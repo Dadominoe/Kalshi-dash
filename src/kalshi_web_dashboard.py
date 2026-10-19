@@ -6376,8 +6376,11 @@ function syncTz() {
 syncTz(); setInterval(syncTz, 3600000);
 // ---- Fit to screen (2026-10-14): for streaming - nobody is at the mouse, so the page arranges itself: shrink just enough that everything from the top down to
 // the bottom of the chart is in the window (never below 60%); if it still does not fit, scroll so the bottom of the chart is at the bottom edge. Saved per browser.
-let fitScreen = true;
+let fitScreen = (window.screen.width >= 1100 && !('ontouchstart' in window));      // phones / tablets start OFF (it keeps scrolling the page for you)
 try { const fv = localStorage.getItem('fitScreen'); if (fv !== null) fitScreen = fv === 'true'; } catch (e) {}
+let fitDone = false;                                    // true once the page has been fitted; it is only refitted when you switch coin / resize / click the button
+let userScrollAt = 0;                                    // when you last scrolled / touched the page: Fit-to-screen never moves the page while you are using it
+['wheel', 'touchstart', 'touchmove', 'keydown', 'mousedown'].forEach(ev => window.addEventListener(ev, () => { userScrollAt = Date.now(); }, {passive: true}));
 let lastFit = 1;
 function syncFitButton() {
   const b = document.getElementById('fit-btn');
@@ -6416,8 +6419,11 @@ function toggleFit() {
 }
 function applyFit(force) {
   if (!fitScreen) return;
+  if (document.body.getAttribute('data-view') === 'both') { document.body.style.zoom = ''; return; }     // two coins on screen: there is no single "bottom of the chart" to fit to - leave the page alone
+  if (!force && (fitDone || Date.now() - userScrollAt < 10000)) return;
   const rows = Array.from(document.querySelectorAll('.pat-chart-row')).filter(r => r.offsetParent !== null);
   if (!rows.length) return;
+  fitDone = true;
   document.body.style.zoom = '1';                         // measure at 100% (all in one task - nothing is painted in between)
   window.scrollTo(0, 0);
   const H = Math.max.apply(null, rows.map(r => r.getBoundingClientRect().bottom)) + 12;
@@ -6431,6 +6437,7 @@ function applyFit(force) {
 }
 window.addEventListener('resize', () => applyFit(true));
 function setAssetView(v) {
+  fitDone = false;                                      // a different coin on screen = fit again once
   if (v !== 'BTC' && v !== 'XRP') v = 'both';
   document.body.setAttribute('data-view', v);
   try { localStorage.setItem('assetView', v); } catch (e) {}
