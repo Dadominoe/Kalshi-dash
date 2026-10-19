@@ -6419,7 +6419,6 @@ function toggleFit() {
 }
 function applyFit(force) {
   if (!fitScreen) return;
-  if (document.body.getAttribute('data-view') === 'both') { document.body.style.zoom = ''; return; }     // two coins on screen: there is no single "bottom of the chart" to fit to - leave the page alone
   if (!force && (fitDone || Date.now() - userScrollAt < 10000)) return;
   const rows = Array.from(document.querySelectorAll('.pat-chart-row')).filter(r => r.offsetParent !== null);
   if (!rows.length) return;
@@ -6433,7 +6432,8 @@ function applyFit(force) {
   lastFit = z;
   document.body.style.zoom = String(z);
   const total = H * z;
-  window.scrollTo(0, total > vh ? total - vh : 0);
+  if (document.body.getAttribute('data-view') === 'both') window.scrollTo(0, 0);       // dual screen: shrink so both coins sit side by side, and stay at the top
+  else window.scrollTo(0, total > vh ? total - vh : 0);
 }
 window.addEventListener('resize', () => applyFit(true));
 function setAssetView(v) {
@@ -10050,7 +10050,7 @@ def render_html():
           <div class="ranges"><b>Predicted range (median/typical move, empirical):</b>{ranges_html}</div>
           </details>
           {near_footer_html}
-          {live_pull_html}
+          {"" if HOSTED_READ_ONLY else live_pull_html}
         </div>''')
 
     return "".join(parts) if parts else "<p>Waiting for first poll...</p>"
