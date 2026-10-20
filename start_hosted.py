@@ -38,4 +38,24 @@ else:
 if not os.environ.get("DASH_PASSWORD"):
     print("[hosted] WARNING: DASH_PASSWORD is not set - anyone with the link can open this dashboard")
 
+# ---- a snapshot of the owner's history (streak, records, pattern stats, price log): copied in whenever the STAMP changes, so the hosted copy matches the owner's
+seed = os.path.join(HERE, "seed_data")
+try:
+    stamp = open(os.path.join(seed, "STAMP"), encoding="utf-8").read().strip()
+    applied = os.path.join(HERE, "data_cache", ".seed_applied")
+    done = open(applied, encoding="utf-8").read().strip() if os.path.exists(applied) else ""
+    if stamp and stamp != done:
+        for name in ("data_cache", "bot_state"):
+            src_dir = os.path.join(seed, name)
+            if os.path.isdir(src_dir):
+                os.makedirs(os.path.join(HERE, name), exist_ok=True)
+                for f in os.listdir(src_dir):
+                    shutil.copy2(os.path.join(src_dir, f), os.path.join(HERE, name, f))
+        open(applied, "w", encoding="utf-8").write(stamp)
+        print(f"[hosted] history snapshot {stamp} copied in")
+    else:
+        print(f"[hosted] history snapshot {stamp} already applied")
+except FileNotFoundError:
+    pass
+
 runpy.run_module("src.kalshi_web_dashboard", run_name="__main__")

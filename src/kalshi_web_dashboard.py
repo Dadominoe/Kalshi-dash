@@ -805,7 +805,19 @@ _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it s
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
-HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")   # set on a hosted copy: the buy / arm / settings endpoints are refused outright
+HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
+ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
+_sync_last = [0.0]                                                            # when the owner's bot last sent its state (website copy)
+MIRROR_FRESH_SECONDS = 180                                                     # the owner's bot counts as "online" if it sent something within this long
+_FOLLOW_CONFIG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data_cache", "follow_config.json")
+
+
+def _mirror_active():
+    """True when this copy should NOT make its own END CALL because it takes the shared one: the website copy while the owner's bot keeps sending its state, or a
+    follower copy (a friend's, with data_cache/follow_config.json) while the website keeps answering."""
+    if time.time() - _sync_last[0] >= MIRROR_FRESH_SECONDS:
+        return False
+    return ACCEPT_SYNC or os.path.exists(_FOLLOW_CONFIG)   # set on a hosted copy: the buy / arm / settings endpoints are refused outright
 
 
 def _version_tag():
@@ -7150,6 +7162,8 @@ def end_call_lock(name, ticker, fair, left, spot, line):
             return lk
         if fair is None or left is None or left > END_CALL_LOCK_LEFT or left <= 0:
             return None
+        if _mirror_active():
+            return None                                       # mirror mode: the shared END CALL is made elsewhere; it arrives within a few seconds
         lean = max(fair, 1 - fair) * 100
         side = ("YES" if fair >= 0.5 else "NO") if lean >= END_CALL_MIN_LEAN else "NONE"
         if left < END_CALL_LOCK_LEFT - END_CALL_LATE_GRACE:
@@ -7336,11 +7350,107 @@ def _leans_html(name, fair, left):
     return badge, note
 
 
+def _apply_sync(pl):
+    """Website copy: take the owner's END CALL record book (so the streak, track record and tables match), the recent END CALL locks, and now and then the old history."""
+    eh = pl.get("end_hist")
+    if isinstance(eh, dict):
+        with _end_hist_mu:
+            _end_hist.clear()
+            _end_hist.update({k: v for k, v in eh.items() if isinstance(v, list)})
+            _save_end_hist()
+    lks = pl.get("end_locks")
+    if isinstance(lks, dict) and lks:
+        with _end_lock_mu:
+            for k, v in lks.items():
+                if isinstance(v, dict) and v.get("side") in ("YES", "NO", "NONE", "LATE"):
+                    _end_locks[k] = v
+            _save_end_locks()
+    rr = pl.get("round_results")
+    if isinstance(rr, dict):
+        _lc_results.update({k: v for k, v in rr.items() if v in ("YES", "NO")})
+    hist = pl.get("history")
+    if isinstance(hist, dict) and hist:
+        with _lock:
+            _history.clear()
+            _history.update({k: v for k, v in hist.items() if isinstance(v, list)})
+        _save_history()
+    _sync_last[0] = time.time()
+
+
+_SYNC_CONFIG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data_cache", "sync_config.json")
+
+
+def _sync_loop():
+    """The owner's PC only (and only if data_cache/sync_config.json exists): every 45 s send the END CALL record book + recent locks to the website copy, and the old history
+    every ~15 minutes, so the website shows the same streak, records and calls. Never raises."""
+    time.sleep(40)
+    n = 0
+    last_ok = None
+    while True:
+        try:
+            with open(_SYNC_CONFIG, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+            url = cfg["url"].rstrip("/") + "/sync_state"
+            import base64 as _b64
+            auth = "Basic " + _b64.b64encode(("sync:" + cfg["password"]).encode("utf-8")).decode()
+            with _end_hist_mu:
+                eh = {k: list(v) for k, v in _end_hist.items()}
+            with _end_lock_mu:
+                locks = dict(list(_end_locks.items())[-60:])
+            pl = {"end_hist": eh, "end_locks": locks, "round_results": dict(list(_lc_results.items())[-800:]), "ts": time.time()}
+            if n % 20 == 0:
+                pl["history"] = {k: list(v) for k, v in _history.items()}
+            body = json.dumps(pl).encode()
+            req = urllib.request.Request(url, data=body, method="POST", headers={"Authorization": auth, "Content-Type": "application/json", "User-Agent": "kalshi-sync"})
+            with urllib.request.urlopen(req, timeout=40) as r:
+                ok = r.status == 200
+            if ok != last_ok:
+                print(f"[sync] website update {'working' if ok else 'FAILED'} ({url})")
+                last_ok = ok
+            n += 1
+        except FileNotFoundError:
+            pass                                                   # no sync_config.json = syncing is off
+        except Exception as e:                                     # noqa: BLE001
+            if last_ok is not False:
+                print(f"[sync] could not reach the website copy: {str(e)[:100]}")
+            last_ok = False
+        time.sleep(45)
+
+
+def _follow_loop():
+    """A friend's copy with data_cache/follow_config.json: every 20 s fetch the shared END CALLs + record book from the website copy, so everyone has the same calls and
+    the same streak. Never raises; with no config file it does nothing."""
+    time.sleep(35)
+    last_ok = None
+    while True:
+        try:
+            with open(_FOLLOW_CONFIG, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+            import base64 as _b64
+            auth = "Basic " + _b64.b64encode(("sync:" + cfg["password"]).encode("utf-8")).decode()
+            req = urllib.request.Request(cfg["url"].rstrip("/") + "/sync_state", headers={"Authorization": auth, "User-Agent": "kalshi-follow"})
+            with urllib.request.urlopen(req, timeout=30) as r:
+                _apply_sync(json.loads(r.read().decode("utf-8")))
+            if last_ok is not True:
+                print("[follow] connected to the shared website - using its END CALLs and streak")
+                last_ok = True
+        except FileNotFoundError:
+            pass
+        except Exception as e:                                     # noqa: BLE001
+            if last_ok is not False:
+                print(f"[follow] could not reach the shared website: {str(e)[:100]} (using this copy's own calls meanwhile)")
+            last_ok = False
+        time.sleep(20)
+
+
 def _end_call_html(name, d, tn, fair, left, spot, line):
     ticker = d.get("ticker")
     if fair is None or not ticker:
         return ""
     lk = end_call_lock(name, ticker, fair, left, spot, line)
+    if lk is None and _mirror_active() and left is not None and left <= END_CALL_LOCK_LEFT:
+        return ('<div class="tug-end tug-end-wait"><span class="tug-end-l">END CALL</span> <span class="tug-wait-badge">WAITING FOR THE MAIN BOT\'S LOCK</span> '
+                '<span class="tug-wait-note">every screen shows the same END CALL as the main bot - it appears in a few seconds</span></div>')
     if lk is None:
         yes = fair >= 0.5
         lean = max(fair, 1 - fair) * 100
@@ -10092,8 +10202,22 @@ class Handler(http.server.BaseHTTPRequestHandler):
         return True
 
     def do_POST(self):
-        """Only the Bookmap bridge add-on (running on THIS computer) posts here."""
+        """The Bookmap bridge add-on (this computer only) and - on the website copy only - the owner's bot (/sync_state, password required) post here."""
         if not self._hosted_gate():
+            return
+        if urllib.parse.urlparse(self.path).path == "/sync_state":
+            code = 404
+            if ACCEPT_SYNC and HOSTED_PASSWORD:
+                try:
+                    n = int(self.headers.get("Content-Length", 0))
+                    if n <= 0 or n > 9_000_000:
+                        raise ValueError("bad size")
+                    _apply_sync(json.loads(self.rfile.read(n)))
+                    code = 200
+                except Exception as _se:
+                    print(f"[sync] bad update: {_se!r}")
+                    code = 400
+            self.send_response(code); self.send_header("Content-Length", "0"); self.end_headers()
             return
         parsed = urllib.parse.urlparse(self.path)
         code = 404
@@ -10149,6 +10273,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
             pstats.Stats(pr, stream=s_).sort_stats("cumulative").print_stats("kalshi_web_dashboard|line_cross|market_hours|multi_exchange_flow|pattern_|mtf_structure|viewtz", 40)
             body = s_.getvalue().encode()
             self.send_response(200); self.send_header("Content-Type", "text/plain"); self.send_header("Content-Length", str(len(body))); self.end_headers()
+            self.wfile.write(body)
+            return
+        if parsed.path == "/sync_state":
+            if not (ACCEPT_SYNC and HOSTED_PASSWORD):
+                self.send_response(404); self.send_header("Content-Length", "0"); self.end_headers()
+                return
+            with _end_hist_mu:
+                eh = {k: list(v) for k, v in _end_hist.items()}
+            with _end_lock_mu:
+                locks = dict(list(_end_locks.items())[-60:])
+            body = json.dumps({"end_hist": eh, "end_locks": locks, "round_results": dict(list(_lc_results.items())[-800:]), "ts": time.time()}).encode()
+            self.send_response(200); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store"); self.end_headers()
             self.wfile.write(body)
             return
         if parsed.path == "/flow_debug":
@@ -10707,6 +10844,8 @@ def main():
     threading.Thread(target=_end_hist_loop, daemon=True, name="end-call-history").start()
     _lc_load()
     threading.Thread(target=_lc_loop, daemon=True, name="line-cross").start()
+    threading.Thread(target=_sync_loop, daemon=True, name="website-sync").start()
+    threading.Thread(target=_follow_loop, daemon=True, name="website-follow").start()
     _load_locked_state()
     _load_live_trading_state()
     _load_bought_tickers()
