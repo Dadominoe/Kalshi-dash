@@ -7232,6 +7232,8 @@ def _save_end_hist():
 
 def _end_hist_pass():
     """Score every locked end call whose round has finished, once Kalshi has finalized the real result. Never guesses from price."""
+    if _mirror_active():
+        return                                                # mirror mode: the shared record book comes from the website; scoring our own copy here made the streak flip back and forth
     now = dt.datetime.now(dt.timezone.utc)
     with _end_lock_mu:
         pending = dict(_end_log_locks)
