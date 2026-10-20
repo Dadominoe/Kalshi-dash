@@ -2055,6 +2055,7 @@ def compute_cumulative_bet_pnl(asset_history, bet_size=100.0, series_prefix=None
 
 ET_ZONE = ZoneInfo("America/New_York")
 from src import viewtz as _viewtz
+from src import accounts as _acc, account_pages as _accp
 
 
 def _parse_ticker_et_uncached(ticker):
@@ -4455,7 +4456,7 @@ PAGE_TEMPLATE = r"""<!doctype html>
     }).catch(function () {});
   }, 5000);
 })();
-</script><meta charset="utf-8"><meta name="viewport" content="width=820"><title>Kalshi Dashboard</title>
+</script><meta charset="utf-8"><meta name="viewport" content="width=820"><title>The Dominator Live Dashboard</title>
 <style>
 body { font-family: -apple-system, Segoe UI, Arial, sans-serif; background:#0d1117; color:#e6edf3; margin:0; padding:12px 24px 24px; }
 h1 { font-size: 15px; color:#9d9d9d; margin:0 0 8px; }
@@ -6696,6 +6697,7 @@ async function refreshInner() {
   }
   const mySeq = ++refreshSeq;
   const res = await fetch('/data');
+  if (res.status === 401) { location.href = '/login'; return; }      // signed out (removed, or password changed)
   const data = await res.json();
   if (mySeq !== refreshSeq) return; // a newer refresh already started - this one is stale, drop it
   // auto-reload when the server was restarted with new code, so an open tab
@@ -6800,7 +6802,7 @@ window.onload = function() {
 };
 </script>
 </head><body>
-<h1>Kalshi Live Dashboard - read only, never trades - refreshes every 1s__VERSION_TAG__</h1>
+__USERBAR__<h1>The Dominator Live Dashboard - read only, never trades - refreshes every 1s__VERSION_TAG__</h1>
 <div class="view-bar"><span class="hint">Show:</span>
   <button class="size-mode-btn" data-view="BTC" onclick="setAssetView('BTC')">BTC only</button>
   <button class="size-mode-btn" data-view="XRP" onclick="setAssetView('XRP')">XRP only</button>
@@ -6844,6 +6846,7 @@ window.onload = function() {
     </div>
   </details>
 </div>
+__LEGAL__
 </body></html>
 """
 
@@ -6976,6 +6979,11 @@ def _pat_rate_html(stats, bias="bullish"):
 _pat_window_tf = {}   # asset name -> timeframe shown in the live pattern window (default 1m)
 HORIZONS_MIN = {tf: max(5, m) for tf, m in {"1m": 1, "5m": 5, "15m": 15, "1h": 60, "3h": 180, "6h": 360, "12h": 720, "1d": 1440, "1w": 10080, "1M": 43200, "1Y": 525600}.items()}
 _PAT_WINDOW_TFS = ("1m", "5m", "15m", "1h", "3h", "6h", "12h", "1d", "1M")
+_view_tf = threading.local()       # this request's viewer: {asset: timeframe} read from their own cookies, so nobody's choice ever changes anybody else's chart
+
+
+def _get_pat_tf(asset_name):
+    return (getattr(_view_tf, "m", None) or {}).get(asset_name) or _pat_window_tf.get(asset_name, "1m")
 
 
 _kflow = {}     # asset name -> {"ticker","ts","yes","no","n"}: Kalshi taker dollars on YES vs NO so far this round
@@ -7350,31 +7358,56 @@ def _leans_html(name, fair, left):
     return badge, note
 
 
-def _apply_sync(pl):
-    """Website copy: take the owner's END CALL record book (so the streak, track record and tables match), the recent END CALL locks, and now and then the old history."""
+def _merge_end_hist(cur, inc):
+    """Union of two END CALL record books by (coin, round); the incoming version of a round wins; oldest first."""
+    out = {}
+    for a in set(cur) | set(inc):
+        rows = {h.get("ticker"): h for h in cur.get(a, []) if isinstance(h, dict)}
+        for h in inc.get(a, []):
+            if isinstance(h, dict) and h.get("ticker"):
+                rows[h["ticker"]] = h
+        out[a] = sorted(rows.values(), key=lambda h: (_window_close_utc(h.get("ticker")) or dt.datetime.min.replace(tzinfo=dt.timezone.utc)))[-3000:]
+    return out
+
+
+def _apply_sync(pl, mode="replace"):
+    """Take another copy's END CALL record book, recent locks and results.
+    mode "replace": mirror it exactly (a follower copy).  "merge": union, incoming wins (the website taking the owner's push).  "fill": union, but only ADD what is missing,
+    never change what we already have (the owner's PC taking back the rounds the website scored while the PC was off)."""
     eh = pl.get("end_hist")
     if isinstance(eh, dict):
+        eh = {k: v for k, v in eh.items() if isinstance(v, list)}
         with _end_hist_mu:
-            _end_hist.clear()
-            _end_hist.update({k: v for k, v in eh.items() if isinstance(v, list)})
+            if mode == "replace":
+                _end_hist.clear()
+                _end_hist.update(eh)
+            elif mode == "merge":
+                merged = _merge_end_hist(_end_hist, eh)
+                _end_hist.clear()
+                _end_hist.update(merged)
+            else:
+                merged = _merge_end_hist(eh, _end_hist)          # our own records win
+                _end_hist.clear()
+                _end_hist.update(merged)
             _save_end_hist()
     lks = pl.get("end_locks")
     if isinstance(lks, dict) and lks:
         with _end_lock_mu:
             for k, v in lks.items():
-                if isinstance(v, dict) and v.get("side") in ("YES", "NO", "NONE", "LATE"):
+                if isinstance(v, dict) and v.get("side") in ("YES", "NO", "NONE", "LATE") and (mode != "fill" or k not in _end_locks):
                     _end_locks[k] = v
             _save_end_locks()
     rr = pl.get("round_results")
     if isinstance(rr, dict):
         _lc_results.update({k: v for k, v in rr.items() if v in ("YES", "NO")})
     hist = pl.get("history")
-    if isinstance(hist, dict) and hist:
+    if isinstance(hist, dict) and hist and mode != "fill":
         with _lock:
             _history.clear()
             _history.update({k: v for k, v in hist.items() if isinstance(v, list)})
         _save_history()
-    _sync_last[0] = time.time()
+    if mode != "fill":
+        _sync_last[0] = time.time()
 
 
 _SYNC_CONFIG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data_cache", "sync_config.json")
@@ -7404,6 +7437,12 @@ def _sync_loop():
             req = urllib.request.Request(url, data=body, method="POST", headers={"Authorization": auth, "Content-Type": "application/json", "User-Agent": "kalshi-sync"})
             with urllib.request.urlopen(req, timeout=40) as r:
                 ok = r.status == 200
+            try:
+                greq = urllib.request.Request(cfg["url"].rstrip("/") + "/sync_state", headers={"Authorization": auth, "User-Agent": "kalshi-sync"})
+                with urllib.request.urlopen(greq, timeout=30) as gr:
+                    _apply_sync(json.loads(gr.read().decode("utf-8")), mode="fill")           # rounds only the website has (PC was off) are added here; ours are never changed
+            except Exception:
+                pass
             if ok != last_ok:
                 print(f"[sync] website update {'working' if ok else 'FAILED'} ({url})")
                 last_ok = ok
@@ -7427,10 +7466,10 @@ def _follow_loop():
             with open(_FOLLOW_CONFIG, "r", encoding="utf-8") as f:
                 cfg = json.load(f)
             import base64 as _b64
-            auth = "Basic " + _b64.b64encode(("sync:" + cfg["password"]).encode("utf-8")).decode()
+            auth = "Basic " + _b64.b64encode(((cfg.get("user") or "sync") + ":" + cfg["password"]).encode("utf-8")).decode()
             req = urllib.request.Request(cfg["url"].rstrip("/") + "/sync_state", headers={"Authorization": auth, "User-Agent": "kalshi-follow"})
             with urllib.request.urlopen(req, timeout=30) as r:
-                _apply_sync(json.loads(r.read().decode("utf-8")))
+                _apply_sync(json.loads(r.read().decode("utf-8")), mode="replace")
             if last_ok is not True:
                 print("[follow] connected to the shared website - using its END CALLs and streak")
                 last_ok = True
@@ -7694,7 +7733,7 @@ def chart_live_payload(asset_name):
     if _mtf is None:
         return None
     sym = {a["name"]: a["symbol"] for a in DASHBOARD_ASSETS}.get(asset_name)
-    tf = _pat_window_tf.get(asset_name, "1m")
+    tf = _get_pat_tf(asset_name)
     cs0 = (_mtf.windows.get(sym) or {}).get(tf) if sym else None
     if not cs0 or len(cs0) < 25:
         return None
@@ -8444,7 +8483,7 @@ def build_pattern_window(asset_name):
     if _mtf is None:
         return ""
     sym = {a["name"]: a["symbol"] for a in DASHBOARD_ASSETS}.get(asset_name)
-    tf = _pat_window_tf.get(asset_name, "1m")
+    tf = _get_pat_tf(asset_name)
     cs = (_mtf.windows.get(sym) or {}).get(tf) if sym else None
     btns = "".join(
         f'<button class="{"size-mode-btn size-mode-active" if t == tf else "size-mode-btn"}" '
@@ -8999,7 +9038,7 @@ _render_cache_lock = threading.Lock()
 
 
 def render_html_cached(max_age=0.9):
-    key = str(_viewtz.get())
+    key = str(_viewtz.get()) + "|" + repr(sorted((getattr(_view_tf, "m", None) or {}).items()))      # each viewer's zone AND chart choices
     now = time.time()
     with _render_cache_lock:
         hit = _render_cache.get(key)
@@ -9008,8 +9047,8 @@ def render_html_cached(max_age=0.9):
     html = render_html()
     with _render_cache_lock:
         _render_cache[key] = (time.time(), html)
-        if len(_render_cache) > 8:
-            for k in sorted(_render_cache, key=lambda k_: _render_cache[k_][0])[:-8]:
+        if len(_render_cache) > 60:
+            for k in sorted(_render_cache, key=lambda k_: _render_cache[k_][0])[:-60]:
                 _render_cache.pop(k, None)
     return html
 
@@ -9327,7 +9366,7 @@ def render_html():
             err = fmt_price(abs(last["price_error"]), decimals) if last["price_error"] is not None else None
             kp = last.get("locked_kalshi_price")
             bet = ""
-            if kp and not synthetic:
+            if kp and not synthetic and not HOSTED_READ_ONLY:       # hypothetical dollar results are not shown on the shared website
                 contracts = 100 / kp
                 payoff = contracts - 100 if last["correct"] else -100
                 bet = f' | $100 bet @ {kp:.1%}: {payoff:+.2f}'
@@ -9484,7 +9523,7 @@ def render_html():
 
         bet_pnl = d.get("bet_pnl")
         bet_pnl_row_html = ""
-        if bet_pnl:
+        if bet_pnl and not HOSTED_READ_ONLY:
             pnl_css = "up" if bet_pnl["total"] >= 0 else "down"
             bet_pnl_row_html = (
                 '<div class="row"><span class="label">If you bet $100 on every locked call '
@@ -9508,7 +9547,7 @@ def render_html():
             if w["n"] == 0:
                 return '<span class="flat">no graded calls yet</span>'
             return f'<span class="{css}">{w["pct"]:+.1f}% ({w["total"]:+,.2f}, {w["n"]} bets)</span>'
-        bet_pnl_windowed_html = (
+        bet_pnl_windowed_html = "" if HOSTED_READ_ONLY else (        # hypothetical dollar results are not shown on the shared website
             '<div class="row"><span class="label">Paper up/down - last 1h</span>'
             f'<span class="value">{_windowed_pnl_span(pnl_1h)}</span></div>'
             '<div class="row"><span class="label">Paper up/down - last 24h</span>'
@@ -10139,7 +10178,7 @@ def render_html():
           {bookmap_panel_html}
           {line_cross_html}
           {market_hours_html}
-          <details class="more-info" data-pat="MORE|{name}"><summary><b>More {name} information</b> <span class="hint">- chart structure, pattern history, regime, RSI, track record, paper P&amp;L, predicted range (click to open)</span></summary>
+          <details class="more-info" data-pat="MORE|{name}"><summary><b>More {name} information</b> <span class="hint">- chart structure, pattern history, regime, RSI, track record, predicted range (click to open)</span></summary>
           {pattern_panel_html}
           {pattern_hist_html}
           <div class="row"><span class="label">{direction_label}</span><span class="value {lean_class}">{leaning_html}</span></div>{fair_html}
@@ -10170,30 +10209,71 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         pass  # silence default request logging
 
+    def _ip(self):
+        xf = (self.headers.get("X-Forwarded-For", "") or "").split(",")[0].strip()
+        return xf or self.client_address[0]
+
+    def _send(self, code, body=b"", ctype="text/html; charset=utf-8", headers=()):
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        for k, v in headers:
+            self.send_header(k, v)
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _cookie_flags(self):
+        return "; Path=/; HttpOnly; SameSite=Lax" + ("; Secure" if (self.headers.get("X-Forwarded-Proto", "") or "").lower() == "https" else "")
+
+    def _identify(self):
+        """(user name, is_admin) of whoever is asking, or None. A hosted copy knows people by their sign-in cookie, or by Basic auth for scripts (the owner's sync and followers)."""
+        import base64 as _b64, hmac as _hmac
+        self._master_ok = False
+        if not HOSTED_PASSWORD:
+            return ("local", True)
+        m = re.search(r"(?:^|;\s*)sess=([^;]+)", self.headers.get("Cookie", "") or "")
+        if m:
+            who = _acc.check_session(m.group(1), HOSTED_PASSWORD)
+            if who:
+                return (who, who == "admin")
+        auth = self.headers.get("Authorization", "")
+        if auth.startswith("Basic "):
+            ip = self._ip()
+            if _acc.throttled(ip):
+                return None
+            try:
+                user, _, pw = _b64.b64decode(auth[6:]).decode("utf-8", "replace").partition(":")
+            except Exception:
+                return None
+            if _hmac.compare_digest(pw.encode(), HOSTED_PASSWORD.encode()):
+                self._master_ok = True
+                return ("admin", True)
+            if _acc.verify(user, pw):
+                return (user.strip().lower(), False)
+            _acc.note_fail(ip)
+        return None
+
     def _hosted_gate(self):
-        """True if the request may go on. Hosted copies: /healthz is open, everything else needs the password; read-only copies refuse every trading / settings endpoint."""
+        """True if the request may go on. Hosted copies: /healthz is open, /login is open, everything else needs a signed-in person; read-only copies refuse every trading / settings endpoint."""
         path = urllib.parse.urlparse(self.path).path
         if path == "/healthz":
             body = b"ok"
             self.send_response(200); self.send_header("Content-Type", "text/plain"); self.send_header("Content-Length", str(len(body))); self.end_headers()
             self.wfile.write(body)
             return False
+        self._who = self._identify()
         if HOSTED_PASSWORD:
-            import base64 as _b64, hmac as _hmac
-            ok = False
-            auth = self.headers.get("Authorization", "")
-            if auth.startswith("Basic "):
-                try:
-                    pw = _b64.b64decode(auth[6:]).decode("utf-8", "replace").split(":", 1)[-1]
-                    ok = _hmac.compare_digest(pw.encode(), HOSTED_PASSWORD.encode())
-                except Exception:
-                    ok = False
-            if not ok:
-                self.send_response(401)
-                self.send_header("WWW-Authenticate", 'Basic realm="Kalshi Dashboard"')
-                self.send_header("Content-Length", "0")
-                self.end_headers()
+            if self._who is None:
+                if path in ("/login", "/signup", "/terms"):
+                    return True
+                if "text/html" in (self.headers.get("Accept", "") or ""):
+                    self.send_response(302); self.send_header("Location", "/login"); self.send_header("Content-Length", "0"); self.end_headers()
+                else:
+                    self._send(401, b'{"error": "sign in"}', "application/json")
                 return False
+            if self._who[0] != "admin":
+                _acc.last_seen[self._who[0]] = time.time()
         if HOSTED_READ_ONLY and (path == "/arm_live" or (path.startswith("/set_") and path != "/set_pattern_tf")) or (HOSTED_READ_ONLY and path == "/bookmap_ingest"):
             body = b'{"error": "this copy is read-only"}'
             self.send_response(403); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(body))); self.end_headers()
@@ -10201,18 +10281,93 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return False
         return True
 
+    def _read_form(self):
+        try:
+            n = int(self.headers.get("Content-Length", 0))
+            raw = self.rfile.read(n) if 0 < n <= 8192 else b""
+        except Exception:
+            raw = b""
+        return {k: v[0] for k, v in urllib.parse.parse_qs(raw.decode("utf-8", "replace"), keep_blank_values=True).items()}
+
+    def _admin_post(self, path):
+        """The owner's /admin forms: add a person, reset a password, remove a person."""
+        f = self._read_form()
+        u, pw = (f.get("u") or "").strip().lower(), f.get("p") or ""
+        msg, err = "", False
+        if path == "/admin/add":
+            if u in _acc.list_users():
+                msg, err = "That user name already exists - use Change password.", True
+            else:
+                ok, m = _acc.add_user(u, pw)
+                msg, err = (f"Added {u}. Give them their user name and password, and the website address." if ok else m), (not ok)
+        elif path == "/admin/passwd":
+            if u not in _acc.list_users():
+                msg, err = "No such person.", True
+            else:
+                ok, m = _acc.add_user(u, pw)
+                msg, err = (f"Password changed for {u}. They have been signed out." if ok else m), (not ok)
+        elif path == "/admin/approve":
+            msg = f"Approved {u}. They can sign in now with the password they chose." if _acc.approve_request(u) else "That request is gone."
+            err = msg == "That request is gone."
+        elif path == "/admin/deny":
+            msg = f"Denied {u}." if _acc.deny_request(u) else "That request is gone."
+            err = msg == "That request is gone."
+        elif path == "/admin/delete":
+            msg = f"Removed {u}. They are signed out." if _acc.delete_user(u) else "No such person."
+            err = msg == "No such person."
+        self._send(200, _accp.admin_page(_acc.list_users(), _acc.last_seen, msg, err, _acc.list_requests()).encode("utf-8"))
+
     def do_POST(self):
         """The Bookmap bridge add-on (this computer only) and - on the website copy only - the owner's bot (/sync_state, password required) post here."""
         if not self._hosted_gate():
             return
-        if urllib.parse.urlparse(self.path).path == "/sync_state":
+        _ppath = urllib.parse.urlparse(self.path).path
+        if HOSTED_PASSWORD and _ppath == "/login":
+            ip = self._ip()
+            wait = _acc.throttled(ip)
+            if wait:
+                self._send(429, _accp.login_page(f"Too many wrong tries. Wait {wait // 60 + 1} minute(s) and try again.").encode("utf-8"))
+                return
+            f = self._read_form()
+            u, pw = (f.get("u") or "").strip().lower(), f.get("p") or ""
+            if u == "admin":
+                import hmac as _hmac
+                ok = _hmac.compare_digest(pw.encode(), HOSTED_PASSWORD.encode())
+            else:
+                ok = _acc.verify(u, pw)
+            if ok:
+                _acc.note_ok(ip)
+                self.send_response(302)
+                self.send_header("Location", "/admin" if u == "admin" else "/")
+                self.send_header("Set-Cookie", "sess=" + _acc.make_session(u, HOSTED_PASSWORD) + self._cookie_flags() + f"; Max-Age={_acc.SESSION_DAYS * 86400}")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+            else:
+                _acc.note_fail(ip)
+                self._send(401, _accp.login_page("Your request is still waiting for the owner to approve it." if (u and _acc.is_pending(u)) else "Wrong user name or password.").encode("utf-8"))
+            return
+        if HOSTED_PASSWORD and _ppath == "/signup":
+            f = self._read_form()
+            if f.get("agree") != "1":
+                self._send(200, _accp.signup_page("Tick the box to agree to the terms first.", True).encode("utf-8"))
+                return
+            ok, m = _acc.request_signup(f.get("u"), f.get("p"), f.get("n"), self._ip(), terms=_accp.TERMS_DATE)
+            self._send(200, (_accp.signup_page("Request sent.", False, done=True) if ok else _accp.signup_page(m, True)).encode("utf-8"))
+            return
+        if HOSTED_PASSWORD and _ppath in ("/admin/add", "/admin/passwd", "/admin/delete", "/admin/approve", "/admin/deny"):
+            if self._who and self._who[1]:
+                self._admin_post(_ppath)
+            else:
+                self._send(403, b"owner only", "text/plain")
+            return
+        if _ppath == "/sync_state":
             code = 404
-            if ACCEPT_SYNC and HOSTED_PASSWORD:
+            if ACCEPT_SYNC and HOSTED_PASSWORD and getattr(self, "_master_ok", False):
                 try:
                     n = int(self.headers.get("Content-Length", 0))
                     if n <= 0 or n > 9_000_000:
                         raise ValueError("bad size")
-                    _apply_sync(json.loads(self.rfile.read(n)))
+                    _apply_sync(json.loads(self.rfile.read(n)), mode="merge")
                     code = 200
                 except Exception as _se:
                     print(f"[sync] bad update: {_se!r}")
@@ -10243,7 +10398,31 @@ class Handler(http.server.BaseHTTPRequestHandler):
         _m_tz = re.search(r"(?:^|;\s*)tz=(-?\d+)", _ck)
         _m_tzn = re.search(r"(?:^|;\s*)tzn=([^;]+)", _ck)
         _viewtz.set_view(urllib.parse.unquote(_m_tzn.group(1)) if _m_tzn else None, _m_tz.group(1) if _m_tz else None)
+        _view_tf.m = {m_.group(1): m_.group(2) for m_ in re.finditer(r"(?:^|;\s*)ptf_([A-Za-z0-9]+)=([0-9A-Za-z]+)", _ck) if m_.group(2) in _PAT_WINDOW_TFS}
         parsed = urllib.parse.urlparse(self.path)
+        if parsed.path == "/terms":
+            self._send(200, _accp.terms_page().encode("utf-8"))
+            return
+        if HOSTED_PASSWORD and parsed.path == "/login":
+            if self._who:
+                self.send_response(302); self.send_header("Location", "/"); self.send_header("Content-Length", "0"); self.end_headers()
+            else:
+                self._send(200, _accp.login_page("", False).encode("utf-8"))
+            return
+        if HOSTED_PASSWORD and parsed.path == "/signup":
+            self._send(200, _accp.signup_page("", False).encode("utf-8"))
+            return
+        if HOSTED_PASSWORD and parsed.path == "/logout":
+            self.send_response(302); self.send_header("Location", "/login"); self.send_header("Content-Length", "0")
+            self.send_header("Set-Cookie", "sess=; Max-Age=0" + self._cookie_flags())
+            self.end_headers()
+            return
+        if HOSTED_PASSWORD and parsed.path == "/admin":
+            if self._who and self._who[1]:
+                self._send(200, _accp.admin_page(_acc.list_users(), _acc.last_seen, requests=_acc.list_requests()).encode("utf-8"))
+            else:
+                self._send(403, b"owner only", "text/plain")
+            return
         if parsed.path in ("/debug_poll", "/debug_threads", "/flow_debug", "/debug_profile") and self.client_address[0] not in ("127.0.0.1", "::1"):
             self.send_response(404); self.end_headers()      # diagnostics: this PC only, never other devices on the network
             return
@@ -10345,14 +10524,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
             qs = urllib.parse.parse_qs(parsed.query)
             a_, t_ = (qs.get("asset") or [""])[0], (qs.get("tf") or [""])[0]
             ok = a_ in LIVE_ASSETS and t_ in _PAT_WINDOW_TFS
-            if ok:
-                _pat_window_tf[a_] = t_
-                with _render_cache_lock:
-                    _render_cache.clear()          # the next page build must show the new timeframe, not the one cached a moment ago
-            body = json.dumps({"ok": ok, "tf": _pat_window_tf.get(a_)}).encode()
+            if ok and not HOSTED_PASSWORD:
+                _pat_window_tf[a_] = t_            # a private copy (one owner): also the default for a browser that has not chosen yet
+            body = json.dumps({"ok": ok, "tf": t_ if ok else None}).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
+            if ok:
+                self.send_header("Set-Cookie", f"ptf_{a_}={t_}; Path=/; Max-Age=31536000; SameSite=Lax")      # this browser only
             self.end_headers()
             self.wfile.write(body)
         elif parsed.path == "/build":
@@ -10779,7 +10958,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
         else:
-            body = PAGE_TEMPLATE.replace('__PATTERN_LIB_JSON__', pattern_lib_json()).replace('__VERSION_TAG__', _version_tag()).encode()
+            body = PAGE_TEMPLATE.replace('__PATTERN_LIB_JSON__', pattern_lib_json()).replace('__VERSION_TAG__', _version_tag()).replace('__LEGAL__', _accp.legal_footer()).replace('__USERBAR__', _accp.userbar(*self._who) if (HOSTED_PASSWORD and self._who) else '').encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
             self.send_header("Content-Length", str(len(body)))
