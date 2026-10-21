@@ -1999,6 +1999,9 @@ def best_hours_html(asset_history):
             f'<br><span style="opacity:0.6;">dimmed = under {BEST_HOURS_MIN_SAMPLE} graded windows, EDT</span></div>')
 
 
+STREAK_GAP_SECONDS = 3600
+
+
 def get_streak(asset_history):
     """Current win/loss streak from the most recent graded calls, walking
     backward. A 'no call' window is SKIPPED, not counted as a break - changed
@@ -2007,7 +2010,16 @@ def get_streak(asset_history):
     Returns ('win'|'loss'|None, count)."""
     streak_correct = None
     count = 0
+    newer_t = None
     for h in reversed(asset_history):
+        try:
+            t_ = _window_close_utc(h.get("ticker"))
+        except Exception:
+            t_ = None
+        if t_ is not None and newer_t is not None and (newer_t - t_).total_seconds() > STREAK_GAP_SECONDS:
+            break                                          # no calls on record for over an hour here (the dashboard was not running): those rounds are unknown, so the streak stops
+        if t_ is not None:
+            newer_t = t_
         if h["correct"] is None:
             continue
         if streak_correct is None:
@@ -9063,6 +9075,23 @@ def data_bodies():
 
 
 _render_build_locks = {}
+_last_page_build = [0.0]
+
+
+def _keepwarm_loop():
+    """The END CALL is locked at the 8th minute as a side effect of building the page. With nobody watching (a website at night) no calls would be made at all, so build the
+    page ourselves whenever no viewer has in the last few seconds."""
+    time.sleep(20)
+    while True:
+        try:
+            if time.time() - _last_page_build[0] > 4:
+                _viewtz.set_view(None, None)
+                _view_tf.m = {}
+                render_html()
+                _last_page_build[0] = time.time()
+        except Exception as e:
+            print(f"[keep-warm] page build failed: {e!r}")
+        time.sleep(3)
 
 
 def render_html_cached(max_age=0.9):
@@ -9091,6 +9120,7 @@ def render_html_cached(max_age=0.9):
         if hit and time.time() - hit[0] < max_age:
             return hit[1]
         html = render_html()
+        _last_page_build[0] = time.time()
         with _render_cache_lock:
             _render_cache[key] = (time.time(), html)
             if len(_render_cache) > 60:
@@ -11080,6 +11110,7 @@ def main():
     _load_end_locks()
     _load_end_hist()
     threading.Thread(target=_end_hist_loop, daemon=True, name="end-call-history").start()
+    threading.Thread(target=_keepwarm_loop, daemon=True, name="keep-warm").start()
     _lc_load()
     threading.Thread(target=_lc_loop, daemon=True, name="line-cross").start()
     threading.Thread(target=_sync_loop, daemon=True, name="website-sync").start()
