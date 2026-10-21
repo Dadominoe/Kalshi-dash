@@ -38,23 +38,53 @@ else:
 if not os.environ.get("DASH_PASSWORD"):
     print("[hosted] WARNING: DASH_PASSWORD is not set - anyone with the link can open this dashboard")
 
-# ---- a snapshot of the owner's history (streak, records, pattern stats, price log): copied in whenever the STAMP changes, so the hosted copy matches the owner's
+# ---- a snapshot of calls to ADD to the website's record: copied in (merged, never overwriting what the website already has) whenever the STAMP changes
+import json
+
+
+def merge_json(name, src_file, dst_file):
+    """END CALL record book / lock file: union by round; what the website already has wins."""
+    try:
+        seed_d = json.load(open(src_file, encoding="utf-8"))
+    except Exception:
+        return 0
+    try:
+        cur = json.load(open(dst_file, encoding="utf-8")) if os.path.exists(dst_file) else {}
+    except Exception:
+        cur = {}
+    added = 0
+    if name == "end_call_history.json":
+        for a, rows in seed_d.items():
+            have = {h.get("ticker") for h in cur.get(a, [])}
+            new_rows = [h for h in rows if h.get("ticker") not in have]
+            added += len(new_rows)
+            cur[a] = sorted(cur.get(a, []) + new_rows, key=lambda h: h.get("ticker", "")[-9:])
+    else:
+        for k_, v in seed_d.items():
+            if k_ not in cur:
+                cur[k_] = v
+                added += 1
+    tmp = dst_file + ".tmp"
+    json.dump(cur, open(tmp, "w", encoding="utf-8"))
+    os.replace(tmp, dst_file)
+    return added
+
+
 seed = os.path.join(HERE, "seed_data")
 try:
     stamp = open(os.path.join(seed, "STAMP"), encoding="utf-8").read().strip()
     applied = os.path.join(HERE, "data_cache", ".seed_applied")
     done = open(applied, encoding="utf-8").read().strip() if os.path.exists(applied) else ""
     if stamp and stamp != done:
-        for name in ("data_cache", "bot_state"):
-            src_dir = os.path.join(seed, name)
-            if os.path.isdir(src_dir):
-                os.makedirs(os.path.join(HERE, name), exist_ok=True)
-                for f in os.listdir(src_dir):
-                    shutil.copy2(os.path.join(src_dir, f), os.path.join(HERE, name, f))
+        os.makedirs(os.path.join(HERE, "data_cache"), exist_ok=True)
+        for name in ("end_call_history.json", "end_call_locks.json"):
+            f = os.path.join(seed, "data_cache", name)
+            if os.path.exists(f):
+                n = merge_json(name, f, os.path.join(HERE, "data_cache", name))
+                print(f"[hosted] {name}: {n} entries added from snapshot {stamp}")
         open(applied, "w", encoding="utf-8").write(stamp)
-        print(f"[hosted] history snapshot {stamp} copied in")
     else:
-        print(f"[hosted] history snapshot {stamp} already applied")
+        print(f"[hosted] snapshot {stamp} already applied")
 except FileNotFoundError:
     pass
 
