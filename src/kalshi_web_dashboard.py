@@ -32,6 +32,7 @@ plainly, never hidden.
 """
 import csv
 import datetime as dt
+import gzip
 import http.server
 import json
 import math
@@ -9039,20 +9040,66 @@ _render_cache = {}
 _render_cache_lock = threading.Lock()
 
 
+def _render_key():
+    return str(_viewtz.get()) + "|" + repr(sorted((getattr(_view_tf, "m", None) or {}).items()))      # each viewer's zone AND chart choices
+
+
+_data_memo = {}
+
+
+def data_bodies():
+    """(plain, gzipped) /data body for this viewer. The page is ~320 KB every second per viewer, so it is sent compressed (~85% smaller) and built once per page version."""
+    html = render_html_cached()
+    k = _render_key()
+    m = _data_memo.get(k)
+    if m and m[0] is html:
+        return m[1], m[2]
+    raw = json.dumps({"html": html, "build": BUILD_ID}).encode()
+    gz = gzip.compress(raw, 4)
+    if len(_data_memo) > 80:
+        _data_memo.clear()
+    _data_memo[k] = (html, raw, gz)
+    return raw, gz
+
+
+_render_build_locks = {}
+
+
 def render_html_cached(max_age=0.9):
-    key = str(_viewtz.get()) + "|" + repr(sorted((getattr(_view_tf, "m", None) or {}).items()))      # each viewer's zone AND chart choices
+    """The page for this viewer's variant (time zone + chart choices). Only ONE request builds a new copy at a time per variant; everyone else who arrives meanwhile
+    is handed the copy that is a moment old, so 100 people refreshing together cost one build, not 100."""
+    key = _render_key()
     now = time.time()
     with _render_cache_lock:
         hit = _render_cache.get(key)
         if hit and now - hit[0] < max_age:
             return hit[1]
-    html = render_html()
-    with _render_cache_lock:
-        _render_cache[key] = (time.time(), html)
-        if len(_render_cache) > 60:
-            for k in sorted(_render_cache, key=lambda k_: _render_cache[k_][0])[:-60]:
-                _render_cache.pop(k, None)
-    return html
+        bl = _render_build_locks.setdefault(key, threading.Lock())
+    if not bl.acquire(blocking=False):
+        if hit and time.time() - hit[0] < 8:
+            return hit[1]                                      # somebody is rebuilding right now: the slightly older copy is fine
+        bl.acquire()                                          # nothing to show yet (first visit of this variant): wait for the builder
+        bl.release()
+        with _render_cache_lock:
+            hit = _render_cache.get(key)
+        if hit:
+            return hit[1]
+        bl.acquire()
+    try:
+        with _render_cache_lock:
+            hit = _render_cache.get(key)
+        if hit and time.time() - hit[0] < max_age:
+            return hit[1]
+        html = render_html()
+        with _render_cache_lock:
+            _render_cache[key] = (time.time(), html)
+            if len(_render_cache) > 60:
+                for k in sorted(_render_cache, key=lambda k_: _render_cache[k_][0])[:-60]:
+                    _render_cache.pop(k, None)
+                    _render_build_locks.pop(k, None)
+        return html
+    finally:
+        bl.release()
 
 
 def render_html():
@@ -10503,7 +10550,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 payload = None
                 print(f"[chart_live] failed: {_ce!r}")
             body = json.dumps(payload or {}).encode()
-            self.send_response(200); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(body)))
+            self.send_response(200); self.send_header("Content-Type", "application/json")
+            if "gzip" in (self.headers.get("Accept-Encoding", "") or ""):
+                body = gzip.compress(body, 4)
+                self.send_header("Content-Encoding", "gzip")
+            self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-store"); self.end_headers()
             self.wfile.write(body)
             return
@@ -10545,9 +10596,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
         elif parsed.path == "/data":
-            body = json.dumps({"html": render_html_cached(), "build": BUILD_ID}).encode()
+            body, gzbody = data_bodies()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
+            if "gzip" in (self.headers.get("Accept-Encoding", "") or ""):
+                body = gzbody
+                self.send_header("Content-Encoding", "gzip")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
@@ -10963,6 +11017,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             body = PAGE_TEMPLATE.replace('__PATTERN_LIB_JSON__', pattern_lib_json()).replace('__VERSION_TAG__', _version_tag()).replace('__LEGAL__', _accp.legal_footer()).replace('__USERBAR__', _accp.userbar(*self._who) if (HOSTED_PASSWORD and self._who) else '').encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
+            if "gzip" in (self.headers.get("Accept-Encoding", "") or ""):
+                body = gzip.compress(body, 6)
+                self.send_header("Content-Encoding", "gzip")
             self.send_header("Content-Length", str(len(body)))
             # no-cache - added 2026-09-14 so a phone/browser never serves a
             # stale layout from before a deploy (e.g. the sound bar's
@@ -11065,6 +11122,7 @@ def main():
     # requests concurrently too is safe.
     socketserver.ThreadingTCPServer.allow_reuse_address = True
     socketserver.ThreadingTCPServer.daemon_threads = True
+    socketserver.ThreadingTCPServer.request_queue_size = 128          # many people loading at once must not be turned away by the default (5) connection queue
     try:
         _httpd_probe = socketserver.ThreadingTCPServer(("0.0.0.0", PORT), Handler)
     except OSError as _be:

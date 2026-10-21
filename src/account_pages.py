@@ -63,7 +63,7 @@ def login_page(msg="", err=True):
                  '<form method="post" action="/login"><label>User name</label><input name="u" autocomplete="username" autofocus required>'
                  '<label>Password</label><input name="p" type="password" autocomplete="current-password" required>'
                  '<button type="submit">Sign in</button></form>'
-                 '<p style="margin-top:18px;font-size:15px">No account yet? <a href="/signup">Ask for access</a></p>' + _tiny())
+                 '<p style="margin-top:18px;font-size:15px">No account yet? Access is a <b>$300 flat rate</b>. <a href="/signup">Ask for access</a></p>' + _tiny())
 
 
 def signup_page(msg="", err=True, done=False):
