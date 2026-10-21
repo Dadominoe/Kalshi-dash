@@ -805,6 +805,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
+SITE_VERSION = "2026-10-20c"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -10337,7 +10338,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         """True if the request may go on. Hosted copies: /healthz is open, /login is open, everything else needs a signed-in person; read-only copies refuse every trading / settings endpoint."""
         path = urllib.parse.urlparse(self.path).path
         if path == "/healthz":
-            body = b"ok"
+            body = ("ok " + SITE_VERSION).encode()
             self.send_response(200); self.send_header("Content-Type", "text/plain"); self.send_header("Content-Length", str(len(body))); self.end_headers()
             self.wfile.write(body)
             return False
