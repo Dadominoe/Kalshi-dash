@@ -805,7 +805,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-20d"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-21b"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -4946,6 +4946,15 @@ details.pat > summary { cursor:pointer; }
   box-shadow:0 6px 22px rgba(0,0,0,0.7); animation:flyAcross 9s linear forwards; }
 .fly-alert small { display:block; font-size:16px; font-weight:600; color:#e6edf3; }
 .fly-buy { background:#0f2a1a; border-color:#3fb950; color:#56d364; } .fly-sell { background:#2a1212; border-color:#f85149; color:#ff7b72; }
+.fly-sweep { background:#2a2208; border-color:#d29922; color:#ffd54a; }
+.dock-sweep { background:#2a2208; border-color:#d29922; } .dock-sweep b { color:#ffd54a; }
+/* the shooting star that crosses the screen when a liquidity-sweep star appears on the chart (a sweep of the highs falls, a sweep of the lows shoots up) */
+.fly-star { position:fixed; left:100vw; z-index:9100; pointer-events:none; display:flex; align-items:center; animation:starShootDown 3.6s ease-in forwards; }
+.fly-star.up { animation-name:starShootUp; }
+.fly-star .ss-star { font-size:68px; line-height:1; color:#ffd54a; text-shadow:0 0 14px #ffb300, 0 0 36px #ff8f00; }
+.fly-star .ss-tail { width:360px; height:7px; border-radius:7px; margin-left:-12px; background:linear-gradient(to right, #fff6c9, rgba(255,213,74,0.55), rgba(255,213,74,0)); }
+@keyframes starShootDown { from { transform:translate(0,0) rotate(-22deg); } to { transform:translate(calc(-100vw - 560px), 46vh) rotate(-22deg); } }
+@keyframes starShootUp { from { transform:translate(0,0) rotate(22deg); } to { transform:translate(calc(-100vw - 560px), -42vh) rotate(22deg); } }
 @keyframes flyAcross { from { transform:translateX(0); } to { transform:translateX(calc(-100vw - 100%)); } }
 .cw { flex:1 1 150px; max-width:250px; min-width:130px; padding:5px 10px 6px; border:2px solid #30363d; border-radius:10px; background:#0d1117; text-align:center; }
 .cw-l { font-size:12px; text-transform:uppercase; letter-spacing:0.3px; color:#8b949e; line-height:1.2; }
@@ -5718,6 +5727,36 @@ function flyAcross(name, cls, head, detail) {
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 10500);
 }
+// a liquidity-sweep star just appeared on a chart: a shooting star crosses the screen with the words, and the note stays in the alert box for a minute
+const alertedSweepStars = new Set();
+function flyStar(dir) {
+  const el = document.createElement('div');
+  el.className = 'fly-star' + (dir === 'lows' ? ' up' : '');
+  el.style.top = (dir === 'lows' ? '64vh' : '12vh');
+  const s = document.createElement('span'); s.className = 'ss-star'; s.textContent = '\u2605';
+  const t = document.createElement('span'); t.className = 'ss-tail';
+  el.appendChild(s); el.appendChild(t);
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3900);
+}
+function checkSweepStars() {
+  document.querySelectorAll('.sweep-star-flag').forEach(el => {
+    const key = el.getAttribute('data-key');
+    if (alertedSweepStars.has(key)) return;
+    alertedSweepStars.add(key);
+    if (el.getAttribute('data-fresh') !== '1') return;
+    const name = el.getAttribute('data-name'), dir = el.getAttribute('data-dir'), tf = el.getAttribute('data-tf') || '';
+    if (!coinShown(name)) return;
+    const head = 'POSSIBLE LIQUIDITY SWEEP FROM THE ' + (dir === 'highs' ? 'HIGHS' : 'LOWS');
+    const detail = tf + ' chart: price poked ' + (dir === 'highs' ? 'above a prior high and closed back below it' : 'below a prior low and closed back above it') + ' - a stop run (information only)';
+    flyStar(dir);
+    flyAcross(name, 'fly-sweep', '\u2605 ' + head, detail);
+    dockPush(name, 'dock-sweep', '\u2605 ' + head, detail, 60000, key);
+  });
+}
+window.testSweepStar = function(name, dir) {   // console helper: testSweepStar('BTC','highs')
+  flyStar(dir || 'highs'); flyAcross(name || 'BTC', 'fly-sweep', '\u2605 POSSIBLE LIQUIDITY SWEEP FROM THE ' + ((dir || 'highs') === 'highs' ? 'HIGHS' : 'LOWS'), 'test');
+};
 function coinShown(name) {
   const v = document.body.getAttribute('data-view');
   return !((v === 'BTC' && name !== 'BTC') || (v === 'XRP' && name !== 'XRP'));
@@ -6791,6 +6830,7 @@ async function refreshInner() {
   checkLockAlerts();
   checkRsiAlerts();
   checkIncomingAlerts();
+  checkSweepStars();
   checkSweepAlerts();
 }
 setInterval(refresh, 1000);
@@ -7738,7 +7778,8 @@ def _sweep_stars(asset_name, tf, labels, cs):
             if bars_since > SWEEP_STAR_BARS or bars_since < 0:
                 del mem[k]
                 continue
-            out.append({"ts": k[0], "up": k[1], "text": "sweep just confirmed" if bars_since <= 0 else ("sweep %d bar%s ago" % (bars_since, "" if bars_since == 1 else "s"))})
+            out.append({"ts": k[0], "up": k[1], "fresh": bars_since <= 0 and now - v.get("first", 0) <= 120,
+                        "text": "sweep just confirmed" if bars_since <= 0 else ("sweep %d bar%s ago" % (bars_since, "" if bars_since == 1 else "s"))})
     return out
 
 
@@ -8327,6 +8368,82 @@ def _funding_about():
             + (f'<div class="mh-stats"><b>How it has usually run (last 60 days, 1-minute candles):</b>{lines}</div>' if lines else '') + '</div></details>')
 
 
+_cb_candles = {}
+
+
+def _cb_closes(sym, gran):
+    """{candle start unix time: close price} for the last ~300 candles of this size (Coinbase public candles), cached 5 minutes. Information only."""
+    now = time.time()
+    hit = _cb_candles.get((sym, gran))
+    if hit and now - hit[0] < 300:
+        return hit[1]
+    try:
+        iso = lambda t: dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        r = _rq.get(f"https://api.exchange.coinbase.com/products/{sym}/candles", params={"granularity": gran, "start": iso(now - 295 * gran), "end": iso(now)}, timeout=10)
+        d = {int(x[0]): float(x[4]) for x in r.json()}
+    except Exception:
+        d = hit[1] if hit else {}
+    _cb_candles[(sym, gran)] = (now, d)
+    return d
+
+
+def _price_at(sym, ts):
+    """The price at unix time ts (the close of the candle that ended at ts), or None when it is too old / unavailable."""
+    gran = 900 if time.time() - ts < 70 * 3600 else 3600
+    start = ts // gran * gran - (gran if ts % gran == 0 else 0)
+    p = _cb_closes(sym, gran).get(int(start))
+    if p is None and gran == 900 and ts % 900 != 0:
+        p = _cb_closes(sym, 900).get(int(start))
+    return p
+
+
+def _prev_close_html(ts, when_fn):
+    """'last close' line for a market row: where BTC and XRP stood when it last closed, and how far they have moved since."""
+    if not ts:
+        return ""
+    parts = []
+    for coin, sym, dec in (("BTC", "BTC-USD", 2), ("XRP", "XRP-USD", 4)):
+        p = _price_at(sym, ts)
+        cur = (_state.get(coin) or {}).get("spot_price")
+        if p is None:
+            continue
+        if cur:
+            ch = (cur / p - 1) * 100
+            parts.append(f'{coin} <b>${p:,.{dec}f}</b> <span class="{"up" if ch >= 0 else "down"}">(now {ch:+.2f}%)</span>')
+        else:
+            parts.append(f'{coin} <b>${p:,.{dec}f}</b>')
+    if not parts:
+        return ""
+    return f'<div class="hint">last close ({when_fn(ts)}): ' + " &middot; ".join(parts) + '</div>'
+
+
+def _last_close_panel(rows, when_fn, asset_name):
+    """Optional pull-down: one row per market - when it last closed and where BTC and XRP stood then (and how far they have moved since). Information only."""
+    body = []
+    for r in rows:
+        ts = r.get("prev_end")
+        if not ts:
+            continue
+        cells = []
+        for coin, sym, dec in (("BTC", "BTC-USD", 2), ("XRP", "XRP-USD", 4)):
+            p = _price_at(sym, ts)
+            cur = (_state.get(coin) or {}).get("spot_price")
+            if p is None:
+                cells.append('<td class="hint">too long ago</td>')
+            elif cur:
+                ch = (cur / p - 1) * 100
+                cells.append(f'<td><b>${p:,.{dec}f}</b> <span class="{"up" if ch >= 0 else "down"}">(now {ch:+.2f}%)</span></td>')
+            else:
+                cells.append(f'<td><b>${p:,.{dec}f}</b></td>')
+        what = "daily candle close (midnight UTC)" if r.get("hours") == "24 / 7" else when_fn(ts)
+        body.append(f'<tr><td><b>{r["name"]}</b></td><td>{what}</td>{cells[0]}{cells[1]}</tr>')
+    if not body:
+        return ""
+    return (f'<details class="mh-drop" data-pat="LCL|{asset_name}"><summary><b>Last close</b> <span class="hint">- where each market ended last, and where Bitcoin and XRP stood at that moment</span></summary>'
+            '<table class="press-table mh-table"><tr><th>Market</th><th>Closed</th><th>BTC then</th><th>XRP then</th></tr>' + "".join(body) + '</table>'
+            '<div class="hint">"now" shows how far the price has moved since that close. Prices are from Coinbase 15-minute (or hourly, for older closes) candles. Information only.</div></details>')
+
+
 def build_market_hours_panel(asset_name):
     """Pull-down: when each market opens and closes (shown in YOUR time), whether it is open now, and the start / end of this Kalshi round."""
     from src import market_hours as _mh
@@ -8394,8 +8511,185 @@ def build_market_hours_panel(asset_name):
     help_ = ('<div class="hint">Times are shown in YOUR time zone. Regular trading hours only; US stock holidays and early closes are built in, other countries\' holidays and CME holiday hours are not. '
              'Crypto never closes, but it often moves around the US stock open (9:30 AM ET) and close (4:00 PM ET), when the CME Bitcoin futures reopen after their daily pause, and at the funding times. '
              'Information only.</div>')
-    return (f'<details class="mh-drop" data-pat="MH|{asset_name}"><summary><b>Market hours</b> <span class="hint">- when each market opens and closes{head}</span></summary>'
+    _mh_html = (f'<details class="mh-drop" data-pat="MH|{asset_name}"><summary><b>Market hours</b> <span class="hint">- when each market opens and closes{head}</span></summary>'
             f'{kal}<table class="press-table mh-table"><tr><th>Now</th><th>Market</th><th>Hours (its own clock)</th><th title="how much busier BTC / XRP usually are in the first 30 minutes after the open than in a normal 30 minutes">Usual swing at the open (BTC / XRP)</th><th>Next change (your time)</th></tr>{"".join(body)}</table>{help_}</details>')
+    return _mh_html + _last_close_panel(rows, when, asset_name)
+
+
+# ---- Last windows: a short review of the last 3 finished 15-minute windows (not saved - only the last few are kept, older ones fall away)
+_win_flow = {}                    # (asset, close_ts) -> {"buy": [15], "sell": [15], "n": [15], "done": [15], "lost": [15]}  money bought / sold in each one-minute candle, every exchange
+_win_flow_mu = threading.Lock()
+_FLOW_STARTED = time.time()       # the trade feed only knows what happened after this; any minute that began before it is "not recorded", never counted as zero
+
+
+def _win_flow_loop():
+    while True:
+        try:
+            now = time.time()
+            base = int(now) // 900 * 900
+            for asset in ("BTC", "XRP"):
+                for close in (base, base + 900):                      # the window that just ended and the one running now
+                    start = close - 900
+                    with _win_flow_mu:
+                        rec = _win_flow.setdefault((asset, close), {"buy": [0.0] * 15, "sell": [0.0] * 15, "n": [0] * 15, "done": [False] * 15, "lost": [False] * 15})
+                    for i in range(15):
+                        if rec["done"][i]:
+                            continue
+                        s0, s1 = start + 60 * i, start + 60 * i + 60
+                        if s0 > now:
+                            break
+                        if s0 < _FLOW_STARTED:
+                            rec["lost"][i] = True
+                            rec["done"][i] = True
+                            continue
+                        bu = se = 0.0
+                        n = 0
+                        with _flow.HUB.lock:
+                            bk = _flow.HUB.buckets.get(asset, {})
+                            for s in range(s0, s1):
+                                vd = bk.get(s)
+                                if vd:
+                                    for x in vd.values():
+                                        bu += x[0]; se += x[1]; n += x[2]
+                        rec["buy"][i], rec["sell"][i], rec["n"][i] = bu, se, n
+                        if s1 <= now - 1:
+                            rec["done"][i] = True                       # the minute is over: its numbers are final
+                            if s0 < now - 880 and n == 0:
+                                rec["lost"][i] = True                   # the dashboard was not running then
+            with _win_flow_mu:
+                for k in [k for k in _win_flow if k[1] < now - 6 * 900]:
+                    del _win_flow[k]
+        except Exception as e:
+            print(f"[last-windows] flow recorder failed: {e!r}")
+        time.sleep(4)
+
+
+def _usd_short(x):
+    a = abs(x)
+    s = f"{a / 1e6:.2f}M" if a >= 1e6 else (f"{a / 1e3:.0f}K" if a >= 1e3 else f"{a:.0f}")
+    return ("-" if x < 0 else "") + "$" + s
+
+
+def build_last_windows_panel(asset_name):
+    """Pull-down: what happened in each of the last 3 finished windows - the line, whether and when it flipped against our call (candle numbers, counted from the
+    end), the last candle compared with the finish, how much was bought and sold, and the picture. Information only; it never feeds a call or a trade."""
+    tz = _viewtz.get()
+    now = time.time()
+    with _lc_mu:
+        rounds = list(_lc_rounds.get(asset_name, []))
+    done = [r for r in rounds if r["close"] <= now and r["cov"] >= 0.5][-3:]
+    done.reverse()
+    head = f'<details class="lc-drop" data-pat="LW|{asset_name}"><summary><b>Last windows</b> <span class="hint">- what happened in the last 3 finished windows: flips, the last candle, volume, picture</span></summary>'
+    if not done:
+        return head + '<div class="hint">collecting data - the first finished window shows up here within 15 minutes.</div></details>'
+    dec = 2 if asset_name == "BTC" else 4
+    unit = "BTC" if asset_name == "BTC" else "XRP"
+    t12 = lambda ts: _viewtz.t12(dt.datetime.fromtimestamp(ts, tz))
+    cards, late_cross, against_n, call_n, right_n = [], [], [], 0, 0
+    for idx, r in enumerate(done):
+        res = _lc_results.get(r["ticker"])
+        with _end_lock_mu:
+            lk = dict(_end_locks.get(f"{asset_name}|{r['ticker']}") or {})
+        call = lk.get("side")
+        px = lambda d_: r["line"] * (1 + d_ / 1e4)
+        pts = r["pts"]
+        o_px, c_px = px(pts[0][1]), px(pts[-1][1])
+        hi, lo = max(px(p[1]) for p in pts), min(px(p[1]) for p in pts)
+        # --- our call
+        ref_side, ref_word = None, "our call"
+        if call in ("YES", "NO"):
+            call_n += 1
+            ref_side = call
+            ok = (res == call) if res else None
+            right_n += 1 if ok else 0
+            verdict = ' <span class="up">- RIGHT</span>' if ok else (' <span class="down">- WRONG</span>' if ok is False else "")
+            call_txt = f'our END CALL <b>{call}</b> ({lk.get("lean", 0):.0f}% lean){verdict}'
+        elif call == "NONE":
+            ref_side, ref_word = lk.get("lean_side"), "the lean"
+            call_txt = f'NO CALL (leaned {lk.get("lean_side", "?")} only {lk.get("lean", 0):.0f}%)'
+        elif call == "LATE":
+            call_txt = "no call was locked (the dashboard was starting up)"
+        else:
+            call_txt = "no END CALL was recorded for this window"
+        lock_off = (900 - lk["left"]) if (call in ("YES", "NO", "NONE") and lk.get("left") is not None) else None
+        # --- crossings, numbered by candle and counted from the end
+        crs = []
+        for ts, dr in r["cross"]:
+            cn = _lc.candle_of(ts, r["start"])
+            crs.append((cn, dr, ts - r["start"]))
+        cross_txt = ""
+        if crs:
+            cross_txt = "; ".join(f'candle {cn} ({_lc.nth_to_last(cn)}) {"up through the line to YES" if dr > 0 else "down through the line to NO"}' for cn, dr, _o in crs)
+        if any(cn >= 13 for cn, _d, _o in crs):
+            late_cross.append(idx)
+        flip_lines = []
+        if ref_side in ("YES", "NO"):
+            after = [(cn, dr, off) for cn, dr, off in crs if lock_off is not None and off >= lock_off - 5]
+            agn = [(cn, dr, off) for cn, dr, off in after if (dr > 0) != (ref_side == "YES")]
+            if agn:
+                against_n.append(idx)
+                cn0 = agn[0][0]
+                flip_lines.append(f'After the lock the price <b>crossed against {ref_word}</b> first on <b>candle {cn0} ({_lc.nth_to_last(cn0)})</b>, '
+                                  f'{15 - cn0} candle{"" if 15 - cn0 == 1 else "s"} before the end.')
+                back = [(cn, dr) for cn, dr, off in after if cn > cn0 and (dr > 0) == (ref_side == "YES")]
+                if back:
+                    flip_lines.append(f'It came back to the {ref_side} side on candle {back[-1][0]} ({_lc.nth_to_last(back[-1][0])}).')
+                else:
+                    flip_lines.append("It did not come back before the window closed.")
+            else:
+                flip_lines.append(f'After the lock the price <b>never crossed against {ref_word}</b> - it stayed on the {ref_side} side to the end.')
+        fl = lk.get("flip")
+        if fl:
+            cn = _lc.candle_of(r["close"] - fl["left"] - 1 + 0.0, r["start"]) if fl.get("left") is not None else None
+            flip_lines.append(f'The {"LEGIT FLIP" if fl.get("kind") == "flip" else "LATE CALL"} badge showed with {fl.get("left", 0) // 60}:{fl.get("left", 0) % 60:02d} left'
+                              + (f' (candle {cn}, {_lc.nth_to_last(cn)})' if cn else "") + f' - the live read was {fl.get("lean", 0):.0f}% {fl.get("side")}.')
+        # --- last candle compared with the finish
+        lastp = [p for p in pts if p[0] >= 840]
+        d_a, d_b = (lastp[0][1], lastp[-1][1]) if len(lastp) >= 2 else (r["d_last"], r["d_last"])
+        fin = "above the line (YES side)" if r["d_last"] > 0 else "below the line (NO side)"
+        lc_move = "moved up" if d_b > d_a else ("moved down" if d_b < d_a else "did not move")
+        last_txt = (f'<b>The last candle</b> {lc_move} ({px(d_a):,.{dec}f} to {px(d_b):,.{dec}f}) and the price finished <b>{abs(r["d_last"]):.1f} bps {fin}</b>'
+                    + (f' - Kalshi settled <b>{res}</b>.' if res else " - settling.")
+                    + (f' The 8th-minute side was {r["side8"]}{"" if res is None else (" - the same as the result." if r["side8"] == res else " - the OPPOSITE of the result.")}' if r.get("side8") else ""))
+        # --- volume
+        with _win_flow_mu:
+            fr = _win_flow.get((asset_name, int(r["close"])))
+            fr = {k: list(v) for k, v in fr.items()} if fr else None
+        if fr and not all(fr["lost"]):
+            nrec = [i for i in range(15) if not fr["lost"][i]]
+            bu, se = sum(fr["buy"][i] for i in nrec), sum(fr["sell"][i] for i in nrec)
+            tot = bu + se
+            partial = len(nrec) < 15
+            lb, ls = fr["buy"][14], fr["sell"][14]
+            last_ok = not fr["lost"][14]
+            avg = tot / max(len(nrec), 1)
+            l3 = sum(fr["buy"][i] - fr["sell"][i] for i in (12, 13, 14) if not fr["lost"][i])
+            vol_txt = (f'<b>Traded in the window (all exchanges):</b> bought {_usd_short(bu)} (about {bu / r["line"]:,.0f} {unit}) vs sold {_usd_short(se)} (about {se / r["line"]:,.0f} {unit}) '
+                       f'- net <span class="{"up" if bu >= se else "down"}">{_usd_short(bu - se)}</span>, {bu / tot * 100 if tot else 50:.0f}% of the money was buying. '
+                       + (f'<br><b>Last candle:</b> bought {_usd_short(lb)} vs sold {_usd_short(ls)} (net {_usd_short(lb - ls)}); an average candle traded {_usd_short(avg)}. ' if last_ok else '<br><b>Last candle:</b> not recorded. ')
+                       + f'Net over the last 3 candles: {_usd_short(l3)}.' + (' <span class="hint">(only part of the window was recorded - the dashboard started mid-window)</span>' if partial else ""))
+            vol_svg = _lc.flow_bars_svg(fr["buy"], fr["sell"], fr["lost"], f"fb{asset_name}{idx}")
+        else:
+            vol_txt = '<span class="hint">How much was traded in this window was not recorded (the dashboard was not running then).</span>'
+            vol_svg = ""
+        title = f'{t12(r["start"])} - {t12(r["close"])}'
+        cards.append(
+            f'<div class="lw-card" style="border-top:1px solid #30363d;margin-top:10px;padding-top:8px">'
+            f'<div><b>{title}</b> &middot; Kalshi: <b>{res or "settling"}</b> &middot; {call_txt}</div>'
+            f'<p style="margin:4px 0">The target line was {r["line"]:,.{dec}f}. The window opened {o_px:,.{dec}f}, finished {c_px:,.{dec}f}; high {hi:,.{dec}f}, low {lo:,.{dec}f} (range {hi - lo:,.{dec}f}). '
+            f'The price crossed the line <b>{len(crs)}</b> time{"" if len(crs) == 1 else "s"}'
+            + (f': {cross_txt}.' if crs else ' - it stayed on one side the whole window.') + '</p>'
+            + "".join(f'<p style="margin:4px 0">{x}</p>' for x in flip_lines)
+            + f'<p style="margin:4px 0">{last_txt}</p><p style="margin:4px 0">{vol_txt}</p>'
+            + _lc.round_svg(r, res, f"lw{asset_name}{idx}", lock_off, call if call in ("YES", "NO") else None) + vol_svg + '</div>')
+    n = len(done)
+    bits = []
+    bits.append(f'the price crossed the line in the last 3 candles in <b>{len(late_cross)} of {n}</b> windows')
+    if call_n:
+        bits.append(f'it crossed against our call after the lock in <b>{len(against_n)} of {call_n}</b> windows with a call, and our call was right in {right_n} of {call_n}')
+    note = ('<div class="hint" style="margin:6px 0">Across these windows: ' + "; ".join(bits) + '. These are the last few windows only (older ones are dropped automatically). '
+            'What happened before does not tell you what the next window will do - information only.</div>')
+    return head + note + "".join(cards) + '</details>'
 
 
 def build_line_cross_panel(asset_name):
@@ -8576,7 +8870,15 @@ def build_pattern_window(asset_name):
     except Exception as _cpe:
         cpi_strip = ""
         print(f"[cpi] strip failed: {_cpe!r}")
-    return (f'<div class="row pat-win" data-asset="{asset_name}">{head}{cpi_strip}'
+    flags = ""
+    try:
+        for s_ in _sweep_stars(asset_name, tf, labels, cs):
+            if s_.get("fresh"):
+                flags += (f'<span class="sweep-star-flag" style="display:none" data-name="{asset_name}" data-tf="{_MTF_NAMES[tf]}" data-fresh="1" '
+                          f'data-dir="{"highs" if s_["up"] else "lows"}" data-key="{asset_name}|{tf}|{int(s_["ts"])}|{"h" if s_["up"] else "l"}"></span>')
+    except Exception as _sfe:
+        print(f"[sweep star] marker failed: {_sfe!r}")
+    return (f'<div class="row pat-win" data-asset="{asset_name}">{flags}{head}{cpi_strip}'
             f"<div class=\"pat-chart-row\"><div class=\"pat-chart\" data-tf=\"{tf}\" onclick=\"expandPatternChart('{asset_name}')\" title=\"click to make it full-screen\">{svg}</div></div>"
             f'<div class="hint">click the chart to make it full-screen (Esc to close)</div>'
             f'<div class="pat-win-legend">{legend}</div></div>')
@@ -10201,6 +10503,11 @@ def render_html():
         except Exception as _mhe:
             market_hours_html = ""
             print(f"[market hours] panel failed: {_mhe!r}")
+        try:
+            last_windows_html = build_last_windows_panel(name) if name in ("BTC", "XRP") else ""
+        except Exception as _lwe:
+            last_windows_html = ""
+            print(f"[last windows] panel failed: {_lwe!r}")
 
         def _cw(cls, label, value_html, sub_html="", tip=""):
             return (f'<div class="cw {cls}" title="{tip}"><div class="cw-l">{label}</div><div class="cw-v">{value_html}</div>'
@@ -10257,6 +10564,7 @@ def render_html():
           {pattern_window_html}
           {bookmap_panel_html}
           {line_cross_html}
+          {last_windows_html}
           {market_hours_html}
           <details class="more-info" data-pat="MORE|{name}"><summary><b>More {name} information</b> <span class="hint">- chart structure, pattern history, regime, RSI, track record, predicted range (click to open)</span></summary>
           {pattern_panel_html}
@@ -10338,7 +10646,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         """True if the request may go on. Hosted copies: /healthz is open, /login is open, everything else needs a signed-in person; read-only copies refuse every trading / settings endpoint."""
         path = urllib.parse.urlparse(self.path).path
         if path == "/healthz":
-            body = ("ok " + SITE_VERSION).encode()
+            body = (f"ok {SITE_VERSION} saved_data={'yes' if os.environ.get('DATA_ON_VOLUME') == '1' else 'NO'} starts={os.environ.get('BOOT_COUNT', '?')} people={len(_acc.list_users()) if HOSTED_PASSWORD else 0}").encode()
             self.send_response(200); self.send_header("Content-Type", "text/plain"); self.send_header("Content-Length", str(len(body))); self.end_headers()
             self.wfile.write(body)
             return False
@@ -10361,17 +10669,22 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return False
         return True
 
-    def _read_form(self):
+    def _persist_warning(self):
+        if os.environ.get("DATA_ON_VOLUME") == "0":
+            return "the saved data is NOT on a Railway Volume, so approved people and the streak are erased every time the site updates. Attach a Volume (mount path /data) in Railway."
+        return ""
+
+    def _read_form(self, limit=8192):
         try:
             n = int(self.headers.get("Content-Length", 0))
-            raw = self.rfile.read(n) if 0 < n <= 8192 else b""
+            raw = self.rfile.read(n) if 0 < n <= limit else b""
         except Exception:
             raw = b""
         return {k: v[0] for k, v in urllib.parse.parse_qs(raw.decode("utf-8", "replace"), keep_blank_values=True).items()}
 
     def _admin_post(self, path):
         """The owner's /admin forms: add a person, reset a password, remove a person."""
-        f = self._read_form()
+        f = self._read_form(400000 if path == "/admin/restore" else 8192)
         u, pw = (f.get("u") or "").strip().lower(), f.get("p") or ""
         msg, err = "", False
         if path == "/admin/add":
@@ -10392,10 +10705,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
         elif path == "/admin/deny":
             msg = f"Denied {u}." if _acc.deny_request(u) else "That request is gone."
             err = msg == "That request is gone."
+        elif path == "/admin/restore":
+            try:
+                data = json.loads(f.get("j") or "{}")
+                a_, r_ = _acc.import_all(data)
+                msg, err = f"Restored: {a_} people and {r_} waiting requests were added back.", False
+            except Exception:
+                msg, err = "That is not a valid backup. Paste the whole file contents.", True
         elif path == "/admin/delete":
             msg = f"Removed {u}. They are signed out." if _acc.delete_user(u) else "No such person."
             err = msg == "No such person."
-        self._send(200, _accp.admin_page(_acc.list_users(), _acc.last_seen, msg, err, _acc.list_requests()).encode("utf-8"))
+        self._send(200, _accp.admin_page(_acc.list_users(), _acc.last_seen, msg, err, _acc.list_requests(), self._persist_warning()).encode("utf-8"))
 
     def do_POST(self):
         """The Bookmap bridge add-on (this computer only) and - on the website copy only - the owner's bot (/sync_state, password required) post here."""
@@ -10431,10 +10751,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if f.get("agree") != "1":
                 self._send(200, _accp.signup_page("Tick the box to agree to the terms first.", True).encode("utf-8"))
                 return
+            if not (f.get("n") or "").strip():
+                self._send(200, _accp.signup_page("Please type your Discord name.", True).encode("utf-8"))
+                return
             ok, m = _acc.request_signup(f.get("u"), f.get("p"), f.get("n"), self._ip(), terms=_accp.TERMS_DATE)
             self._send(200, (_accp.signup_page("Request sent.", False, done=True) if ok else _accp.signup_page(m, True)).encode("utf-8"))
             return
-        if HOSTED_PASSWORD and _ppath in ("/admin/add", "/admin/passwd", "/admin/delete", "/admin/approve", "/admin/deny"):
+        if HOSTED_PASSWORD and _ppath in ("/admin/add", "/admin/passwd", "/admin/delete", "/admin/approve", "/admin/deny", "/admin/restore"):
             if self._who and self._who[1]:
                 self._admin_post(_ppath)
             else:
@@ -10497,9 +10820,34 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_header("Set-Cookie", "sess=; Max-Age=0" + self._cookie_flags())
             self.end_headers()
             return
+        if HOSTED_PASSWORD and parsed.path in ("/admin/people.csv", "/admin/people_log.csv"):
+            if self._who and self._who[1]:
+                z = _viewtz.get()
+
+                def _when(t):
+                    if not t:
+                        return ""
+                    d = dt.datetime.fromtimestamp(float(t), dt.timezone.utc).astimezone(z)
+                    return f"{d:%b} {d.day}, {d.year} {_viewtz.t12(d)} {d.tzname() or ''}".strip()
+                if parsed.path == "/admin/people.csv":
+                    body, fname = _accp.people_csv(_acc.people_rows(), _when), "dominator_people.csv"
+                else:
+                    body, fname = _accp.log_csv(_acc.read_log(), _when), "dominator_people_history.csv"
+                self._send(200, body.encode("utf-8-sig"), "text/csv; charset=utf-8",
+                           (("Content-Disposition", f'attachment; filename="{fname}"'),))
+            else:
+                self._send(403, b"owner only", "text/plain")
+            return
+        if HOSTED_PASSWORD and parsed.path == "/admin/backup":
+            if self._who and self._who[1]:
+                self._send(200, json.dumps(_acc.export_all(), indent=1).encode("utf-8"), "application/json",
+                           (("Content-Disposition", 'attachment; filename="dominator_people_backup.json"'),))
+            else:
+                self._send(403, b"owner only", "text/plain")
+            return
         if HOSTED_PASSWORD and parsed.path == "/admin":
             if self._who and self._who[1]:
-                self._send(200, _accp.admin_page(_acc.list_users(), _acc.last_seen, requests=_acc.list_requests()).encode("utf-8"))
+                self._send(200, _accp.admin_page(_acc.list_users(), _acc.last_seen, requests=_acc.list_requests(), warn=self._persist_warning()).encode("utf-8"))
             else:
                 self._send(403, b"owner only", "text/plain")
             return
@@ -11112,6 +11460,7 @@ def main():
     _load_end_hist()
     threading.Thread(target=_end_hist_loop, daemon=True, name="end-call-history").start()
     threading.Thread(target=_keepwarm_loop, daemon=True, name="keep-warm").start()
+    threading.Thread(target=_win_flow_loop, daemon=True, name="last-windows-flow").start()
     _lc_load()
     threading.Thread(target=_lc_loop, daemon=True, name="line-cross").start()
     threading.Thread(target=_sync_loop, daemon=True, name="website-sync").start()

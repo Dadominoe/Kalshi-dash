@@ -35,6 +35,15 @@ if vol:
     print(f"[hosted] history is kept on the volume at {vol}")
 else:
     print("[hosted] WARNING: no volume attached - history will be lost every time the service restarts")
+try:                                                                  # boot counter: lives in data_cache, so it only keeps counting up if the saved data really survives each update
+    _bc = os.path.join(vol if vol else HERE, "data_cache", ".boot_count")
+    os.makedirs(os.path.dirname(_bc), exist_ok=True)
+    _n = int(open(_bc).read().strip() or 0) + 1 if os.path.exists(_bc) else 1
+    open(_bc, "w").write(str(_n))
+    os.environ["BOOT_COUNT"] = str(_n)
+    os.environ["DATA_ON_VOLUME"] = "1" if vol else "0"
+except Exception:
+    pass
 if not os.environ.get("DASH_PASSWORD"):
     print("[hosted] WARNING: DASH_PASSWORD is not set - anyone with the link can open this dashboard")
 

@@ -245,3 +245,105 @@ def classify(rd, now_ts):
     else:
         code, label, text = "MIXED", "MIXED", f"{c_} crossing{'s' if c_ != 1 else ''} so far, now {abs(d):.0f} bps {side.lower()} the line"
     return {"code": code, "label": label, "text": text, "c": c_, "d": d, "mins_since": since, "side": side}
+
+
+def nth_to_last(candle, total=15):
+    """'last candle' / '2nd to last' / '3rd to last' / '4th to last' ... for candle number 1..total."""
+    n = total + 1 - candle
+    if n <= 1:
+        return "the last candle"
+    return {2: "2nd to last", 3: "3rd to last"}.get(n, f"{n}th to last")
+
+
+def candle_of(ts, start):
+    return max(1, min(15, int((ts - start) // 60) + 1))
+
+
+def round_svg(r, result, uid, lock_off=None, lock_side=None, width=900, height=250):
+    """Picture of ONE 15-minute window: distance from the target line (basis points) every few seconds, the 15 one-minute candles numbered, the last 3 shaded,
+    a dot on every crossing (with its candle number), the 8th-minute lock, and Kalshi's result."""
+    L, R, T, B = 46, 12, 30, 34
+    pw, ph = width - L - R, height - T - B
+    zero = T + ph / 2
+    pts = r["pts"]
+    dmax = max([4.0] + [abs(p[1]) for p in pts]) * 1.12
+    sx = lambda off: L + max(0.0, min(900.0, off)) / 900.0 * pw
+    sy = lambda d: zero - max(-dmax, min(dmax, d)) / dmax * (ph / 2)
+    o = [f'<svg viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg" class="lc-svg" role="img">',
+         f'<defs><clipPath id="{uid}a"><rect x="{L}" y="{T}" width="{pw}" height="{ph / 2:.1f}"/></clipPath>'
+         f'<clipPath id="{uid}b"><rect x="{L}" y="{zero:.1f}" width="{pw}" height="{ph / 2:.1f}"/></clipPath></defs>',
+         f'<rect x="0" y="0" width="{width}" height="{height}" fill="#0d1117"/>',
+         f'<rect x="{L}" y="{T}" width="{pw}" height="{ph / 2:.1f}" fill="#3fb950" fill-opacity="0.06"/>',
+         f'<rect x="{L}" y="{zero:.1f}" width="{pw}" height="{ph / 2:.1f}" fill="#f85149" fill-opacity="0.06"/>',
+         f'<rect x="{sx(720):.1f}" y="{T}" width="{sx(900) - sx(720):.1f}" height="{ph}" fill="#d29922" fill-opacity="0.10"/>',
+         f'<rect x="{sx(840):.1f}" y="{T}" width="{sx(900) - sx(840):.1f}" height="{ph}" fill="#d29922" fill-opacity="0.12"/>']
+    for k in range(16):
+        x = sx(k * 60)
+        o.append(f'<line x1="{x:.1f}" y1="{T}" x2="{x:.1f}" y2="{T + ph}" stroke="#30363d" stroke-width="1" stroke-dasharray="3 4"/>')
+    for k in range(15):
+        o.append(f'<text x="{sx(k * 60 + 30):.1f}" y="{T + ph + 14}" text-anchor="middle" font-size="12" fill="{"#e3b341" if k >= 12 else "#8b949e"}">{k + 1}</text>')
+    o.append(f'<text x="{(sx(720) + sx(900)) / 2:.1f}" y="{T - 6}" text-anchor="middle" font-size="12" fill="#e3b341">last 3 candles</text>')
+    o.append(f'<text x="{L - 6}" y="{T + 12}" text-anchor="end" font-size="12" fill="#56d364">above</text>')
+    o.append(f'<text x="{L - 6}" y="{T + ph - 4}" text-anchor="end" font-size="12" fill="#ff7b72">below</text>')
+    if len(pts) >= 2:
+        xy = [(sx(p[0]), sy(p[1])) for p in pts]
+        path = "M " + " L ".join(f"{x:.1f},{y:.1f}" for x, y in xy)
+        poly = path + f" L {xy[-1][0]:.1f},{zero:.1f} L {xy[0][0]:.1f},{zero:.1f} Z"
+        o.append(f'<path d="{poly}" fill="#3fb950" fill-opacity="0.35" clip-path="url(#{uid}a)"/>')
+        o.append(f'<path d="{poly}" fill="#f85149" fill-opacity="0.35" clip-path="url(#{uid}b)"/>')
+        o.append(f'<path d="{path}" fill="none" stroke="#e6edf3" stroke-width="1.8" stroke-linejoin="round"/>')
+    if lock_off is not None:
+        x = sx(lock_off)
+        o.append(f'<line x1="{x:.1f}" y1="{T}" x2="{x:.1f}" y2="{T + ph}" stroke="#58a6ff" stroke-width="1.6" stroke-dasharray="6 4"/>')
+        o.append(f'<text x="{x - 4:.1f}" y="{T + 12}" text-anchor="end" font-size="12" font-weight="700" fill="#58a6ff">call locked{(" " + lock_side) if lock_side else ""}</text>')
+    for ts, direction in r["cross"]:
+        off = ts - r["start"]
+        col = "#56d364" if direction > 0 else "#ff7b72"
+        o.append(f'<circle cx="{sx(off):.1f}" cy="{zero:.1f}" r="6" fill="{col}" stroke="#0d1117" stroke-width="1.5"/>')
+        o.append(f'<text x="{sx(off):.1f}" y="{zero - 10:.1f}" text-anchor="middle" font-size="12" font-weight="700" fill="{col}">c{candle_of(ts, r["start"])}</text>')
+    o.append(f'<line x1="{L}" y1="{zero:.1f}" x2="{width - R}" y2="{zero:.1f}" stroke="#d29922" stroke-width="2.2"/>')
+    chip = {"YES": "#3fb950", "NO": "#f85149"}.get(result)
+    if chip:
+        o.append(f'<rect x="{width - R - 112}" y="4" width="112" height="19" rx="5" fill="{chip}" fill-opacity="0.25" stroke="{chip}"/>'
+                 f'<text x="{width - R - 56}" y="18" text-anchor="middle" font-size="13" font-weight="800" fill="{chip}">Kalshi: {result}</text>')
+    o.append(f'<text x="{L + 4}" y="{zero + 16:.1f}" font-size="12" font-weight="700" fill="#e3b341">TARGET LINE</text>')
+    o.append(f'<text x="{L}" y="{height - 4}" font-size="11" fill="#8b949e">numbers = the 15 one-minute candles - dots = crossings (c13 = candle 13) - up to +/- {dmax / 1.12:.0f} basis points (1 bp = 0.01%)</text>')
+    o.append("</svg>")
+    return "".join(o)
+
+
+def _short_usd(x):
+    a = abs(x)
+    s = f"{a / 1e6:.2f}M" if a >= 1e6 else (f"{a / 1e3:.0f}K" if a >= 1e3 else f"{a:.0f}")
+    return ("-" if x < 0 else "") + "$" + s
+
+
+def flow_bars_svg(buy, sell, lost, uid, width=900, height=150):
+    """Net buying (green, up) or selling (red, down) in each of the 15 one-minute candles of a window, all exchanges added together. The last 3 are shaded."""
+    L, R, T, B = 46, 12, 16, 28
+    pw, ph = width - L - R, height - T - B
+    zero = T + ph / 2
+    net = [None if lost[i] else buy[i] - sell[i] for i in range(15)]
+    vmax = max([1.0] + [abs(v) for v in net if v is not None]) * 1.1
+    bw = pw / 15
+    o = [f'<svg viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg" class="lc-svg" role="img">',
+         f'<rect x="0" y="0" width="{width}" height="{height}" fill="#0d1117"/>',
+         f'<rect x="{L + 12 * bw:.1f}" y="{T}" width="{3 * bw:.1f}" height="{ph}" fill="#d29922" fill-opacity="0.12"/>']
+    for i in range(15):
+        x = L + i * bw
+        v = net[i]
+        if v is None:
+            o.append(f'<text x="{x + bw / 2:.1f}" y="{zero:.1f}" text-anchor="middle" font-size="10" fill="#6e7681">n/a</text>')
+        else:
+            h = abs(v) / vmax * (ph / 2)
+            col = "#3fb950" if v >= 0 else "#f85149"
+            y = zero - h if v >= 0 else zero
+            o.append(f'<rect x="{x + 3:.1f}" y="{y:.1f}" width="{bw - 6:.1f}" height="{max(h, 1):.1f}" fill="{col}" fill-opacity="0.8"/>')
+            o.append(f'<text x="{x + bw / 2:.1f}" y="{(y - 3) if v >= 0 else (y + h + 11):.1f}" text-anchor="middle" font-size="10" fill="#c9d1d9">{_short_usd(v)}</text>')
+        o.append(f'<text x="{x + bw / 2:.1f}" y="{height - 12}" text-anchor="middle" font-size="12" fill="{"#e3b341" if i >= 12 else "#8b949e"}">{i + 1}</text>')
+    o.append(f'<line x1="{L}" y1="{zero:.1f}" x2="{width - R}" y2="{zero:.1f}" stroke="#8b949e" stroke-width="1"/>')
+    o.append(f'<text x="{L - 6}" y="{T + 10}" text-anchor="end" font-size="11" fill="#56d364">more bought</text>')
+    o.append(f'<text x="{L - 6}" y="{T + ph - 2}" text-anchor="end" font-size="11" fill="#ff7b72">more sold</text>')
+    o.append(f'<text x="{L}" y="{height - 1}" font-size="10" fill="#8b949e">money bought minus money sold in each one-minute candle (every exchange added together)</text>')
+    o.append("</svg>")
+    return "".join(o)

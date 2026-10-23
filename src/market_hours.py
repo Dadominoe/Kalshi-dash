@@ -54,7 +54,7 @@ def market_rows(now):
     rows = []
     for group, name, zone, sched, cal, note in MARKETS:
         if sched is None:
-            rows.append({"group": group, "name": name, "hours": "24 / 7", "state": "OPEN", "next_ts": None, "next_what": "", "note": note})
+            rows.append({"group": group, "name": name, "hours": "24 / 7", "state": "OPEN", "next_ts": None, "next_what": "", "note": note, "prev_end": now // 86400 * 86400})      # crypto has no close: use the daily candle close (midnight UTC)
             continue
         ss = _sessions(zone, sched, cal, now)
         cur = next(((s, e) for s, e in ss if s <= now < e), None)
@@ -65,10 +65,10 @@ def market_rows(now):
         d0 = dt.datetime.fromtimestamp(now, z)
         hours = f"{_h12(o)} - {_h12(c)} {d0.tzname()}"
         if cur:
-            rows.append({"group": group, "name": name, "hours": hours, "state": "OPEN", "next_ts": cur[1], "next_what": "closes", "note": note})
+            rows.append({"group": group, "name": name, "hours": hours, "state": "OPEN", "next_ts": cur[1], "next_what": "closes", "note": note, "prev_end": prev_end})
         else:
             brk = prev_end is not None and nxt is not None and now - prev_end <= 2 * 3600 and nxt - now <= 2 * 3600
-            rows.append({"group": group, "name": name, "hours": hours, "state": "BREAK" if brk else "CLOSED", "next_ts": nxt, "next_what": "opens", "note": note})
+            rows.append({"group": group, "name": name, "hours": hours, "state": "BREAK" if brk else "CLOSED", "next_ts": nxt, "next_what": "opens", "note": note, "prev_end": prev_end})
     return rows
 
 

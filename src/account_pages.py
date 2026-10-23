@@ -72,11 +72,11 @@ def signup_page(msg="", err=True, done=False):
     return _page("Ask for access", f'<h1>Ask for access</h1>{_msg(msg, err)}<div class="msg" style="font-size:17px"><b>Price: $300 flat rate.</b> You pay the owner directly, and your account is approved once it is arranged. The price is for access to the information only.</div>'
                  '<form method="post" action="/signup"><label>Pick a user name (letters, numbers, dot, dash, underscore)</label><input name="u" autocomplete="username" required>'
                  '<label>Pick a password (at least 8 characters)</label><input name="p" type="password" autocomplete="new-password" minlength="8" required>'
-                 '<label>Who are you? (so the owner knows who to approve)</label><input name="n" maxlength="200" required>'
+                 '<label>Your Discord name (so the owner knows who you are)</label><input name="n" maxlength="100" placeholder="for example  nate_trades" required>'
                  '<label style="display:flex;gap:10px;align-items:flex-start;margin-top:16px;color:#e6edf3"><input type="checkbox" name="agree" value="1" required style="width:auto;margin-top:4px"><span>I am of legal age where I live, I understand this is for information only and not gambling or advice, and I agree to the <a href="/terms" target="_blank">Terms and disclaimers</a>.</span></label><button type="submit">Send request</button></form><p style="margin-top:18px;font-size:15px"><a href="/login">Back to sign in</a></p>')
 
 
-def admin_page(users, online, msg="", err=False, requests=None):
+def admin_page(users, online, msg="", err=False, requests=None, warn=""):
     rows = []
     for name in sorted(users):
         seen = online.get(name)
@@ -87,7 +87,7 @@ def admin_page(users, online, msg="", err=False, requests=None):
         else:
             st = '<span class="off">not since the site restarted</span>'
         n = html.escape(name)
-        rows.append(f'<tr><td><b>{n}</b></td><td>{st}</td>'
+        rows.append(f'<tr><td><b>{n}</b><br><span class="off">Discord: {html.escape(users[name].get("note") or "-")}</span></td><td>{st}</td>'
                     f'<td><form method="post" action="/admin/passwd" class="row"><input type="hidden" name="u" value="{n}">'
                     f'<input name="p" type="password" placeholder="new password" minlength="8" required><button class="grey">Change password</button></form></td>'
                     f'<td><form method="post" action="/admin/delete" onsubmit="return confirm(\'Remove {n}? They will be signed out right away.\')">'
@@ -103,11 +103,19 @@ def admin_page(users, online, msg="", err=False, requests=None):
             rr.append(f'<tr><td><b>{n}</b></td><td>{who}<br><span class="off">{when}</span></td>'
                       f'<td><form method="post" action="/admin/approve" style="display:inline"><input type="hidden" name="u" value="{n}"><button class="grey" style="background:#238636">Approve</button></form> '
                       f'<form method="post" action="/admin/deny" style="display:inline"><input type="hidden" name="u" value="{n}"><button class="red">Deny</button></form></td></tr>')
-        reqs = (f'<h2>Waiting for your approval ({len(requests)})</h2><table><tr><th>User name</th><th>Who they say they are</th><th></th></tr>' + "".join(rr) + '</table>')
-    body = (f'<h1>People who can sign in</h1>{_msg(msg, err)}<p><a href="/">Back to the dashboard</a> &nbsp; <a href="/logout">Sign out</a></p>{reqs}{table}'
+        reqs = (f'<h2>Waiting for your approval ({len(requests)})</h2><table><tr><th>User name</th><th>Discord name</th><th></th></tr>' + "".join(rr) + '</table>')
+    warn_html = (f'<div class="msg err" style="font-size:16px"><b>Warning:</b> {html.escape(warn)}</div>') if warn else ""
+    backup = ('<h2>Your records</h2><p><a href="/admin/people.csv"><b>Download the people list</b></a> - everybody who ever asked: user name, Discord name, '
+              'when they asked, when you approved them, the terms they agreed to, and anyone denied or removed. Opens in Excel or Google Sheets.</p>'
+              '<p><a href="/admin/people_log.csv">Download the full history</a> - every ask, approve, deny, remove and password change, in order. Nothing is ever erased from it.</p>'
+              '<h2>Backup</h2><p><a href="/admin/backup">Download a backup of everybody</a> (user names, scrambled passwords and the full history - keep it private). '
+              'Restoring it puts back the people and the history.</p>'
+              '<form method="post" action="/admin/restore"><label>Restore: paste the contents of a backup file here (it only adds people who are missing)</label>'
+              '<input name="j" placeholder="paste the backup text here"><button class="grey" style="margin-top:10px">Restore</button></form>')
+    body = (f'<h1>People who can sign in</h1>{warn_html}{_msg(msg, err)}<p><a href="/">Back to the dashboard</a> &nbsp; <a href="/logout">Sign out</a></p>{reqs}{table}'
             '<h2>Add a person</h2><form method="post" action="/admin/add"><label>User name (letters, numbers, dot, dash, underscore)</label><input name="u" required>'
             '<label>Their password (at least 8 characters - tell it to them yourself)</label><input name="p" type="password" minlength="8" required>'
-            '<button type="submit">Add person</button></form>')
+            '<button type="submit">Add person</button></form>' + backup)
     return _page("People", body, wide=True)
 
 
@@ -115,3 +123,30 @@ def userbar(name, is_admin):
     link = '<a href="/admin" style="color:#58a6ff">People</a> &nbsp; ' if is_admin else ""
     return ('<div style="position:fixed;top:3px;right:8px;z-index:99999;font:12px Segoe UI,Arial,sans-serif;color:#9da7b3;background:rgba(15,20,25,.78);padding:2px 8px;border-radius:6px">'
             f'{html.escape(name)} &nbsp; {link}<a href="/logout" style="color:#58a6ff">Sign out</a></div>')
+
+
+PEOPLE_COLUMNS = (("user_name", "User name"), ("discord_name", "Discord name"), ("status", "Status"), ("asked_on", "Asked on"),
+                  ("approved_on", "Approved on"), ("terms_agreed", "Terms agreed to"), ("terms_agreed_on", "Agreed to terms on"),
+                  ("last_seen", "Last seen"), ("denied_on", "Denied on"), ("removed_on", "Removed on"))
+LOG_COLUMNS = (("time", "When"), ("event", "What happened"), ("name", "User name"), ("discord", "Discord name"),
+               ("asked_at", "Asked on"), ("terms", "Terms"), ("agreed_at", "Agreed to terms on"))
+_TIME_KEYS = {"asked_on", "approved_on", "terms_agreed_on", "last_seen", "denied_on", "removed_on", "time", "asked_at", "agreed_at", "approved_at"}
+
+
+def _csv(rows, columns, fmt_time):
+    import csv
+    import io
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow([label for _, label in columns])
+    for r in rows:
+        w.writerow([fmt_time(r.get(k)) if k in _TIME_KEYS else (r.get(k) or "") for k, _ in columns])
+    return buf.getvalue()
+
+
+def people_csv(rows, fmt_time):
+    return _csv(rows, PEOPLE_COLUMNS, fmt_time)
+
+
+def log_csv(entries, fmt_time):
+    return _csv(entries, LOG_COLUMNS, fmt_time)
