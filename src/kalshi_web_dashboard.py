@@ -805,7 +805,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-21b"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-23a"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -5038,6 +5038,14 @@ details.pat > summary { cursor:pointer; }
 .press-sell { background:#da3633; color:#fff; font-size:18px; font-weight:800; line-height:40px; padding-right:12px; text-align:right; white-space:nowrap; overflow:hidden; transition:width 0.4s ease; text-shadow:0 1px 2px rgba(0,0,0,0.6); }
 .press-mid { position:absolute; left:50%; top:0; bottom:0; width:3px; margin-left:-1px; background:#e6edf3; opacity:0.85; }
 .press-chips { margin-top:6px; display:flex; flex-wrap:wrap; gap:6px; }
+.pw-tag { font-size:12px; font-weight:800; letter-spacing:0.5px; padding:2px 9px; border-radius:6px; margin-right:4px; }
+.pw-1m { background:#0b2a4a; color:#58a6ff; border:1px solid #1f6feb; }
+.pw-live { background:#2a2208; color:#ffd54a; border:1px solid #d29922; }
+.pw-livetxt { color:#ffd54a; }
+.pw-dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:#ffd54a; margin-right:6px; vertical-align:1px; animation:pwPulse 1.4s ease-in-out infinite; }
+@keyframes pwPulse { 0%,100% { opacity:1; } 50% { opacity:0.25; } }
+.press-live { margin:0 0 12px; padding-bottom:12px; border-bottom:1px solid #30363d; }
+.press-bar-live { height:54px; } .press-bar-live .press-buy, .press-bar-live .press-sell { font-size:18px; }
 .press-chip { font-size:13px; padding:2px 8px; border-radius:10px; border:1px solid #30363d; background:#161b22; }
 .press-chip.up { color:#3fb950; border-color:#238636; } .press-chip.down { color:#f85149; border-color:#da3633; } .press-chip.flat { color:#8b949e; }
 .press-more { margin-top:6px; }
@@ -5757,6 +5765,10 @@ function checkSweepStars() {
 window.testSweepStar = function(name, dir) {   // console helper: testSweepStar('BTC','highs')
   flyStar(dir || 'highs'); flyAcross(name || 'BTC', 'fly-sweep', '\u2605 POSSIBLE LIQUIDITY SWEEP FROM THE ' + ((dir || 'highs') === 'highs' ? 'HIGHS' : 'LOWS'), 'test');
 };
+function setPressWin(sec) {            // this browser's own live-bar window (5 / 10 / 30 seconds) - nobody else's changes
+  document.cookie = 'pwin=' + sec + '; path=/; max-age=31536000; SameSite=Lax';
+  refresh();
+}
 function coinShown(name) {
   const v = document.body.getAttribute('data-view');
   return !((v === 'BTC' && name !== 'BTC') || (v === 'XRP' && name !== 'XRP'));
@@ -6935,6 +6947,62 @@ def _pct_cls(p):
     return "up" if p >= 55 else ("down" if p <= 45 else "flat")
 
 
+def _live_pressure_html(asset_name, win, slow_pct):
+    """The LIVE bar: money bought vs sold over only the last `win` seconds (5 / 10 / 30), all exchanges, plus a 60-second line of how that reading has moved.
+    The faint band on the line is the 1-minute reading. Information only."""
+    now = int(time.time())
+    span = 60 + win
+    buy = [0.0] * span
+    sell = [0.0] * span
+    with _flow.HUB.lock:
+        bk = _flow.HUB.buckets.get(asset_name, {})
+        for i in range(span):
+            vd = bk.get(now - span + 1 + i)
+            if vd:
+                for x in vd.values():
+                    buy[i] += x[0]; sell[i] += x[1]
+    pb = [0.0]; ps = [0.0]
+    for i in range(span):
+        pb.append(pb[-1] + buy[i]); ps.append(ps[-1] + sell[i])
+    series, last = [], 50.0
+    for k in range(60):
+        end = win + k + 1                                  # exclusive index of the window's last second
+        b_, s_ = pb[end] - pb[end - win], ps[end] - ps[end - win]
+        if b_ + s_ > 0:
+            last = b_ / (b_ + s_) * 100
+        series.append(last)
+    bw, sw = pb[span] - pb[span - win], ps[span] - ps[span - win]
+    quiet = (bw + sw) <= 0
+    live = 50.0 if quiet else bw / (bw + sw) * 100
+    sell_pct = 100 - live
+    verdict = ("buyers pushing", "up") if live >= 58 else (("sellers pushing", "down") if live <= 42 else ("balanced", "flat"))
+    if quiet:
+        verdict = ("no trades in the last %d sec" % win, "flat")
+    ago = series[-11] if len(series) >= 11 else live
+    d_ = live - ago
+    col = "#3fb950" if live >= 50 else "#f85149"
+    W, H = 600, 56
+    pts = " ".join(f"{i / 59 * W:.1f},{H - series[i] / 100 * H:.1f}" for i in range(60))
+    band = ""
+    if slow_pct is not None:
+        band = f'<rect x="0" y="{H - slow_pct / 100 * H - 5:.1f}" width="{W}" height="10" fill="{col}" fill-opacity="0.16"/>'
+    svg = (f'<svg viewBox="0 0 {W} {H}" width="100%" height="{H}" role="img" aria-label="live buy percentage over the last 60 seconds" style="display:block;margin-top:6px">'
+           f'<line x1="0" y1="{H / 2:.1f}" x2="{W}" y2="{H / 2:.1f}" stroke="#484f58" stroke-dasharray="4 4"/>{band}'
+           f'<polyline points="{pts}" fill="none" stroke="{col}" stroke-width="2.4" stroke-linejoin="round"/></svg>')
+    cur = getattr(_view_tf, "pw", 10)
+    btns = "".join(f'<button class="size-mode-btn{" size-mode-active" if w_ == cur else ""}" onclick="setPressWin({w_})">{w_} sec</button>' for w_ in (5, 10, 30))
+    return (
+        f'<div class="press-live" data-asset-live="{asset_name}">'
+        f'<div class="press-head"><span><span class="pw-tag pw-live"><i class="pw-dot"></i>LIVE</span> <b class="pw-livetxt">last {win} seconds</b> '
+        f'<span class="hint">window:</span> {btns}</span>'
+        f'<span class="press-verdict {verdict[1]}">{verdict[0]}</span></div>'
+        f'<div class="press-bar press-bar-live"><div class="press-buy" style="width:{live:.1f}%;background:#238636">{live:.0f}% buy</div>'
+        f'<div class="press-sell" style="width:{sell_pct:.1f}%;background:#da3633">{sell_pct:.0f}% sell</div><span class="press-mid"></span></div>'
+        f'{svg}'
+        f'<div class="hint">now {live:.0f}% buy &middot; <span class="{"up" if d_ >= 0 else "down"}">buy share {"up" if d_ >= 0 else "down"} {abs(d_):.0f} points ({ago:.0f}% to {live:.0f}%) vs 10 seconds ago</span>'
+        f' &middot; money in the window: bought {_usd_short(bw)} / sold {_usd_short(sw)} &middot; the faint band on the line is the 1-minute reading</div></div>')
+
+
 def build_pressure_bar(asset_name):
     """Live buy-vs-sell pressure ('tug of war') summed over every exchange we can reach - taker trade flow in dollars
     over 10s / 30s / 1m / 5m, resting bid-vs-ask depth, perp positioning, and a per-exchange pull-down. Information only."""
@@ -6991,8 +7059,9 @@ def build_pressure_bar(asset_name):
              '<th>trades</th><th>book bids %</th></tr>' + "".join(rows) + '</table>')
     return (
         f'<div class="row press-row" data-asset-press="{asset_name}">'
-        f'<div class="press-head"><b>Buy / sell pressure</b> <span class="hint">{s["live_n"]} exchanges live &middot; last minute '
-        f'&middot; net {("+" if net >= 0 else "-")}{_usd_short(net)}</span> <span class="press-verdict {_pct_cls(buy)}">{verdict}</span></div>'
+        + _live_pressure_html(asset_name, getattr(_view_tf, "pw", 10), main * 100) +
+        f'<div class="press-head"><span><span class="pw-tag pw-1m">1 MINUTE</span> <b>{asset_name} buy / sell pressure</b></span> <span class="hint">{s["live_n"]} exchanges live &middot; last minute '
+        f'&middot; net {("+" if net >= 0 else "-")}{_usd_short(abs(net))}</span> <span class="press-verdict {_pct_cls(buy)}">{verdict}</span></div>'
         f'<div class="press-bar"><div class="press-buy" style="width:{buy:.1f}%">{buy:.0f}% buy</div>'
         f'<div class="press-sell" style="width:{sell:.1f}%">{sell:.0f}% sell</div><span class="press-mid"></span></div>'
         f'<div class="press-chips">{"".join(chips)}{book}</div>{deriv_html}'
@@ -9356,7 +9425,7 @@ _render_cache_lock = threading.Lock()
 
 
 def _render_key():
-    return str(_viewtz.get()) + "|" + repr(sorted((getattr(_view_tf, "m", None) or {}).items()))      # each viewer's zone AND chart choices
+    return str(_viewtz.get()) + "|" + repr(sorted((getattr(_view_tf, "m", None) or {}).items())) + "|" + str(getattr(_view_tf, "pw", 10))      # each viewer's zone, chart choices AND live-bar window
 
 
 _data_memo = {}
@@ -10801,6 +10870,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         _m_tz = re.search(r"(?:^|;\s*)tz=(-?\d+)", _ck)
         _m_tzn = re.search(r"(?:^|;\s*)tzn=([^;]+)", _ck)
         _viewtz.set_view(urllib.parse.unquote(_m_tzn.group(1)) if _m_tzn else None, _m_tz.group(1) if _m_tz else None)
+        _mpw = re.search(r"(?:^|;\s*)pwin=(\d+)", _ck)
+        _view_tf.pw = int(_mpw.group(1)) if _mpw and int(_mpw.group(1)) in (5, 10, 30) else 10
         _view_tf.m = {m_.group(1): m_.group(2) for m_ in re.finditer(r"(?:^|;\s*)ptf_([A-Za-z0-9]+)=([0-9A-Za-z]+)", _ck) if m_.group(2) in _PAT_WINDOW_TFS}
         parsed = urllib.parse.urlparse(self.path)
         if parsed.path == "/terms":
