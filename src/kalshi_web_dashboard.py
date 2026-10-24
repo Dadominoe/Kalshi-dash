@@ -805,7 +805,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-23a"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-23b"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -5038,6 +5038,11 @@ details.pat > summary { cursor:pointer; }
 .press-sell { background:#da3633; color:#fff; font-size:18px; font-weight:800; line-height:40px; padding-right:12px; text-align:right; white-space:nowrap; overflow:hidden; transition:width 0.4s ease; text-shadow:0 1px 2px rgba(0,0,0,0.6); }
 .press-mid { position:absolute; left:50%; top:0; bottom:0; width:3px; margin-left:-1px; background:#e6edf3; opacity:0.85; }
 .press-chips { margin-top:6px; display:flex; flex-wrap:wrap; gap:6px; }
+.info-help { margin:6px 0 2px; } .info-help summary { cursor:pointer; font-size:13px; color:#58a6ff; list-style:none; } .info-help summary::-webkit-details-marker { display:none; }
+.info-help-body { margin-top:6px; padding:10px 12px; background:#161b22; border:1px solid #30363d; border-radius:8px; font-size:13px; line-height:1.5; color:#c9d1d9; text-align:left; font-weight:400; text-transform:none; letter-spacing:0; }
+.info-help-body p { margin:0 0 8px; } .info-help-body b { color:#e6edf3; } .info-help-body li { margin:0 0 4px; }
+.ih-pop { position:relative; } .ih-pop .info-help-body { position:absolute; z-index:60; left:0; top:100%; width:320px; box-shadow:0 6px 20px rgba(0,0,0,0.55); }
+.tb-rsi-in .ih-pop summary { font-size:11px; }
 .pw-tag { font-size:12px; font-weight:800; letter-spacing:0.5px; padding:2px 9px; border-radius:6px; margin-right:4px; }
 .pw-1m { background:#0b2a4a; color:#58a6ff; border:1px solid #1f6feb; }
 .pw-live { background:#2a2208; color:#ffd54a; border:1px solid #d29922; }
@@ -6947,6 +6952,55 @@ def _pct_cls(p):
     return "up" if p >= 55 else ("down" if p <= 45 else "flat")
 
 
+def _info_help(key, title, body_html, pop=False):
+    """A closed-by-default pull-down that explains something on the page in plain words (its open / closed state is remembered by the page)."""
+    return (f'<details class="info-help{" ih-pop" if pop else ""}" data-pat="HELP|{key}"><summary>{title}</summary>'
+            f'<div class="info-help-body">{body_html}</div></details>')
+
+
+def _pressure_help(asset_name):
+    return _info_help(f"PRESS|{asset_name}", "? what is this - the buy / sell pressure bars",
+        '<p><b>What it shows.</b> Every trade on about 16 exchanges is either a buyer paying the asking price (money coming IN) or a seller taking the bid (money going OUT). '
+        'These bars add up that money and show what share of it was buying. 60% buy means 60 cents of every dollar traded was buyers and 40 cents was sellers.</p>'
+        '<p><b>The two bars.</b> The <b>LIVE</b> bar only looks at the last 5, 10 or 30 seconds (you pick the window with the buttons - it is your own setting and nobody else\'s changes). '
+        'It reacts fast but jumps around, because a few seconds of trading is a small sample. The <b>1 MINUTE</b> bar averages the last 60 seconds, so it moves slowly and is steadier. '
+        'Quick chips under it show the same count over 10 sec, 30 sec, 1 min and 5 min.</p>'
+        '<p><b>The line under the live bar.</b> The buy share for the last 60 seconds. The faint band is where the 1-minute bar sits, so you can see the live reading leading or lagging it.</p>'
+        '<p><b>What a "point" is.</b> One point is one percentage point of that buy share. If the buy share goes from 61% to 77%, that is up 16 points. '
+        'It is not dollars and it is not the price - it is only how far the buy share moved.</p>'
+        '<p><b>The words.</b> Live bar: "buyers pushing" at 58% buy or more, "sellers pushing" at 42% or less, otherwise "balanced". 1-minute bar: "BUYERS in control" at 55% or more, "SELLERS in control" at 45% or less. '
+        'In a quiet market there are only a few trades, so a single big trade can swing a short window a lot.</p>'
+        '<p class="hint">Information only - it describes where money has been going. It is not advice and it never tells anyone to do anything.</p>')
+
+
+def _tug_help(asset_name):
+    return _info_help(f"TUG|{asset_name}", "? what is this - price vs the line",
+        '<p><b>The line.</b> Kalshi asks one question every 15 minutes: will the price finish ABOVE or BELOW a set price? That set price is the line (the "price to beat"). Above the line = the YES side. Below = the NO side.</p>'
+        '<p><b>The big picture.</b> Left is the line, right is the live price, and the difference is how far apart they are right now. The gauge puts the line in the centre and the coin shows where the price is. '
+        'The headline says which side is winning at this moment and by how much. It can change many times before the round ends.</p>'
+        '<p><b>The bars below (the "tug of war").</b> Each bar is one source of pressure, shown as a lean toward UP or DOWN:</p>'
+        '<ul style="margin:0 0 8px 18px;padding:0"><li><b>Price vs the line</b> - which side of the line the price is on and how far.</li>'
+        '<li><b>Exchange buyers vs sellers</b> - the money flow on all exchanges since this round started (spot and perpetual futures shown separately too).</li>'
+        '<li><b>Kalshi money</b> - what the Kalshi market itself is pricing for UP and DOWN.</li>'
+        '<li><b>Liquidations</b> - forced closings of leveraged trades; big ones can push the price.</li></ul>'
+        '<p><b>"Pressure leans UP/DOWN".</b> The feeds blended into one lean: price vs the line counts half, the money-flow feeds count the other half. It is a lean, not a score or a promise.</p>'
+        '<p><b>"Flow and price agree / disagree".</b> Agree means the money is moving the same way the price already sits. Disagree means the price is on one side but the money is pushing the other way.</p>'
+        '<p><b>Around the line.</b> How many dollars traded above the line and how many below it this round.</p>'
+        '<p><b>END CALL and LINE BEHAVIOR (above the bars).</b> The END CALL is a lean locked once, at the 8th minute of the round (7:00 left). If the lean is under 60% it says NO CALL. '
+        'LINE BEHAVIOR describes how the price has been acting around the line - for example whether it keeps crossing back and forth.</p>'
+        '<p class="hint">Information only - it describes the round so far. It does not guarantee how the round ends and it never tells anyone what to do.</p>')
+
+
+def _rsi_help(asset_name):
+    return _info_help(f"RSI|{asset_name}", "? what is the RSI",
+        '<p><b>RSI</b> (Relative Strength Index) is a number from 0 to 100 that measures how strongly the price has been moving up or down over the last 14 one-minute candles. '
+        'It is the same RSI 14 you see on TradingView, worked out from Coinbase 1-minute candles, and the last candle ticks with the live price.</p>'
+        '<p><b>How to read it.</b> Around 50 is normal. Above 60 means the recent moves have been mostly up (pressure building up). Below 40 means mostly down. '
+        'Above 70 is called "overbought" - it has been stretched up fast. Below 30 is "oversold" - stretched down fast. The dot on the strip shows where it sits and the color follows the same pressure.</p>'
+        '<p><b>What it does not mean.</b> Stretched does not mean it must turn around - prices can stay stretched for a long time. It only describes how fast the last few minutes moved.</p>'
+        '<p class="hint">Information only - it is never used for any call.</p>', pop=True)
+
+
 def _live_pressure_html(asset_name, win, slow_pct):
     """The LIVE bar: money bought vs sold over only the last `win` seconds (5 / 10 / 30), all exchanges, plus a 60-second line of how that reading has moved.
     The faint band on the line is the 1-minute reading. Information only."""
@@ -7065,6 +7119,7 @@ def build_pressure_bar(asset_name):
         f'<div class="press-bar"><div class="press-buy" style="width:{buy:.1f}%">{buy:.0f}% buy</div>'
         f'<div class="press-sell" style="width:{sell:.1f}%">{sell:.0f}% sell</div><span class="press-mid"></span></div>'
         f'<div class="press-chips">{"".join(chips)}{book}</div>{deriv_html}'
+        + _pressure_help(asset_name) +
         f'<details class="press-more" data-pat="PRESS|{asset_name}"><summary class="hint">by exchange (information only - never used for buying)</summary>'
         f'{table}</details></div>')
 
@@ -7751,7 +7806,7 @@ def build_tug_panel(name, d):
             f'<span class="tug-gr hint">UP &#9650;</span></div>'
             f'<div class="hint tug-cap">centre = the line &middot; needle = live price ({fmt_price(spot, dec)})</div>'
             f'<div class="tug-head {"up" if up_side else "down"}">{"UP" if up_side else "DOWN"} is winning by {fmt_price(abs(diff), dec)}</div>'
-            f'{lean_html}{"".join(rows)}{boxes}{agree}{around}</div>')
+            f'{lean_html}{"".join(rows)}{boxes}{agree}{around}' + _tug_help(name) + '</div>')
 
 
 def _coinbase_last_price(symbol):
@@ -9939,7 +9994,7 @@ def render_html():
             rsi = d.get("rsi")
         tb_rsi_html = (f'<div class="tb-rsi tb-rsi-in" data-asset="{name}"><span class="tb-rsi-k">RSI 14 - TradingView, 1 min</span> '
                        f'<b class="tb-rsi-v {rsi_zone_cls(rsi)}">{rsi:.1f}</b> <span class="tb-rsi-n {rsi_zone_cls(rsi)}">{rsi_pressure_note(rsi)}</span>'
-                       f'<span class="rsi-track"><i class="rsi-dot" style="left:{max(0.0, min(100.0, rsi)):.1f}%"></i></span></div>') if rsi is not None else \
+                       f'<span class="rsi-track"><i class="rsi-dot" style="left:{max(0.0, min(100.0, rsi)):.1f}%"></i></span>' + _rsi_help(name) + '</div>') if rsi is not None else \
                       f'<div class="tb-rsi tb-rsi-in" data-asset="{name}"><span class="tb-rsi-k">RSI 14 - TradingView, 1 min</span> <span class="hint">warming up...</span></div>'
         if rsi is None:
             rsi_html = '<span class="flat">warming up...</span>'
