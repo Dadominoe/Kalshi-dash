@@ -13,6 +13,7 @@ import html
 import json
 import os
 import re
+import shutil
 import threading
 import time
 
@@ -76,14 +77,52 @@ def _h(s):
     return hashlib.sha256((s or "").strip().lower().encode("utf-8")).hexdigest()[:32]
 
 
+# ---- lifetime members: everybody who paid the original $300 is locked in for life
+def migrate_lifetime():
+    """Once, on the hosted site: everybody already here with no membership dates is an original $300 member -> marked LIFETIME (the people file is saved first).
+    Idempotent: people who already have the mark, or a membership date, are left alone."""
+    try:
+        if not os.environ.get("DASH_PASSWORD"):
+            return 0
+        todo = [n for n, u in _acc.list_users().items() if "member_until" not in u and "lifetime" not in u]
+        if not todo:
+            return 0
+        bak = _acc.USERS_FILE + ".pre_lifetime.bak"
+        if not os.path.exists(bak) and os.path.exists(_acc.USERS_FILE):
+            shutil.copy2(_acc.USERS_FILE, bak)
+        for n in todo:
+            _acc.set_fields(n, lifetime=True, plan="Lifetime ($300)")
+            _acc._log("marked lifetime (original $300 member)", n)
+        return len(todo)
+    except Exception:
+        return 0
+
+
+def set_lifetime(name, on):
+    u = _acc.list_users().get(name)
+    if u is None:
+        return False
+    if on:
+        _acc.set_fields(name, lifetime=True, plan="Lifetime ($300)")
+    else:
+        _acc.set_fields(name, lifetime=False, plan="", member_until=u.get("member_until", 0) or 0)
+    _acc._log("lifetime " + ("ON" if on else "OFF"), name)
+    return True
+
+
+migrate_lifetime()
+
+
 # ---- who has access right now
 def status(name):
-    """('open', None) for people with no expiry (admin, everybody who was here before), ('member', until) while time is left, ('expired', until) otherwise."""
+    """('lifetime', None) for original $300 members, ('open', None) for the owner and anybody with no expiry, ('member', until) while time is left, ('expired', until) otherwise."""
     if name == "admin":
         return "open", None
     u = _acc.list_users().get(name)
     if u is None:
         return "expired", 0
+    if u.get("lifetime"):
+        return "lifetime", None
     if "member_until" not in u:
         return "open", None
     until = float(u.get("member_until") or 0)
@@ -91,13 +130,16 @@ def status(name):
 
 
 def has_access(name):
-    return (not MEMBERSHIP_ON) or status(name)[0] in ("open", "member")
+    return (not MEMBERSHIP_ON) or status(name)[0] in ("open", "member", "lifetime")
 
 
 def grant_days(name, days, plan="", customer=""):
-    """Add days on top of whatever time is left. Returns the new end time."""
+    """Add days on top of whatever time is left. Returns the new end time. Lifetime members never need it (a payment from one is only written in the log)."""
     u = _acc.list_users().get(name)
     if u is None:
+        return None
+    if u.get("lifetime"):
+        _acc._log("payment from a lifetime member (no days added)", name, plan=plan, customer=customer)
         return None
     base = max(time.time(), float(u.get("member_until") or 0)) if "member_until" in u else time.time()
     until = base + days * 86400
@@ -219,6 +261,9 @@ def join_page(name, ip, msg="", err=False):
                      f'<div style="font-size:13px;color:#8b949e">${p["price"] / p["days"]:.2f} a day</div>'
                      f'<a href="{link}"><button type="button" style="width:100%;margin-top:10px">Get {html.escape(p["name"])}</button></a></div>')
     ok, why = trial_available(name, ip)
+    if st == "lifetime":
+        head = '<div class="msg">You are a <b>lifetime member</b>. You paid once and you are locked in for life - there is nothing more to pay, ever. <a href="/">Back to the dashboard</a></div>'
+        return _page("Membership", f'<h1>Membership</h1>{_msg(msg, err)}{head}<p style="margin-top:20px"><a href="/logout">Sign out</a> &nbsp; <a href="/terms">Terms</a></p>' + _tiny())
     if st == "member" and u.get("plan") == "free pass":
         head = f'<div class="msg">Your free pass runs until <b>{_fmt(until)}</b>. <a href="/">Back to the dashboard</a></div>'
     elif st == "member":

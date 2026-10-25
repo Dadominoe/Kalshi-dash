@@ -805,7 +805,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-25-all14"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-25-life15"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -12978,6 +12978,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 msg, err = f"Restored: {a_} people and {r_} waiting requests were added back.", False
             except Exception:
                 msg, err = "That is not a valid backup. Paste the whole file contents.", True
+        elif path == "/admin/lifetime":
+            on = f.get("on") == "1"
+            ok = _mem.set_lifetime(u, on)
+            msg, err = ((f"{u} is now a LIFETIME member - never expires." if on else f"{u} is no longer lifetime.") if ok else "No such person."), (not ok)
         elif path == "/admin/delete":
             msg = f"Removed {u}. They are signed out." if _acc.delete_user(u) else "No such person."
             err = msg == "No such person."
@@ -13068,7 +13072,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             ok, m = _acc.request_signup(f.get("u"), f.get("p"), f.get("n"), self._ip(), terms=_accp.TERMS_DATE)
             self._send(200, (_accp.signup_page("Request sent.", False, done=True) if ok else _accp.signup_page(m, True)).encode("utf-8"))
             return
-        if HOSTED_PASSWORD and _ppath in ("/admin/add", "/admin/passwd", "/admin/delete", "/admin/approve", "/admin/deny", "/admin/restore"):
+        if HOSTED_PASSWORD and _ppath in ("/admin/add", "/admin/passwd", "/admin/delete", "/admin/approve", "/admin/deny", "/admin/restore", "/admin/lifetime"):
             if self._who and self._who[1]:
                 self._admin_post(_ppath)
             else:

@@ -48,7 +48,7 @@ def terms_page():
     ]
     if MEMBERSHIP_ON:
         sections = [(t, x) for t, x in sections if t not in ("Fees", "Your access", "Your information")] + [
-            ("Memberships and fees", "Access is by paid membership: 10 days for $65, 30 days for $165, or 3.5 months for $379. Every new account gets one free 3-hour pass (one per person). Each plan renews automatically at the same price when its time is up, until you cancel; you keep what you already paid for after you cancel. Payments are handled by Stripe, so we never see or store your card details. The fee is only for access to the information. It is never a share of, a payment for, or a promise about any trading result."),
+            ("Memberships and fees", "Access is by paid membership: 10 days for $65, 30 days for $165, or 3.5 months for $379. Every new account gets one free 3-hour pass (one per person). Each plan renews automatically at the same price when its time is up, until you cancel; you keep what you already paid for after you cancel. Payments are handled by Stripe, so we never see or store your card details. Members who paid the original flat $300 are lifetime members: they keep access for life and never pay again. The fee is only for access to the information. It is never a share of, a payment for, or a promise about any trading result."),
             ("Your access", "Access lasts for the time you have paid for and can be changed or removed at any time. Do not share your login. Do not copy, redistribute or republish the content without the owner's written permission. The owner may change these terms; using the site after a change means you accept it."),
             ("Your information", "We keep the user name you choose, your e-mail address, a scrambled (hashed) version of your password, when you agreed to these terms, and when your membership starts and ends. Your chart choices are kept in your own browser. Card payments are taken by Stripe, not by us. We do not sell or share your information. We never ask for, and you should never type here, any exchange keys or bank details."),
         ]
@@ -68,12 +68,32 @@ def _tiny():
 
 
 def login_page(msg="", err=True):
+    if MEMBERSHIP_ON:
+        try:
+            from src import membership as _m
+            plans = _m.plans()["plans"]
+        except Exception:
+            plans = []
+        cards = "".join(
+            f'<div style="flex:1 1 140px;border:1px solid {"#d29922" if p.get("best") else "#30363d"};border-radius:10px;padding:14px;background:#0d1117;text-align:center">'
+            f'{"<div style=color:#d29922;font-size:12px;font-weight:700>BEST VALUE</div>" if p.get("best") else ""}'
+            f'<div style="font-size:13px;color:#9da7b3">{html.escape(p["name"].upper())}</div><div style="font-size:30px;font-weight:700">${p["price"]}</div>'
+            f'<div style="font-size:12px;color:#8b949e">${p["price"] / p["days"]:.2f} a day</div></div>' for p in plans)
+        return _page("The Dominator", '<div style="text-align:center"><div style="font-size:13px;letter-spacing:3px;color:#8b949e">LIVE MARKET INTELLIGENCE</div>'
+                     '<h1 style="font-size:34px;margin:6px 0 4px">THE DOMINATOR</h1><div style="color:#9da7b3;margin-bottom:18px">Live calls, flip warnings, order flow and charts for the 15-minute BTC and XRP rounds.</div></div>'
+                     f'<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">{cards}</div>'
+                     '<div class="msg" style="text-align:center">Try it free: <b>one 3-hour pass</b> for every new account. Plans renew automatically until you cancel.</div>'
+                     '<a href="/signup"><button type="button" style="width:100%;margin-top:4px;font-size:19px">Create an account</button></a>'
+                     f'<h2 style="margin-top:26px">Already a member? Sign in</h2>{_msg(msg, err)}'
+                     '<form method="post" action="/login"><label>User name</label><input name="u" autocomplete="username" required>'
+                     '<label>Password</label><input name="p" type="password" autocomplete="current-password" required>'
+                     '<button type="submit">Sign in</button></form>'
+                     '<p style="margin-top:14px;font-size:14px;color:#9da7b3;text-align:center">Original <b>$300 members are locked in for life</b> - nothing more to pay. Just sign in.</p>' + _tiny(), wide=True)
     return _page("Sign in", f'<h1>The Dominator Live Dashboard</h1>{_msg(msg, err)}'
                  '<form method="post" action="/login"><label>User name</label><input name="u" autocomplete="username" autofocus required>'
                  '<label>Password</label><input name="p" type="password" autocomplete="current-password" required>'
                  '<button type="submit">Sign in</button></form>'
-                 + ('<p style="margin-top:18px;font-size:15px">New here? <a href="/signup"><b>Create an account</b></a> - one free 3-hour pass, then plans from $65.</p>' if MEMBERSHIP_ON else
-                    '<p style="margin-top:18px;font-size:15px">No account yet? Access is a <b>$300 flat rate</b>. <a href="/signup">Ask for access</a></p>') + _tiny())
+                 '<p style="margin-top:18px;font-size:15px">No account yet? Access is a <b>$300 flat rate</b>. <a href="/signup">Ask for access</a></p>' + _tiny())
 
 
 def signup_page(msg="", err=True, done=False):
@@ -95,6 +115,8 @@ def signup_page(msg="", err=True, done=False):
 
 
 def _member_line(u):
+    if u.get("lifetime"):
+        return '<br><span class="on">LIFETIME member ($300) - never expires</span>'
     if "member_until" not in u:
         return '<br><span class="off">no end date</span>' if MEMBERSHIP_ON else ""
     until = float(u.get("member_until") or 0)
@@ -116,6 +138,7 @@ def admin_page(users, online, msg="", err=False, requests=None, warn=""):
         rows.append(f'<tr><td><b>{n}</b><br><span class="off">Discord: {html.escape(users[name].get("note") or "-")}</span>{_member_line(users[name])}</td><td>{st}</td>'
                     f'<td><form method="post" action="/admin/passwd" class="row"><input type="hidden" name="u" value="{n}">'
                     f'<input name="p" type="password" placeholder="new password" minlength="8" required><button class="grey">Change password</button></form></td>'
+                    f'<td><form method="post" action="/admin/lifetime" style="margin:0 0 6px"><input type="hidden" name="u" value="{n}"><input type="hidden" name="on" value="{0 if users[name].get("lifetime") else 1}"><button class="grey">{"Lifetime: ON (click to turn off)" if users[name].get("lifetime") else "Make lifetime"}</button></form>'
                     f'<td><form method="post" action="/admin/delete" onsubmit="return confirm(\'Remove {n}? They will be signed out right away.\')">'
                     f'<input type="hidden" name="u" value="{n}"><button class="red">Remove</button></form></td></tr>')
     table = ('<table><tr><th>Person</th><th>Last seen</th><th>Password</th><th></th></tr>' + "".join(rows) + '</table>') if rows else '<p>Nobody yet. Add the first person below.</p>'
