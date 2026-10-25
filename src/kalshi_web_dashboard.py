@@ -805,7 +805,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-25-flip5"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-25-dual6"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -6593,7 +6593,7 @@ function alvToggle() {
   if (p) { p.remove(); return; }
   p = document.createElement('div'); p.id = 'alv-panel';
   const keys = Object.keys(clipMap).filter(k => k[0] !== '_').sort((x, y) => (clipMap[x].label || x).localeCompare(clipMap[y].label || y));
-  p.innerHTML = '<div class="alv-h"><b>Alert voices</b> <span class="hint">tick = the alert speaks when the narrator is ON. The play button lets you hear it.</span><label class="alv-old"><input type="checkbox" ' + (oldSoundsOn ? 'checked' : '') + ' onchange="oldSoundsSet(this.checked)"> old beeps, sirens and chimes <span class="hint">(archived and OFF - tick to bring them back)</span></label><label class="alv-old"><input type="checkbox" ' + (compVoiceOn ? 'checked' : '') + ' onchange="compVoiceSet(this.checked)"> computer voice for lines that have no recording <span class="hint">(OFF - those lines stay silent)</span></label><button class="alv-x" onclick="alvToggle()">close</button></div>' + ['BTC', 'XRP'].map(c => '<div class="alv-voice"><b>' + c + ' VOICE</b> <button type="button" class="alv-vb' + (voiceBy[c] === 'dominator' ? ' on' : '') + '" onclick="voiceSetSet(\'' + c + '\', \'dominator\')">Dominator (male)</button><button type="button" class="alv-vb' + (voiceBy[c] === 'girl' ? ' on' : '') + '" onclick="voiceSetSet(\'' + c + '\', \'girl\')">Girl (female)</button> <button type="button" onclick="coinTag(\'' + c + '\', function () {})">&#9654; hear it</button></div>').join('') + '<div class="alv-voice hint">The list below shows the takes of the voice you picked last.</div><div class="alv-flip"><b>FLIP METER STEPS</b> <span class="hint">the flip-risk % that fires each flip alert (earlier = more warning but more false alarms)</span><div class="alv-fsteps"><label>1 Warning <input type="number" min="5" max="95" step="5" value="' + Math.round(flipSteps.early * 100) + '" onchange="flipStepSet(\'early\', this.value)">%</label><label>2 Incoming <input type="number" min="5" max="95" step="5" value="' + Math.round(flipSteps.rise * 100) + '" onchange="flipStepSet(\'rise\', this.value)">%</label><label>3 Reversal <input type="number" min="5" max="95" step="5" value="' + Math.round(flipSteps.flip * 100) + '" onchange="flipStepSet(\'flip\', this.value)">%</label></div></div><div class="alv-list">' +
+  p.innerHTML = '<div class="alv-h"><b>Alert voices</b> <span class="hint">tick = the alert speaks when the narrator is ON. The play button lets you hear it.</span><label class="alv-old"><input type="checkbox" ' + (oldSoundsOn ? 'checked' : '') + ' onchange="oldSoundsSet(this.checked)"> old beeps, sirens and chimes <span class="hint">(archived and OFF - tick to bring them back)</span></label><label class="alv-old"><input type="checkbox" ' + (compVoiceOn ? 'checked' : '') + ' onchange="compVoiceSet(this.checked)"> computer voice for lines that have no recording <span class="hint">(OFF - those lines stay silent)</span></label><button class="alv-x" onclick="alvToggle()">close</button></div>' + ['BTC', 'XRP'].map(c => '<div class="alv-voice"><b>' + c + ' VOICE</b> <button type="button" class="alv-vb' + (voiceBy[c] === 'dominator' ? ' on' : '') + '" onclick="voiceSetSet(\'' + c + '\', \'dominator\')">Dominator (male)</button><button type="button" class="alv-vb' + (voiceBy[c] === 'girl' ? ' on' : '') + '" onclick="voiceSetSet(\'' + c + '\', \'girl\')">Girl (female)</button> <button type="button" onclick="coinTag(\'' + c + '\', function () {})">&#9654; hear it</button></div>').join('') + '<div class="alv-voice hint">The list below shows the takes of the voice you picked last.</div><div class="alv-flip"><b>FLIP METER STEPS</b> <span class="hint">the flip-risk % that fires each flip alert (earlier = more warning but more false alarms)</span><div class="alv-fsteps"><label>1 Scalp opportunity <input type="number" min="5" max="95" step="5" value="' + Math.round(flipSteps.early * 100) + '" onchange="flipStepSet(\'early\', this.value)">%</label><label>2 Incoming <input type="number" min="5" max="95" step="5" value="' + Math.round(flipSteps.rise * 100) + '" onchange="flipStepSet(\'rise\', this.value)">%</label><label>3 Reversal <input type="number" min="5" max="95" step="5" value="' + Math.round(flipSteps.flip * 100) + '" onchange="flipStepSet(\'flip\', this.value)">%</label></div></div><div class="alv-list">' +
     keys.map(k => '<label class="alv-row"><input type="checkbox" ' + (sigOff.indexOf(k) < 0 ? 'checked' : '') + ' onchange="alvSet(\'' + k + '\', this.checked)"> <span>' + (clipMap[k].label || k) + '</span> <span class="hint">' + (clipMap[k].nopick ? 'a recording for every call' : clipMap[k].files.length + ' take' + (clipMap[k].files.length > 1 ? 's' : '')) + '</span> <button type="button" onclick="event.preventDefault(); clipPlay(\'' + k + '\')">&#9654;</button>' + (clipMap[k].note ? '<span class="alv-note hint">' + clipMap[k].note + '</span>' : '') + '</label><div class="alv-takes">' + (clipMap[k].nopick ? [] : clipMap[k].files).map((f, i) => '<span class="alv-take"><button type="button" onclick="clipPlayFile(\'' + f + '\')" title="play this take">' + (i + 1) + '</button><label title="untick = never play this take"><input type="checkbox" ' + (badTakes.indexOf(f) < 0 ? 'checked' : '') + ' onchange="takeSet(\'' + f + '\', this.checked)"></label></span>').join('') + '</div>').join('') + '</div>';
   document.body.appendChild(p);
 }
@@ -6755,7 +6755,7 @@ function flipLadder(name, key, r, call, sd) {
       if (narCoin[name]) narSay(name + '. Flip incoming. ' + Math.round(r * 100) + ' percent.', 'rise:' + key, 600000, 'flip_incoming', null, true); else speakUrgent(name + '. Flip incoming. ' + Math.round(r * 100) + ' percent.');
     } else if (r >= flipSteps.early && !said.early) {
       said.early = true;
-      if (narCoin[name]) narSay(name + '. Warning. Possible flip incoming. ' + Math.round(r * 100) + ' percent.', 'early:' + key, 600000, 'flip_warn', null, true); else speakUrgent(name + '. Warning. Possible flip incoming. ' + Math.round(r * 100) + ' percent.');
+      if (narCoin[name]) narSay(name + '. Scalp opportunity. Possible flip. ' + Math.round(r * 100) + ' percent.', 'early:' + key, 600000, 'flip_warn', null, true); else speakUrgent(name + '. Scalp opportunity. Possible flip. ' + Math.round(r * 100) + ' percent.');
     }
 }
 function checkFlipRiskAlerts() {
@@ -7148,8 +7148,15 @@ function toggleFit() {
   syncFitButton();
   applyFit(true);
 }
+function bothScale() {
+  // dual screen on a laptop: BTC and XRP each need about 990 px, so shrink the page just enough that they sit SIDE BY SIDE instead of one under the other (steps of 2%)
+  if (document.body.getAttribute('data-view') !== 'both' || window.innerWidth < 900) return false;      // phones stay stacked
+  document.body.style.zoom = String(Math.round(Math.min(1, Math.max(0.5, window.innerWidth / 2000)) * 50) / 50);
+  return true;
+}
 function applyFit(force) {
-  if (!fitScreen) return;
+  if (bothScale()) return;
+  if (!fitScreen) { document.body.style.zoom = ''; return; }
   if (!force && (fitDone || Date.now() - userScrollAt < 10000)) return;
   const rows = Array.from(document.querySelectorAll('.pat-chart-row')).filter(r => r.offsetParent !== null);
   if (!rows.length) return;
@@ -7172,6 +7179,7 @@ function setAssetView(v) {
   if (v !== 'BTC' && v !== 'XRP') v = 'both';
   document.body.setAttribute('data-view', v);
   try { localStorage.setItem('assetView', v); } catch (e) {}
+  applyFit(true);
   document.querySelectorAll('.view-bar button').forEach(b =>
     b.className = (b.getAttribute('data-view') === v) ? 'size-mode-btn size-mode-active' : 'size-mode-btn');
 }
