@@ -805,7 +805,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-25-ind7"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-25-hour8"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -5017,6 +5017,10 @@ details.pat > summary { cursor:pointer; }
 .mk { display:inline-flex; align-items:center; gap:8px; font-size:15px; font-weight:800; padding:6px 14px; border-radius:12px; border:2px solid; letter-spacing:0.3px; white-space:nowrap; color:#fff; }
 .mk::before { content:''; width:12px; height:12px; border-radius:50%; background:rgba(255,255,255,.85); box-shadow:0 0 0 4px rgba(255,255,255,.2); flex:none; }
 .mk small { font-weight:600; opacity:0.85; }
+.hr-warn { margin-top:6px; padding:5px 9px; border-radius:8px; border:2px solid #f85149; background:rgba(218,54,51,.22); color:#fff; font-weight:800; font-size:13px; animation:hrblink 1s steps(2,start) infinite; }
+.hr-warn-ic { color:#ffd33d; font-size:16px; }
+.hr-ok { margin-top:6px; padding:4px 9px; border-radius:8px; font-weight:800; font-size:13px; color:#fff; } .hr-good { border:2px solid #d29922; background:rgba(210,153,34,.18); } .hr-great { border:2px solid #3fb950; background:rgba(35,134,54,.28); }
+@keyframes hrblink { 50% { opacity:.25; } }
 .mk-drop { position:relative; display:inline-block; }
 .mk-drop > summary { cursor:pointer; }
 .mk-now { font-size:13px; color:#a6b0bb; margin-left:8px; white-space:nowrap; }
@@ -6758,6 +6762,19 @@ function flipLadder(name, key, r, call, sd) {
       if (narCoin[name]) narSay(name + '. Scalp opportunity. Possible flip. ' + Math.round(r * 100) + ' percent.', 'early:' + key, 600000, 'flip_warn', null, true); else speakUrgent(name + '. Scalp opportunity. Possible flip. ' + Math.round(r * 100) + ' percent.');
     }
 }
+const hourTier = {};
+function checkHourWarn() {
+  document.querySelectorAll('.hr-state').forEach(el => {
+    const name = el.getAttribute('data-name'), tier = el.getAttribute('data-tier'), key = el.getAttribute('data-key');
+    if (!name || !tier) return;
+    const was = hourTier[name];
+    hourTier[name] = tier;
+    if (was === undefined || was === tier) return;                     // first look after a page load, or no change: say nothing
+    if (tier === 'danger') narSay(name + '. Danger. The calls have been under seventy five percent in the last hour.', 'hd:' + key, 600000, 'hour_danger');
+    else if (tier === 'good' && was === 'danger') narSay(name + '. Back on track. The calls are healthy again.', 'hg:' + key, 600000, 'hour_good');
+    else if (tier === 'great') narSay(name + '. The calls are hot. Eighty percent and up in the last hour.', 'hr:' + key, 600000, 'hour_great');
+  });
+}
 function checkFlipRiskAlerts() {
   document.querySelectorAll('.flip-risk').forEach(el => flipLadder(el.getAttribute('data-name'), el.getAttribute('data-key'), parseFloat(el.getAttribute('data-risk')), el.getAttribute('data-call'), null));
 }
@@ -7508,6 +7525,7 @@ async function refreshInner() {
   checkCertainFlipAlerts();
   checkWhaleAlerts();
   checkFlipRiskAlerts();
+  checkHourWarn();
   checkNarrator();
   narPaint();
   checkWallAlerts();
@@ -9046,6 +9064,37 @@ def _clip_map(voice="dominator"):
         return ent["map"]
     except Exception:
         return (_clip_cache.get(voice) or {"map": {}})["map"]
+
+
+HOUR_GOOD, HOUR_GREAT = 0.75, 0.80   # last hour's locked calls: 80% and up = great, 75% and up = good, 74% and below = dangerous (blinking sign). Needs at least 4 calls in the hour.
+
+
+def _hour_warning_html(name):
+    """The last-hour status for one coin: GREAT / GOOD / DANGEROUS from how many of the last 60 minutes' locked END CALLS were right. Information only - it never changes a call or touches trading."""
+    try:
+        with _end_hist_mu:
+            eh = [h for h in _end_hist.get(name, []) if h.get("call") in ("YES", "NO") and h.get("correct") is not None]
+        now = dt.datetime.now(ET_ZONE)
+        recent = []
+        for h in eh[-12:]:
+            m = re.search(r"-(\d\d)([A-Z]{3})(\d\d)(\d\d)(\d\d)-", h.get("ticker", ""))
+            if not m:
+                continue
+            t = dt.datetime.strptime("".join(m.groups()), "%y%b%d%H%M").replace(tzinfo=ET_ZONE)
+            if 0 <= (now - t).total_seconds() <= 3600:
+                recent.append(h)
+        n = len(recent)
+        if n < 4:
+            return ""
+        k = sum(1 for h in recent if h["correct"])
+        r = k / n
+        tier = "great" if r >= HOUR_GREAT else ("good" if r >= HOUR_GOOD else "danger")
+        state = f'<span class="hr-state" data-name="{name}" data-tier="{tier}" data-key="{name}::{recent[-1]["ticker"]}" style="display:none;"></span>'
+        if tier == "danger":
+            return f'<div class="hr-warn"><span class="hr-warn-ic">&#9888;</span> LAST HOUR: DANGEROUS - only {k} of {n} calls right ({r * 100:.0f}%). Careful.</div>' + state
+        return f'<div class="hr-ok hr-{tier}">LAST HOUR: {tier.upper()} - {k} of {n} calls right ({r * 100:.0f}%)</div>' + state
+    except Exception:
+        return ""
 
 
 def _flip_now():
@@ -11870,6 +11919,8 @@ def render_html():
             streak_html = f'<span class="down">{streak_count} loss{"es" if streak_count != 1 else ""} in a row</span>'
         else:
             streak_html = '<span class="flat">no streak yet</span>'
+        if name in END_STREAK_COINS:
+            streak_html += _hour_warning_html(name)
 
         last = d.get("last_result")
         last_html = ""
