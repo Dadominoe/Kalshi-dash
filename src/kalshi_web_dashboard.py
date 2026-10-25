@@ -805,7 +805,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-25-hour8"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-25-final11"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -13129,7 +13129,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return
         if parsed.path == "/clip" and _voice_client(self.client_address[0]):
             fn = (urllib.parse.parse_qs(parsed.query).get("f") or [""])[0]
-            if re.fullmatch(r"\d{3}_clip\.mp3|(g_)?(coin_(BTC|XRP)_\d|lock_(UP_\d\d|DOWN_\d\d|NONE)|rev_up)\.(wav|mp3)|g_\d{3}\.(wav|mp3)", fn) and _cp_has(fn):
+            if re.fullmatch(r"\d{3}_clip\.mp3|(g_)?(coin_(BTC|XRP)_\d|lock_(UP_\d\d|DOWN_\d\d|NONE)|rev_up)\.(wav|mp3)|g_\d{3}\.(wav|mp3)|(g_)?(scalp|sweep_low|sweep_high|hunt_high|hour_(danger|good|great))_\d\.(wav|mp3)", fn) and _cp_has(fn):
                 audio = _cp_read(fn)
                 self.send_response(200); self.send_header("Content-Type", "audio/wav" if fn.endswith(".wav") else "audio/mpeg")
                 self.send_header("Content-Length", str(len(audio))); self.send_header("Cache-Control", "max-age=86400"); self.end_headers()
