@@ -805,7 +805,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-25-voice"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-25-voice4"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -4893,7 +4893,7 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .ct-v .up, .ct-foot.up { color:#56d364; } .ct-v .down, .ct-foot.down { color:#ff7b72; } .ct-v .warn, .ct-foot.warn { color:#e3b341; }
 .ct-foot { margin-top:8px; padding:6px 8px; border-radius:8px; background:#0d1117; font-weight:700; }
 .tug-more { margin-top:6px; } .tug-more > summary { cursor:pointer; padding:4px 0; }
-.ct-recs { margin-top:12px; } .ct-rec { margin-top:8px; } .ct-rec .press-table { width:100%; font-size:12px; }
+.ct-agree-body { padding:8px 4px; } .ct-agree-body .press-table { width:100%; font-size:12px; margin:6px 0; } .ct-recs { margin-top:12px; } .ct-rec { margin-top:8px; } .ct-rec .press-table { width:100%; font-size:12px; }
 .ct-info { margin-top:12px; } .ct-info > summary { cursor:pointer; display:inline-block; padding:5px 14px; border-radius:8px 8px 0 0; background:#21262d; border:1px solid #30363d; font-weight:700; user-select:none; }
 .ct-info[open] > summary { background:#0e7c86; border-color:#39d0d8; }
 .ct-info-body { border:1px solid #30363d; border-radius:0 8px 8px 8px; padding:8px 12px; }
@@ -5493,7 +5493,7 @@ function speakRaw(text) {
   const spoken = String(text || '').replace(/^BTC\b/, 'Bitcoin').replace(/^XRP\b/, 'X R P');
   try {
     if (typeof ttsReady !== 'undefined' && ttsReady) {
-      const a = new Audio('/tts?nogen=1&voice=' + voiceSet + '&text=' + encodeURIComponent(spoken));
+      const a = new Audio('/tts?nogen=1&voice=' + voiceOf(text) + '&text=' + encodeURIComponent(spoken));
       a.volume = narGain();
       a.onerror = () => speakBrowser(text);
       a.play().catch(() => speakBrowser(text));
@@ -5504,13 +5504,13 @@ function speakRaw(text) {
 }
 
 // the computer voice used while a sentence has not been recorded yet: the deepest male voice this browser has for the Dominator set, a female one for the Girl set
-function browserVoice() {
+function browserVoice(vs) {
   let list = [];
   try { list = window.speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang)); } catch (e) { return null; }
   if (!list.length) return null;
   const male = [/Christopher|Guy|Ryan|Davis|Andrew|Eric|Roger|Brian|Steffan/i, /David/i, /Mark/i];
   const female = [/Aria|Jenny|Michelle|Sonia|Ana\b/i, /Zira/i, /Hazel|Susan|Samantha/i];
-  for (const rx of (voiceSet === 'girl' ? female : male)) {
+  for (const rx of (vs === 'girl' ? female : male)) {
     const online = list.find(v => rx.test(v.name) && /Online|Natural/i.test(v.name));
     if (online) return online;
     const any = list.find(v => rx.test(v.name));
@@ -5525,16 +5525,17 @@ function speakBrowser(text) {
   // works regardless of whether voice/sound happen to be toggled off right
   // now - same "test buttons work regardless" convention every other test
   // button on this page already follows.
-  if (!('speechSynthesis' in window)) return;
+  if (!('speechSynthesis' in window) || !compVoiceOn) return;
   try {
     // said once (was twice for a short stretch on 2026-09-25, reverted same
     // day per user request - the extra repeat was adding real delay on top
     // of the alert's own lag, which made it feel out of sync with the chart)
     const u = new SpeechSynthesisUtterance(text);
-    const bv = browserVoice();
+    const vs = voiceOf(text);
+    const bv = browserVoice(vs);
     if (bv) u.voice = bv;
-    u.pitch = voiceSet === 'girl' ? 1.1 : 0.55;                   // a deep male computer voice for the Dominator set (closest the browser can get), a lighter one for the Girl set
-    u.rate = voiceSet === 'girl' ? 1.05 : 0.95;
+    u.pitch = vs === 'girl' ? 1.1 : 0.55;                   // a deep male computer voice for the Dominator set (closest the browser can get), a lighter one for the Girl set
+    u.rate = vs === 'girl' ? 1.05 : 0.95;
     // boosted 2026-09-28 per user request ("make it a little bit louder") -
     // raises the floor and applies a 1.3x multiplier, capped at the Web
     // Speech API's hard ceiling of 1.0
@@ -6435,6 +6436,9 @@ try {
 let narratorOn = narCoin.BTC || narCoin.XRP;                       // true when at least one coin is on
 const narQueue = [], narSeen = {}, narState = {};
 let narBusyUntil = 0, audioUnlocked = false, clipMap = {}, clipLast = {}, ttsReady = false, ttsAudio = null;
+let compVoiceOn = false;                                              // the plain computer voice for lines that have no recording - OFF by default (those lines are then silent)
+try { compVoiceOn = localStorage.getItem('compVoice') === '1'; } catch (e) {}
+function compVoiceSet(on) { compVoiceOn = !!on; try { localStorage.setItem('compVoice', on ? '1' : '0'); } catch (e) {} }
 let oldSoundsOn = false;
 try { oldSoundsOn = localStorage.getItem('oldSounds') === '1'; } catch (e) {}
 function oldSoundsSet(on) { oldSoundsOn = !!on; try { localStorage.setItem('oldSounds', on ? '1' : '0'); } catch (e) {} }
@@ -6462,15 +6466,30 @@ function flipStepSet(k, v) {
   try { localStorage.setItem('flipSteps', JSON.stringify(flipSteps)); } catch (e) {}
   const pn = document.getElementById('alv-panel'); if (pn) { pn.remove(); alvToggle(); }
 }
-let voiceSet = 'dominator';
+let voiceSet = 'dominator';                                          // the voice the Alert voices panel shows / plays, and the one for lines that belong to no coin
 try { voiceSet = localStorage.getItem('voiceSet') === 'girl' ? 'girl' : 'dominator'; } catch (e) {}
+let voiceBy = {BTC: voiceSet, XRP: voiceSet};                         // each coin has its OWN narrator voice (so you can tell Bitcoin from XRP by ear)
+try { const vb0 = JSON.parse(localStorage.getItem('voiceBy') || 'null'); if (vb0) voiceBy = {BTC: vb0.BTC === 'girl' ? 'girl' : 'dominator', XRP: vb0.XRP === 'girl' ? 'girl' : 'dominator'}; } catch (e) {}
+const clipMaps = {dominator: {}, girl: {}};
+function voiceOf(text) { const m = /^(BTC|XRP)\b/.exec(String(text || '')); return m ? voiceBy[m[1]] : voiceSet; }
+function mapOf(voice) { return clipMaps[voice] || clipMaps.dominator; }
 let sigOff = ['new_candle', 'flat', 'session_close'];
 try { const so = JSON.parse(localStorage.getItem('sigOff') || 'null'); if (Array.isArray(so)) sigOff = so; } catch (e) {}
-function clipsLoad(then) { fetch('/clipmap?set=' + voiceSet, {cache: 'no-store'}).then(r => r.json()).then(j => { clipMap = j || {}; if (then) then(); }).catch(() => {}); }
-function voiceSetSet(v) {
-  voiceSet = v === 'girl' ? 'girl' : 'dominator';
-  try { localStorage.setItem('voiceSet', voiceSet); } catch (e) {}
-  clipsLoad(() => { const pn = document.getElementById('alv-panel'); if (pn) { pn.remove(); alvToggle(); } });
+function clipsLoad(then) {
+  let left = 2;
+  ['dominator', 'girl'].forEach(v => {
+    fetch('/clipmap?set=' + v, {cache: 'no-store'}).then(r => r.json()).then(j => { if (j && Object.keys(j).length) clipMaps[v] = j; }).catch(() => {}).then(() => {
+      if (--left === 0) { clipMap = mapOf(voiceSet); if (then) then(); }
+    });
+  });
+}
+function voiceSetSet(coin, v) {                                     // one coin's narrator voice; the other coin keeps its own
+  v = v === 'girl' ? 'girl' : 'dominator';
+  if (coin === 'BTC' || coin === 'XRP') voiceBy[coin] = v;
+  voiceSet = v;
+  clipMap = mapOf(voiceSet);
+  try { localStorage.setItem('voiceSet', voiceSet); localStorage.setItem('voiceBy', JSON.stringify(voiceBy)); } catch (e) {}
+  const pn = document.getElementById('alv-panel'); if (pn) { pn.remove(); alvToggle(); }
 }
 clipsLoad(); setInterval(clipsLoad, 300000);
 // the browser keeps sound locked after every page load until the page has been clicked once (the dashboard reloads itself whenever it is restarted)
@@ -6498,8 +6517,8 @@ function takeSet(f, ok) {
 function clipPlayFile(f) {
   try { const a = new Audio('/clip?f=' + encodeURIComponent(f)); a.volume = narGain(); a.play().catch(() => {}); } catch (e) {}
 }
-function clipPlay(key, then) {
-  const m = clipMap[key];
+function clipPlay(key, then, voice) {
+  const m = mapOf(voice || voiceSet)[key];
   if (!m || !m.files || !m.files.length) return false;
   const files = m.files.filter(x => badTakes.indexOf(x) < 0);       // takes you switched off in the Alert voices panel are skipped
   if (!files.length) return false;
@@ -6518,7 +6537,7 @@ function clipPlay(key, then) {
   } catch (e) { return false; }
 }
 function coinTag(coin, then) {
-  const m = clipMap['_coin_' + coin];
+  const m = mapOf(voiceBy[coin])['_coin_' + coin];
   if (!m || !m.files || !m.files.length) return false;
   try {
     const a = new Audio('/clip?f=' + encodeURIComponent(m.files[Math.floor(Math.random() * m.files.length)]));
@@ -6542,7 +6561,7 @@ function narToggle(btn) {
   try { localStorage.setItem('narCoin', JSON.stringify(narCoin)); localStorage.setItem('narOn', narratorOn ? '1' : '0'); } catch (e) {}
   audioUnlocked = true;
   narPaint();
-  if (turnOn) { if (sigOff.indexOf('session_open') < 0 && !clipPlay('session_open')) speakRaw((targets[0] === 'BTC' ? 'Bitcoin' : 'X R P') + ' narrator on.'); }
+  if (turnOn) { if (sigOff.indexOf('session_open') < 0 && !clipPlay('session_open', null, targets.length === 1 ? voiceBy[targets[0]] : voiceSet)) speakRaw((targets[0] === 'BTC' ? 'Bitcoin' : 'X R P') + ' narrator on.'); }
   else {
     for (let i = narQueue.length - 1; i >= 0; i--) { const m0 = /^(BTC|XRP)\b/.exec(narQueue[i].text || ''); if (!m0 || targets.indexOf(m0[1]) >= 0) narQueue.splice(i, 1); }
     if (!narratorOn) { try { window.speechSynthesis.cancel(); if (ttsAudio) ttsAudio.pause(); } catch (e) {} if (sigOff.indexOf('session_close') < 0) clipPlay('session_close'); }
@@ -6570,7 +6589,7 @@ function alvToggle() {
   if (p) { p.remove(); return; }
   p = document.createElement('div'); p.id = 'alv-panel';
   const keys = Object.keys(clipMap).filter(k => k[0] !== '_').sort((x, y) => (clipMap[x].label || x).localeCompare(clipMap[y].label || y));
-  p.innerHTML = '<div class="alv-h"><b>Alert voices</b> <span class="hint">tick = the alert speaks when the narrator is ON. The play button lets you hear it.</span><label class="alv-old"><input type="checkbox" ' + (oldSoundsOn ? 'checked' : '') + ' onchange="oldSoundsSet(this.checked)"> old beeps, sirens and chimes <span class="hint">(archived and OFF - tick to bring them back)</span></label><button class="alv-x" onclick="alvToggle()">close</button></div><div class="alv-voice"><b>VOICE</b> <button type="button" class="alv-vb' + (voiceSet === 'dominator' ? ' on' : '') + '" onclick="voiceSetSet(\'dominator\')">Dominator (male)</button><button type="button" class="alv-vb' + (voiceSet === 'girl' ? ' on' : '') + '" onclick="voiceSetSet(\'girl\')">Girl (female)</button></div><div class="alv-flip"><b>FLIP METER STEPS</b> <span class="hint">the flip-risk % that fires each flip alert (earlier = more warning but more false alarms)</span><div class="alv-fsteps"><label>1 Warning <input type="number" min="5" max="95" step="5" value="' + Math.round(flipSteps.early * 100) + '" onchange="flipStepSet(\'early\', this.value)">%</label><label>2 Incoming <input type="number" min="5" max="95" step="5" value="' + Math.round(flipSteps.rise * 100) + '" onchange="flipStepSet(\'rise\', this.value)">%</label><label>3 Reversal <input type="number" min="5" max="95" step="5" value="' + Math.round(flipSteps.flip * 100) + '" onchange="flipStepSet(\'flip\', this.value)">%</label></div></div><div class="alv-list">' +
+  p.innerHTML = '<div class="alv-h"><b>Alert voices</b> <span class="hint">tick = the alert speaks when the narrator is ON. The play button lets you hear it.</span><label class="alv-old"><input type="checkbox" ' + (oldSoundsOn ? 'checked' : '') + ' onchange="oldSoundsSet(this.checked)"> old beeps, sirens and chimes <span class="hint">(archived and OFF - tick to bring them back)</span></label><label class="alv-old"><input type="checkbox" ' + (compVoiceOn ? 'checked' : '') + ' onchange="compVoiceSet(this.checked)"> computer voice for lines that have no recording <span class="hint">(OFF - those lines stay silent)</span></label><button class="alv-x" onclick="alvToggle()">close</button></div>' + ['BTC', 'XRP'].map(c => '<div class="alv-voice"><b>' + c + ' VOICE</b> <button type="button" class="alv-vb' + (voiceBy[c] === 'dominator' ? ' on' : '') + '" onclick="voiceSetSet(\'' + c + '\', \'dominator\')">Dominator (male)</button><button type="button" class="alv-vb' + (voiceBy[c] === 'girl' ? ' on' : '') + '" onclick="voiceSetSet(\'' + c + '\', \'girl\')">Girl (female)</button> <button type="button" onclick="coinTag(\'' + c + '\', function () {})">&#9654; hear it</button></div>').join('') + '<div class="alv-voice hint">The list below shows the takes of the voice you picked last.</div><div class="alv-flip"><b>FLIP METER STEPS</b> <span class="hint">the flip-risk % that fires each flip alert (earlier = more warning but more false alarms)</span><div class="alv-fsteps"><label>1 Warning <input type="number" min="5" max="95" step="5" value="' + Math.round(flipSteps.early * 100) + '" onchange="flipStepSet(\'early\', this.value)">%</label><label>2 Incoming <input type="number" min="5" max="95" step="5" value="' + Math.round(flipSteps.rise * 100) + '" onchange="flipStepSet(\'rise\', this.value)">%</label><label>3 Reversal <input type="number" min="5" max="95" step="5" value="' + Math.round(flipSteps.flip * 100) + '" onchange="flipStepSet(\'flip\', this.value)">%</label></div></div><div class="alv-list">' +
     keys.map(k => '<label class="alv-row"><input type="checkbox" ' + (sigOff.indexOf(k) < 0 ? 'checked' : '') + ' onchange="alvSet(\'' + k + '\', this.checked)"> <span>' + (clipMap[k].label || k) + '</span> <span class="hint">' + (clipMap[k].nopick ? 'a recording for every call' : clipMap[k].files.length + ' take' + (clipMap[k].files.length > 1 ? 's' : '')) + '</span> <button type="button" onclick="event.preventDefault(); clipPlay(\'' + k + '\')">&#9654;</button>' + (clipMap[k].note ? '<span class="alv-note hint">' + clipMap[k].note + '</span>' : '') + '</label><div class="alv-takes">' + (clipMap[k].nopick ? [] : clipMap[k].files).map((f, i) => '<span class="alv-take"><button type="button" onclick="clipPlayFile(\'' + f + '\')" title="play this take">' + (i + 1) + '</button><label title="untick = never play this take"><input type="checkbox" ' + (badTakes.indexOf(f) < 0 ? 'checked' : '') + ' onchange="takeSet(\'' + f + '\', this.checked)"></label></span>').join('') + '</div>').join('') + '</div>';
   document.body.appendChild(p);
 }
@@ -6579,9 +6598,9 @@ function alvSet(k, on) {
   if (!on) sigOff.push(k);
   try { localStorage.setItem('sigOff', JSON.stringify(sigOff)); } catch (e) {}
 }
-function filePlay(f, then) {
+function filePlay(f, then, voice) {
   try {
-    const a = new Audio('/clip?f=' + encodeURIComponent((voiceSet === 'girl' ? 'g_' : '') + f));
+    const a = new Audio('/clip?f=' + encodeURIComponent(((voice || voiceSet) === 'girl' ? 'g_' : '') + f));
     a.volume = narGain();
     ttsAudio = a;
     narBusyUntil = Date.now() + 12000;
@@ -6613,19 +6632,20 @@ function narFlush() {
   if (!it) return;
   const cm = /^(BTC|XRP)\b/.exec(it.text || '');
   const spoken = (it.text || '').replace(/^BTC\b/, 'Bitcoin').replace(/^XRP\b/, 'X R P');
+  const vc = cm ? voiceBy[cm[1]] : voiceSet;                         // this coin's own narrator voice
   if (it.file) {                                                      // a recorded callout with the call in it (locked call: up / down and the percent)
-    const go = () => { if (!filePlay(it.file)) narVoice(spoken); };
+    const go = () => { if (!filePlay(it.file, null, vc)) narVoice(spoken, vc); };
     if (!(cm && coinTag(cm[1], go))) go();
-  } else if (it.clip && clipMap[it.clip]) {
-    const go = () => { if (!clipPlay(it.clip)) narVoice(spoken); };
+  } else if (it.clip && mapOf(vc)[it.clip]) {
+    const go = () => { if (!clipPlay(it.clip, null, vc)) narVoice(spoken, vc); };
     if (!(cm && coinTag(cm[1], go))) go();
-  } else narVoice(spoken);
+  } else narVoice(spoken, vc);
   narBusyUntil = Math.max(narBusyUntil, now + 1200);
   if (narQueue.length) setTimeout(narFlush, 900);
 }
 // ---- Signals (squeezes, crosses, divergence, breaks, traps, volume, round lifecycle ...): toast always, voice when the narrator is ON ---------------------------------
 let sigLast = -1;
-const SIG_UP = /^(golden_cross|bull_div|short_squeeze|funding_short|funding_flip_up|support_hold|bear_trap|stop_hunt|oversold|resistance_break|target_hit|trade_enter|hold|stop_up)$/;
+const SIG_UP = /^(golden_cross|bull_div|short_squeeze|funding_short|funding_flip_up|support_hold|bear_trap|stop_hunt|oversold|resistance_break|target_hit|trade_enter|hold|stop_up|cash_out)$/;
 const SIG_DN = /^(death_cross|bear_div|long_squeeze|funding_long|funding_flip_down|resistance_reject|bull_trap|stop_hunt_high|overbought|support_break|liq_cascade|weak_hands|stay_out|risk_vol|stop_loss)$/;
 function sigToast(e) {
   let box = document.getElementById('sig-toasts');
@@ -6658,10 +6678,10 @@ function ttsCheck() {
 }
 setInterval(ttsCheck, 60000);
 setTimeout(ttsCheck, 1500);
-function narVoice(text) {
+function narVoice(text, voice) {
   if (!ttsReady) { speakRaw(text); return; }
   try {
-    const a = new Audio('/tts?voice=' + voiceSet + '&text=' + encodeURIComponent(text));
+    const a = new Audio('/tts?voice=' + (voice || voiceOf(text)) + '&text=' + encodeURIComponent(text));
     a.volume = narGain();
     ttsAudio = a;
     narBusyUntil = Date.now() + 15000;                                   // hold the queue while this sentence plays (released when it ends)
@@ -8529,6 +8549,88 @@ def _ct_card(name, M, lab, mins, v, d, tn, res, recs=None):
     return f'<div class="ct-card {cls}">{head}<div class="ct-card-call {cls}">{call}{tier_html}{real}{beside}</div>{"".join(rows)}{foot}</div>'
 
 
+_ct_agree_cache = {"t": 0.0, "data": None}
+
+
+def _ct_agreement():
+    """How often the round ended as called, by how the early / mid / late calls line up (from every recorded round that has all three calls and none of them 'no call'). Cached 30 s. Information only."""
+    now = time.time()
+    if _ct_agree_cache["data"] and now - _ct_agree_cache["t"] < 30:
+        return _ct_agree_cache["data"]
+    with _ct_mu:
+        items = [(coin, t, {k: list(v) for k, v in (r.get("m") or {}).items() if k in ("11", "7", "3")}, r.get("res"))
+                 for coin in ("BTC", "XRP") for t, r in _ct[coin].items() if r.get("res") in ("YES", "NO")]
+    rows = []
+    for coin, t, m, res in items:
+        if len(m) < 3:
+            continue
+        sd = [m[k][0] for k in ("11", "7", "3")]
+        if "NONE" in sd:
+            continue
+        def pr(k, side=sd[1]):
+            ky = m[k][2] if len(m[k]) > 2 else None
+            return None if ky is None else (ky if side == "YES" else 1 - ky)
+        rows.append({"coin": coin, "e": sd[0], "m": sd[1], "l": sd[2], "ok": sd[1] == res, "pe": pr("11"), "pm": pr("7"), "pl": pr("3"),
+                     "close": _window_close_utc(t) or dt.datetime(2000, 1, 1, tzinfo=dt.timezone.utc)})
+    rows.sort(key=lambda r: r["close"])
+    for i, r in enumerate(rows):
+        r["half"] = 0 if i < len(rows) // 2 else 1
+    cats = [("Every round with all three calls (the mid call scored)", lambda r: True),
+            ("ALL THREE calls the same", lambda r: r["e"] == r["m"] == r["l"]),
+            ("The three calls NOT all the same", lambda r: not (r["e"] == r["m"] == r["l"])),
+            ("Early and mid agree", lambda r: r["e"] == r["m"]),
+            ("Mid and late agree", lambda r: r["m"] == r["l"]),
+            ("Early and mid agree, but LATE says the other side", lambda r: r["e"] == r["m"] != r["l"]),
+            ("Mid and late agree, but EARLY says the other side", lambda r: r["m"] == r["l"] != r["e"])]
+    def pct(sel):
+        return (sum(1 for r in sel if r["ok"]) / len(sel) * 100) if sel else None
+    table = []
+    for lab, f in cats:
+        sel = [r for r in rows if f(r)]
+        table.append({"label": lab, "n": len(sel), "all": pct(sel), "BTC": pct([r for r in sel if r["coin"] == "BTC"]), "XRP": pct([r for r in sel if r["coin"] == "XRP"]),
+                      "old": pct([r for r in sel if r["half"] == 0]), "new": pct([r for r in sel if r["half"] == 1])})
+    same = [r for r in rows if r["e"] == r["m"] == r["l"]]
+    avgp = lambda k: (sum(r[k] for r in same if r[k] is not None) / max(1, sum(1 for r in same if r[k] is not None)) * 100) if same else None
+    bands = []
+    for lo, hi, lab in ((0, 0.70, "under 70c"), (0.70, 0.80, "70 to 79c"), (0.80, 0.90, "80 to 89c"), (0.90, 1.01, "90c and up")):
+        sel = [r for r in same if r["pm"] is not None and lo <= r["pm"] < hi]
+        bands.append({"label": lab, "n": len(sel), "pct": pct(sel), "price": (sum(r["pm"] for r in sel) / len(sel) * 100) if sel else None})
+    data = {"table": table, "bands": bands, "avg": (avgp("pe"), avgp("pm"), avgp("pl")), "n": len(rows)}
+    _ct_agree_cache.update(t=now, data=data)
+    return data
+
+
+def _ct_agree_html(name, marks):
+    """The 'When the calls agree' drop-down for the 3 calls window."""
+    try:
+        d = _ct_agreement()
+    except Exception as e:
+        print(f"[call timing] agreement table failed: {e!r}")
+        return ""
+    if not d["n"]:
+        return ""
+    f = lambda v: "-" if v is None else f'<span class="{"up" if v >= 80 else ("down" if v < 60 else "flat")}">{v:.1f}%</span>'
+    head = d["table"][1]
+    rows = "".join(f'<tr><td>{t["label"]}</td><td>{t["n"]}</td><td><b>{f(t["all"])}</b></td><td>{f(t["BTC"])}</td><td>{f(t["XRP"])}</td><td>{f(t["old"])}</td><td>{f(t["new"])}</td></tr>' for t in d["table"])
+    bands = "".join(f'<tr><td>{b["label"]}</td><td>{b["n"]}</td><td><b>{f(b["pct"])}</b></td><td>{("%.0fc" % b["price"]) if b["price"] is not None else "-"}</td></tr>' for b in d["bands"])
+    now_bits = []
+    for M, lab in ((11, "early"), (7, "mid"), (3, "late")):
+        v = marks.get(str(M))
+        now_bits.append(f"{lab} " + (("UP" if v[0] == "YES" else ("DOWN" if v[0] == "NO" else "no call")) if v else "waiting"))
+    sides = [marks.get(str(M), [None])[0] for M in (11, 7, 3)]
+    got = [s for s in sides if s in ("YES", "NO")]
+    verdict = ("<b class='up'>all three agree</b>" if len(got) == 3 and len(set(got)) == 1 else ("<b class='down'>the calls disagree</b>" if len(set(got)) > 1 else "<span class='hint'>not all three are in yet</span>"))
+    pe, pm, pl = d["avg"]
+    return (f'<details class="ct-recdet" data-pat="CTAGREE|{name}"><summary><b>When the calls agree</b> <span class="hint">- all three the same: </span>{f(head["all"])} <span class="hint">ended as called ({head["n"]} rounds)</span></summary>'
+            f'<div class="ct-agree-body"><p class="hint">From every recorded round that has an early (11:00 left), a mid (7:00 left, the real END CALL) and a late (3:00 left) call and none of them a no call. "Ended as called" = the round finished on the side of the mid call.</p>'
+            f'<p><b>This round now:</b> {" &middot; ".join(now_bits)} - {verdict}</p>'
+            f'<table class="press-table"><tr><th>Situation</th><th>Rounds</th><th>Ended as called</th><th>BTC</th><th>XRP</th><th>Older half</th><th>Newer half</th></tr>{rows}</table>'
+            f'<p class="hint">If the late call flips against the other two, the late call has usually been the right one.</p>'
+            f'<p><b>What Kalshi was already charging</b> for the called side when all three agreed: about {pe:.0f}c at the early call, {pm:.0f}c at the mid call, {pl:.0f}c at the late call. So a high win rate only helps against the price. By the mid-call price:</p>'
+            f'<table class="press-table"><tr><th>Mid-call price</th><th>Rounds</th><th>Ended as called</th><th>Price paid on average</th></tr>{bands}</table>'
+            f'<p class="hint">About 11 days of rounds so far, so a good read, not a promise. Information only.</p></div></details>')
+
+
 def build_call_timing_panel(name):
     """The 3 calls: one floating pull-down with three windows (EARLY / MID / LATE), each with the full picture of its call, plus a small 'Scoreboard & info' tab. Information only."""
     if name not in ("BTC", "XRP"):
@@ -8551,7 +8653,7 @@ def build_call_timing_panel(name):
     tables = "".join(f'<details class="ct-recdet" data-pat="CTREC|{name}|{M}"><summary><b>{lab}</b> <span class="hint">{mins}{" - the real END CALL" if M == 7 else ""}</span> &nbsp;{_ct_rec_line(allrecs[M], 24)} <span class="hint">last 24 hours</span></summary>{streak_windows_html(allrecs[M], name, show_pnl=False, plain=True)}</details>'
                      for M, lab, mins in ((11, "EARLY CALL", "4 minutes in (11:00 left)"), (7, "MID CALL", "8 minutes in (7:00 left)"), (3, "LATE CALL", "12 minutes in (3:00 left)")))
     return (f'<details class="ct-drop" data-pat="CT|{name}"><summary><span class="dd-ic">&#9654;</span><b>The 3 calls</b> {chips} <span class="dd-hint">- click to open the three call windows</span></summary>'
-            f'<div class="ct-body"><div class="ct-cards">{cards}</div><div class="ct-recs"><div class="ct-rec-h"><b>Track record</b> <span class="hint">- the same table for all three calls</span></div>{tables}</div>'
+            f'<div class="ct-body"><div class="ct-cards">{cards}</div><div class="ct-recs"><div class="ct-rec-h"><b>Track record</b> <span class="hint">- the same table for all three calls</span></div>{tables}{_ct_agree_html(name, marks)}</div>'
             f'<details class="ct-info" data-pat="CTI|{name}"><summary>Scoreboard &amp; info</summary><div class="ct-info-body">{board}</div></details>'
             f'<div class="hint ct-note">More information will be added to each window as we learn what matters. Nothing here changes the real END CALL or trades.</div></div></details>')
 
@@ -8825,21 +8927,25 @@ def _sig_rsi(cl, n=14):
 # ---- Voice pack: the owner's saved ElevenLabs clips, sorted into alert types by src/build_clip_map.py ----------------------------------------------------------------------
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 _CLIP_DIR = os.path.join(_BASE_DIR, "..", "data_cache", "elevenlabs_saved")
-_VOICE_ZIP = os.path.join(_BASE_DIR, "..", "voice_pack.zip")            # the website build carries the recordings as ONE zip (GitHub's web upload takes only 100 files at a time)
-_zip_state = {"z": None, "names": set(), "tried": False}
+_VOICE_ZIPS = [os.path.join(_BASE_DIR, "..", n) for n in ("voice_pack.zip", "voice_speech.zip")]          # the website build carries the recordings as ONE zip + the pre-recorded narrator sentences as a second one (GitHub's web upload: 100 files at a time, 25 MB each)
+_zip_state = {"z": None, "names": {}, "tried": False}
 
 
 def _vp_zip():
-    """The open voice-pack zip on the website build, or None (this PC reads its recordings straight from the folder)."""
+    """The open voice-pack zip(s) on the website build, or None (this PC reads its recordings straight from the folder)."""
     if not _zip_state["tried"]:
         _zip_state["tried"] = True
-        if not os.path.exists(os.path.join(_CLIP_DIR, "clip_map.json")) and os.path.exists(_VOICE_ZIP):
-            try:
-                import zipfile
-                z = zipfile.ZipFile(_VOICE_ZIP)
-                _zip_state["z"], _zip_state["names"] = z, set(z.namelist())
-            except Exception as e:
-                print(f"[voice] could not open the voice pack: {e!r}")
+        if not os.path.exists(os.path.join(_CLIP_DIR, "clip_map.json")):
+            import zipfile
+            for zp in _VOICE_ZIPS:
+                if os.path.exists(zp):
+                    try:
+                        z = zipfile.ZipFile(zp)
+                        for n_ in z.namelist():
+                            _zip_state["names"][n_] = z
+                        _zip_state["z"] = z
+                    except Exception as e:
+                        print(f"[voice] could not open {zp}: {e!r}")
     return _zip_state["z"]
 
 
@@ -8849,7 +8955,7 @@ def _cp_has(name):
 
 def _cp_read(name):
     if _vp_zip():
-        return _zip_state["z"].read(name)
+        return _zip_state["names"][name].read(name)
     with open(os.path.join(_CLIP_DIR, name), "rb") as f:
         return f.read()
 
@@ -8861,7 +8967,7 @@ def _cp_names():
 def _cp_stamp(mapname):
     """Changes whenever the recordings change, so the clip map is read again."""
     if _vp_zip():
-        return os.path.getmtime(_VOICE_ZIP)
+        return max(os.path.getmtime(zp) for zp in _VOICE_ZIPS if os.path.exists(zp))
     exc = os.path.join(_CLIP_DIR, "clip_exclude.json")
     return max(os.path.getmtime(os.path.join(_CLIP_DIR, mapname)), os.path.getmtime(_CLIP_DIR), os.path.getmtime(exc) if os.path.exists(exc) else 0)
 
@@ -8916,6 +9022,7 @@ def _clip_map(voice="dominator"):
 
 _SIG_CLIP_ALIAS = {"bull_div": "divergence", "bear_div": "divergence"}
 _sig_flags = {"BTC": {}, "XRP": {}}
+_sig_trapseen = {"BTC": {}, "XRP": {}}                    # when each kind of fake move (trap / stop hunt) was last seen - the hold alert looks at it
 _sig_fsign = {}
 _sig_round = {}
 
@@ -8954,12 +9061,16 @@ def _sig_scan_patterns(coin, cs, r):
     if c_ < lo30 and prev[4] >= lo30:
         _sig_emit(coin, "support_break", f"{coin}. Price closed below the low of the last two and a half hours. Support is breaking.", px, f"sb:{coin}", 1200)
     if l_ < lo30 and c_ > lo30 and (min(o, c_) - l_) >= 0.6 * rg:
+        _sig_trapseen[coin]["stop_hunt"] = now
         _sig_emit(coin, "stop_hunt", f"{coin}. Stop hunt. The lows were swept and price snapped back. Stops are gone.", px, f"sh:{coin}", 1200)
     if h_ > hi30 and c_ < hi30 and (h_ - max(o, c_)) >= 0.6 * rg:
+        _sig_trapseen[coin]["stop_hunt_high"] = now
         _sig_emit(coin, "stop_hunt_high", f"{coin}. Stop hunt above. The highs were swept and price fell back. Stops are gone.", px, f"shh:{coin}", 1200)
     if prev[4] < lo30p and c_ > lo30p:
+        _sig_trapseen[coin]["bear_trap"] = now
         _sig_emit(coin, "bear_trap", f"{coin}. Bear trap. The breakdown was a lie and price is back above support.", px, f"bt:{coin}", 1200)
     if prev[4] > hi30p and c_ < hi30p:
+        _sig_trapseen[coin]["bull_trap"] = now
         _sig_emit(coin, "bull_trap", f"{coin}. Bull trap. The breakout was bait and price is back below resistance.", px, f"ut:{coin}", 1200)
     if lo30 <= l_ <= lo30 * 1.0008 and c_ > o and (c_ - l_) >= 0.6 * rg:
         _sig_emit(coin, "support_hold", f"{coin}. Support holds. Buyers stepped in and the dip was absorbed.", px, f"sp:{coin}", 1200)
@@ -9039,11 +9150,34 @@ def _sig_scan_round(coin):
             _sig_emit(coin, "call_locked", f"{coin}. Call locked, {'up' if yes else 'down'}, {lk['lean']:.0f} percent.", spot, f"te:{coin}:{ticker}", 60, clip="call_locked", file=_lock_file("UP" if yes else "DOWN", lk["lean"]))
         holding = (spot >= line) == yes
         fr = _flip_risk(coin, lk["side"], spot, line, left)
-        if holding and fr:
-            if 240 < left <= 300 and fr[0] < 0.30 and "hold" not in fired:
-                fired.add("hold")
-                _sig_emit(coin, "hold", f"{coin}. Hold the line. The call is holding, {abs(fr[1]):.1f} candle ranges on the right side.", spot, f"hd:{coin}:{ticker}", 60)
-            if left <= 120 and fr[0] < 0.10 and "safe" not in fired:
+        p = None                                                             # how sure Kalshi is of the CALLED side right now
+        if d.get("confidence") is not None and d.get("leaning") in ("YES", "NO"):
+            ky = d["confidence"] if d["leaning"] == "YES" else 1 - d["confidence"]
+            p = ky if yes else 1 - ky
+        with _ct_mu:
+            _cm = (_ct[coin].get(ticker) or {}).get("m") or {}
+            early, late = _cm.get("11"), _cm.get("3")
+        two_agree = (bool(early) and early[0] == lk["side"]) or (bool(late) and late[0] == lk["side"])        # early + mid agree, or mid + late agree
+        km = tn.get("k_up")                                                  # the share of Kalshi money on YES; for the called side:
+        k_side = None if km is None else (km if yes else 1 - km)
+        if holding and p is not None and p >= 0.94 and left > 20 and "cash" not in fired:
+            fired.update(("cash", "hold", "safe"))                           # nearly certain: this replaces 'hold' and 'looks safe' for the round
+            _sig_emit(coin, "cash_out", f"{coin}. Target hit. Kalshi has the call at {p * 100:.0f} percent. Take the profit.", spot, f"co:{coin}:{ticker}", 60)
+        elif fr and fr[0] < 0.55 and p is not None and 0.78 <= p < 0.94 and "cash" not in fired and "trap_hold" not in fired and 20 < left <= 420:        # only when Kalshi is at least 78% sure of the call
+            # diamond hands: a FAKE move against the call has just been seen (a drop that is a trap / low sweep for an UP call, a pump that is a trap / high sweep for a DOWN call)
+            seen = _sig_trapseen.get(coin, {})
+            kinds = ("bear_trap", "stop_hunt") if yes else ("bull_trap", "stop_hunt_high")
+            hit = [k for k in kinds if time.time() - seen.get(k, 0) < 600]
+            if hit:
+                fired.add("trap_hold")
+                what = "trap" if hit[0].endswith("trap") else "stop hunt"
+                _sig_emit(coin, "hold", f"{coin}. Diamond hands. That {'drop' if yes else 'pump'} was a fake, a {what}. The {'up' if yes else 'down'} call stands.", spot, f"th:{coin}:{ticker}", 60)
+        if holding and fr and "cash" not in fired:
+            if (60 < left <= 300 and two_agree and fr[0] < 0.30 and p is not None and 0.70 <= p < 0.94
+                    and (k_side is None or k_side >= 0.75) and "hold" not in fired):
+                fired.add("hold")                                            # hold only when it all looks decent: two calls agree, Kalshi price 70-94%, Kalshi money 75%+, low flip risk, price on the right side
+                _sig_emit(coin, "hold", f"{coin}. Hold the line. Two calls agree, Kalshi has it at {p * 100:.0f} percent and the call is holding.", spot, f"hd:{coin}:{ticker}", 60)
+            if left <= 120 and fr[0] < 0.10 and (p is None or p < 0.94) and "safe" not in fired:
                 fired.add("safe")
                 _sig_emit(coin, "stop_up", f"{coin}. The call looks safe. Flip risk is only {fr[0] * 100:.0f} percent.", spot, f"su:{coin}:{ticker}", 60)
 
@@ -9279,12 +9413,28 @@ def _tts_status():
     u = _tts_usage()
     cap = int((cfg or {}).get("monthly_char_cap", 8000))
     loc = _local_tts_up()
-    return {"ready": loc or (bool(cfg) and u["chars"] < cap), "local": loc, "used": u["chars"], "cap": cap, "configured": bool(cfg)}
+    return {"ready": loc or _pre_tts_available() or (bool(cfg) and u["chars"] < cap), "local": loc, "used": u["chars"], "cap": cap, "configured": bool(cfg)}
+
+
+def _pre_tts(text, voice="dominator"):
+    """A sentence recorded ahead of time (same name scheme as the local voice service's cache) from the voice pack, or None. This is how the website speaks narrator lines in the chosen voice without a voice service."""
+    try:
+        import hashlib
+        t = " ".join(str(text).split())[:240]
+        key = hashlib.sha1((("girl|" if voice == "girl" else "") + t).encode("utf-8")).hexdigest()
+        name = "tts_" + key + ".mp3"
+        return _cp_read(name) if _cp_has(name) else None
+    except Exception:
+        return None
+
+
+def _pre_tts_available():
+    return any(n.startswith("tts_") for n in _cp_names()) if _vp_zip() else False
 
 
 def _tts_audio(text, voice="dominator", nogen=False):
     """Speech for a sentence that has no recorded clip: the local voice of the chosen set first (free, same voice as the name tags and call callouts), ElevenLabs only for the Dominator voice and only if the local one is not running."""
-    return _local_tts_audio(text, voice, nogen) or (_tts_audio_eleven(text) if (voice != "girl" and not nogen) else None)
+    return _pre_tts(text, voice) or _local_tts_audio(text, voice, nogen) or (_tts_audio_eleven(text) if (voice != "girl" and not nogen) else None)
 
 
 def _tts_audio_eleven(text):
@@ -11208,6 +11358,7 @@ _SITE_CHART = os.environ.get("SITE_CHART", "1") != "0"                  # on the
 _MTF_ON = (os.path.exists(_MTF_GEN) and (not HOSTED_PASSWORD or _SITE_CHART)
            and not os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "VERSION.txt")))      # shared copies and the website never get it
 _MTF_LAST_REQ = [0.0]
+_MTF_STATE = {"runs": 0, "ok": None, "secs": None, "rc": None, "at": 0.0, "note": ""}        # how the last chart build went (shown on the chart page while there is no chart, and at /mtf_status)
 SHOW_HEAT_MAP = False                                       # the order-book heat map pull-down (owner turned it off 2026-10-24; the data collection behind it keeps running)
 _MTF_WAKE = threading.Event()
 
@@ -11269,9 +11420,21 @@ def _mtf_loop():
                 if not (now - built >= (30 if site else 15) or new_candle):
                     continue
             flags = (0x00004000 | 0x08000000) if os.name == "nt" else 0             # below-normal priority, no console window
-            with open(os.path.join(_MTF_OUT, "gen_log.txt"), "w", encoding="utf-8") as lg:
-                _sp.run([_sys.executable, "-I", _MTF_GEN, "--embed", _MTF_OUT], timeout=(120 if site else 240), creationflags=flags, stdout=lg, stderr=_sp.STDOUT,
-                        preexec_fn=((lambda: os.nice(10)) if os.name != "nt" else None))
+            _t0 = time.time()
+            _rc = None
+            try:
+                with open(os.path.join(_MTF_OUT, "gen_log.txt"), "w", encoding="utf-8") as lg:
+                    _rc = _sp.run([_sys.executable, "-I", _MTF_GEN, "--embed", _MTF_OUT], timeout=(300 if site else 240), creationflags=flags, stdout=lg, stderr=_sp.STDOUT,
+                                  preexec_fn=((lambda: os.nice(10)) if os.name != "nt" else None)).returncode
+                _note = ""
+            except _sp.TimeoutExpired:
+                _note = "the chart builder ran out of time (" + str(int(time.time() - _t0)) + " seconds) - the server is too slow for it"
+            try:
+                with open(os.path.join(_MTF_OUT, "gen_log.txt"), "r", encoding="utf-8", errors="replace") as lg2:
+                    _tail = lg2.read()[-700:]
+            except OSError:
+                _tail = ""
+            _MTF_STATE.update(runs=_MTF_STATE["runs"] + 1, ok=os.path.exists(os.path.join(_MTF_OUT, "mtf_BTC.html")) and _rc == 0, secs=round(time.time() - _t0, 1), rc=_rc, at=time.time(), note=_note or " | ".join(_tail.strip().splitlines())[-400:])
         except Exception as _e:
             print(f"[mtf-chart] build failed: {_e!r}")
 
@@ -12877,6 +13040,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_header("Cache-Control", "no-store"); self.end_headers()
             self.wfile.write(body)
             return
+        if parsed.path == "/mtf_status" and _MTF_ON:
+            _pg = os.path.join(_MTF_OUT, "mtf_BTC.html")
+            body = json.dumps(dict(_MTF_STATE, built_age=(round(time.time() - os.path.getmtime(_pg)) if os.path.exists(_pg) else None), viewer_seen=round(time.time() - _MTF_LAST_REQ[0]))).encode()
+            self.send_response(200); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(body))); self.send_header("Cache-Control", "no-store"); self.end_headers()
+            self.wfile.write(body)
+            return
         if parsed.path == "/mtf_panel" and _MTF_ON:
             _coin = (urllib.parse.parse_qs(parsed.query).get("coin") or [""])[0].upper()
             if _coin in ("BTC", "XRP"):
@@ -12886,8 +13055,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     with open(os.path.join(_MTF_OUT, f"mtf_{_coin}.html"), "rb") as _f:
                         body = _f.read()
                 except OSError:
+                    _st = _MTF_STATE
+                    _why = "" if not _st["runs"] else (" Last attempt: " + ("finished" if _st["ok"] else "FAILED") + " after " + str(_st["secs"]) + " s (attempt " + str(_st["runs"]) + "). " + __import__("html").escape(str(_st["note"])[-300:]))
                     body = (b'<html><head><meta http-equiv="refresh" content="4"></head><body style="background:#0f1419;color:#8b949e;font:16px Segoe UI,Arial;padding:24px">'
-                            b'Building the Patterns &amp; Tunnel chart - about half a minute the first time...</body></html>')
+                            b'Building the Patterns &amp; Tunnel chart - about half a minute the first time...<br><br><small>' + _why.encode("utf-8") + b'</small></body></html>')
                 self.send_response(200); self.send_header("Content-Type", "text/html; charset=utf-8")
                 if "gzip" in (self.headers.get("Accept-Encoding", "") or ""):
                     body = gzip.compress(body, 4)

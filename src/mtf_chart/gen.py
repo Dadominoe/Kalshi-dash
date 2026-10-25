@@ -998,7 +998,7 @@ def build_svg(coin, base_cs, lines_by_tf, emas, srs, frames, uid, dec, nshow, wi
         o.append(f'<line x1="{L_}" y1="{sy(v):.1f}" x2="{width - R_}" y2="{sy(v):.1f}" stroke="#21262d"/><text x="{L_ - 6}" y="{sy(v) + 4:.1f}" text-anchor="end" font-size="15" fill="#8b949e">{v:,.{dec}f}</text>')
     o.append(time_axis_svg(t0, tmax, step, sx, T_, ph))
     px_now = vis[-1][4]
-    o.append(f'<g class="sr" clip-path="url(#{uid}c)" style="display:none">')
+    o.append(f'<g class="sr" clip-path="url(#{uid}c)" style="display:inline">')
     for st, h_, l_ in srs:
         col = "#3fb950" if px_now > h_ else ("#f85149" if px_now < l_ else "#8b949e")
         yt, yb = sy(h_), sy(l_)
@@ -1080,6 +1080,15 @@ def _load_odds():
 
 ODDS = _load_odds()
 AGREE_INFO = {}
+AGREE_VOTES = {}                                            # coin -> the six indicator readings behind the 'N of 6 lean' chip, for the click-open list
+IND_EXPLAIN = {
+    "moving-average tilt": "The green line is a 15-candle moving average: the average closing price of the last 15 minutes. This checks how steeply it slopes. Sloping UP by more than a small amount counts as UP, DOWN the same way, and in between it is flat. It shows which way the short-term average is leaning. It does not say where price will go.",
+    "green over/under red": "The green line (the 15-candle average) against the red line (the 34-candle average). Green above red means recent prices are higher than the longer average, so it leans UP. Green below red leans DOWN. When the two cross, that is the golden cross (up) or the death cross (down).",
+    "price over/under blue": "The blue line is the 111-candle average, the long-term trend on this chart. Price above it leans UP, price below it leans DOWN.",
+    "MACD (average of 5)": "MACD compares a fast average with a slow one. Above zero means the fast one is above the slow one (the bullish side), below zero the bearish side. This is the average of five readings, so it is smoother.",
+    "RSI": "RSI measures how strong the recent buying or selling has been, on a scale of 0 to 100. Over 55 leans UP, under 45 leans DOWN, and in between there is no lean. Over 70 means stretched up, under 30 stretched down.",
+    "tunnel direction": "The tunnel is the narrow channel price is moving inside right now. A rising tunnel leans UP, a falling tunnel leans DOWN, and when no tunnel is found there is no lean.",
+}
 _BUCKET_NAME = {"0-1": "0 or 1 of 6 agree", "2-3": "2 or 3 of 6 agree", "4": "4 of 6 agree", "5": "5 of 6 agree", "6": "all 6 agree"}
 
 
@@ -1106,8 +1115,9 @@ def agree_live(cs, coin):
              ("MACD (average of 5)", 1 if mc > 0 else -1, "bullish side" if mc > 0 else "bearish side"),
              ("RSI", 1 if rs > 55 else (-1 if rs < 45 else 0), f"{rs:.0f} - {'leaning up' if rs > 55 else ('leaning down' if rs < 45 else 'middle, no lean')}"),
              ("tunnel direction", 0 if f is None else (1 if f[5] == "up" else -1), "no tunnel" if f is None else ("rising tunnel" if f[5] == "up" else "falling tunnel"))]
+    AGREE_VOTES[coin] = [[v[0], v[1], v[2], IND_EXPLAIN.get(v[0], "")] for v in votes]
     up, dn = sum(1 for v in votes if v[1] == 1), sum(1 for v in votes if v[1] == -1)
-    dots = "".join(f'<i style="display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:3px;background:{"#3fb950" if v[1] == 1 else ("#f85149" if v[1] == -1 else "#6e7681")}" title="{v[0]}: {v[2]}"></i>' for v in votes)
+    dots ="".join(f'<i style="display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:3px;background:{"#3fb950" if v[1] == 1 else ("#f85149" if v[1] == -1 else "#6e7681")}" title="{v[0]}: {v[2]}"></i>' for v in votes)
     lead = "UP" if up > dn else ("DOWN" if dn > up else "split")
     col = "#3fb950" if up > dn else ("#f85149" if dn > up else "#8b949e")
     label = f'{dots} <b style="color:{col}">' + (f"{max(up, dn)} of 6 lean {lead}" if up != dn else f"split - {up} up, {dn} down") + '</b>'
@@ -1160,12 +1170,12 @@ def ind_panel(coin, chips, agree=""):
         return f'<div class="irow"><div class="iname"><b>{name}</b><span>{sub}</span></div><div class="ictl">{ctl}</div>{info}</div>'
     chk = lambda on, js: f'<label class="sw"><input type="checkbox" {"checked" if on else ""} onchange="{js}"><span></span></label>'
     rows = (row("Trend lines", "one color per chart size", chips, "trend", True)
-            + row("Floors, ceilings, body lines", "fine dotted levels", chk(False, "toggleFl(this.checked,this)"), "trend")
-            + row("Support / resistance bands", "shaded zones price has turned at", chk(False, "toggleTf(\'" + coin + "\',\'sr\',this.checked)"), "sr")
+            + row("Floors, ceilings, body lines", "fine dotted levels", chk(True, "toggleFl(this.checked,this)"), "trend")
+            + row("Support / resistance bands", "shaded zones price has turned at", chk(True, "toggleTf(\'" + coin + "\',\'sr\',this.checked)"), "sr")
             + row("Moving averages", "green (15), red (34) and blue (111)", chk(True, "toggleSel(this,\'.ema\')"), "ma")
             + row("Tunnel shading", "which chart size to shade", sel, "tunnel")
             + row("RSI", "strength meter (on the dashboard)", "", "rsi")
-            + row("MACD (average of 5)", "strip under the chart", chk(False, "toggleSel(this,\'.macdpane\')"), "macd"))
+            + row("MACD (average of 5)", "strip under the chart", chk(True, "toggleSel(this,\'.macdpane\')"), "macd"))
     return ('<div class="indgrid"><div class="indlist">' + rows + '</div><div class="infopanel"><div class="infoin"><p class="hint">Click the <b>i</b> beside any indicator to read what it is, what its colors mean, and what price did afterwards.</p></div></div></div>')
 
 
@@ -1223,14 +1233,14 @@ for coin, sym, dec in COINS:
             inner = ""
             for zi, nz in enumerate((45, 100, 200)):
                 uid = f"{coin}{bkey}z{nz}"
-                inner += f'<div class="zoomv zv-{nz}" style="display:{"block" if zi == 0 else "none"}">' + build_svg(coin, cs, lines_v, emas, srs, frames, uid, dec, nz, bias=bias, own=bkey) + replay_bar(uid) + f'<div class="macdpane" style="display:none">{macd_svg(cs, nz, uid + "m")}</div>' + "</div>"
+                inner += f'<div class="zoomv zv-{nz}" style="display:{"block" if zi == 0 else "none"}">' + build_svg(coin, cs, lines_v, emas, srs, frames, uid, dec, nz, bias=bias, own=bkey) + replay_bar(uid) + f'<div class="macdpane">{macd_svg(cs, nz, uid + "m")}</div>' + "</div>"
             zbar = ('<div class="bar zbar"><b>Candles shown:</b> <button class="on" onclick="setCandles(\'' + coin + '\',45,this)">45 (standard)</button>'
                     '<button onclick="setCandles(\'' + coin + '\',100,this)">100</button><button onclick="setCandles(\'' + coin + '\',200,this)">200 (zoomed out)</button></div>')
             body = inner + zbar
         else:
             uid = f"{coin}{bkey}"
             body = ('<div class="zoomv" style="display:block">' + build_svg(coin, cs, lines_v, emas, srs, frames, uid, dec, SHOW[bkey], bias=bias, own=bkey) + replay_bar(uid)
-                    + f'<div class="macdpane" style="display:none">{macd_svg(cs, SHOW[bkey], f"{coin}{bkey}m")}</div></div>')
+                    + f'<div class="macdpane">{macd_svg(cs, SHOW[bkey], f"{coin}{bkey}m")}</div></div>')
         views.append(f'<div class="view v-{coin}-{bkey}" style="display:{"block" if bi == 0 else "none"}">{body}</div>')
         if bkey == "1m":
             st = cross_stats(cs, emas["green"], emas["red"])
@@ -1244,10 +1254,11 @@ for coin, sym, dec in COINS:
     except Exception as _ae:
         agree_label = "not available right now"
         print("agree row failed:", repr(_ae))
+    agree_votes = __import__("html").escape(json.dumps(AGREE_VOTES.get(coin, [])), quote=True)
     base_btns = "".join(f'<button class="{"on" if i == 0 else ""}" onclick="setBase(\'{coin}\',\'{b[1]}\',this)">{b[0]}</button>' for i, b in enumerate(BASES))
     tf_boxes = "".join(f'<label class="chip"><input type="checkbox" data-k="{key}" {"checked" if on else ""} onchange="toggleTf(\'{coin}\',\'{key}\',this.checked)"><i style="background:{color}"></i>{key}</label>' for key, mins, color, w, on, keep in TFS)
     lad_btns = "".join(f'<button class="{"on" if m == "both" else ""}" onclick="setLad(\'{coin}\',\'{m}\',this)">{nm}</button>' for m, nm in (("both", "Both ladders"), ("up", "Up ladder (rising lines)"), ("down", "Down ladder (falling lines)")))
-    blocks.append(f'<section class="card lad-both nofl"><h2>{coin}</h2><div class="modebar"><button class="on" onclick="setMode(\'{coin}\',\'pat\',this)">Patterns</button><button onclick="setMode(\'{coin}\',\'tun\',this)">Tunnel</button></div><div class="mpat"><div class="bar basebar">{base_btns}<span class="agreechip">{agree_label}<button class="ibtn" title="What is this?" onclick="showAgree(this,\'agree-{coin}\')">i</button></span></div><div class="pgrid"><div class="pleft">{"".join(views)}<div class="bar2"><b>Show:</b> {lad_btns} <button class="fs" onclick="goFull(this)">Full screen</button> <button class="fs" style="background:#30363d;border-color:#484f58" onclick="toggleAll(this)">Show every line</button> <button class="fs" style="background:#30363d;border-color:#484f58" onclick="resetZoom(this)">Reset zoom</button> <span class="hint">scroll wheel = zoom - drag = move - double-click = reset</span></div>{stat_txt}</div><div class="pright">{ind_panel(coin, tf_boxes, agree_label)}</div></div></div><div class="mtun" style="display:none">{build_tunnel_tab(coin, tfc, dec)}</div></section>')
+    blocks.append(f'<section class="card lad-both"><h2>{coin}</h2><div class="modebar"><button class="on" onclick="setMode(\'{coin}\',\'pat\',this)">Patterns</button><button onclick="setMode(\'{coin}\',\'tun\',this)">Tunnel</button></div><div class="mpat"><div class="bar basebar">{base_btns}<span class="agreechip" title="Click to see which indicators are green or red" data-votes="{agree_votes}" onclick="showAgree(this,\'agree-{coin}\')">{agree_label}<button class="ibtn" title="What is this?">i</button></span></div><div class="pgrid"><div class="pleft">{"".join(views)}<div class="bar2"><b>Show:</b> {lad_btns} <button class="fs" onclick="goFull(this)">Full screen</button> <button class="fs" style="background:#30363d;border-color:#484f58" onclick="toggleAll(this)">Show every line</button> <button class="fs" style="background:#30363d;border-color:#484f58" onclick="resetZoom(this)">Reset zoom</button> <span class="hint">scroll wheel = zoom - drag = move - double-click = reset</span></div>{stat_txt}</div><div class="pright">{ind_panel(coin, tf_boxes, agree_label)}</div></div></div><div class="mtun" style="display:none">{build_tunnel_tab(coin, tfc, dec)}</div></section>')
 
 def _load_stats():
     try:
@@ -1401,8 +1412,8 @@ h1{{font-size:24px;margin:0 0 4px}} h2{{font-size:20px;margin:0 0 8px}} .hint{{c
 svg{{width:100%;height:auto;display:block;margin-top:8px;border-radius:8px;cursor:grab;touch-action:none;user-select:none}} svg line,svg polyline{{vector-effect:non-scaling-stroke}}
 .bar{{margin:6px 0}} .bar button{{background:#21262d;color:#e6edf3;border:1px solid #30363d;border-radius:8px;padding:5px 14px;font-size:14px;cursor:pointer;margin-right:6px}}
 .bar button.on{{background:#1f6feb;border-color:#58a6ff}}
-.agreechip{{display:inline-flex;align-items:center;gap:8px;margin-left:12px;padding:4px 10px;border:1px solid #30363d;border-radius:8px;font-size:13px;background:#161b22;vertical-align:middle}} .agreechip .ibtn{{margin:0;padding:1px 8px}}
-#agreepop{{position:fixed;left:12px;top:56px;width:min(560px,92vw);max-height:78vh;overflow:auto;z-index:50;background:#0d1117;border:2px solid #58a6ff;border-radius:12px;padding:12px 16px;box-shadow:0 14px 44px rgba(0,0,0,.75);font-size:14px}} #agreepop .agx{{float:right}}
+.agreechip{{cursor:pointer;display:inline-flex;align-items:center;gap:8px;margin-left:12px;padding:4px 10px;border:1px solid #30363d;border-radius:8px;font-size:13px;background:#161b22;vertical-align:middle}} .agreechip .ibtn{{margin:0;padding:1px 8px}}
+#agreepop{{position:fixed;left:12px;top:56px;width:min(560px,92vw);max-height:78vh;overflow:auto;z-index:50;background:#0d1117;border:2px solid #58a6ff;border-radius:12px;padding:12px 16px;box-shadow:0 14px 44px rgba(0,0,0,.75);font-size:14px}} #agreepop .agx{{float:right}} #agreepop .vrow{{display:flex;align-items:center;gap:8px;padding:7px 0;border-top:1px solid #21262d}} #agreepop .vdot{{display:inline-block;width:13px;height:13px;border-radius:50%;flex:0 0 13px}} #agreepop .vst{{font-weight:800}} #agreepop .vrow .vi{{margin-left:auto}} #agreepop .vexp{{background:#161b22;border-left:3px solid #58a6ff;padding:8px 12px;margin:2px 0 6px 21px;font-size:13px;color:#c9d1d9}}
 .tfb{{display:inline-flex;align-items:center;gap:6px;margin-right:16px;font-size:14px;cursor:pointer}} .tfb i{{display:inline-block;width:34px;border-radius:3px}}
 .noshade .rf polygon{{display:none}} .stt{{width:100%;border-collapse:collapse;font-size:13px;margin:6px 0}} .stt th,.stt td{{border-bottom:1px solid #30363d;padding:5px 6px;text-align:left;vertical-align:top}} .stt th{{color:#8b949e;font-weight:600}} .stt td.sg{{color:#3fb950;font-weight:700}} .stt td.sr_{{color:#f85149;font-weight:700}} .stt tr.bl td{{color:#8b949e}}
 .ind{{margin:6px 0}} .ind summary{{cursor:pointer;font-size:15px;color:#58a6ff}} .indb{{margin:6px 0 10px 14px;font-size:14px;color:#c9d1d9}} .indb p{{margin:4px 0}}
@@ -1464,12 +1475,17 @@ function goFull(btn){{var cd=btn.closest('.card');if(document.fullscreenElement)
 function setShade(c,v){{var cd=card(c);[].forEach.call(cd.querySelectorAll('.ch'),function(g){{g.style.display=(v!=='none'&&g.classList.contains('ch-'+v))?'inline':'none'}});cd.classList.toggle('noshade',v!=='1m')}}
 function toggleAll(btn){{var cd=btn.closest('.card');var on=cd.classList.toggle('alllines');btn.textContent=on?'Clean view':'Show every line'}}
 function toggleSel(el,sel){{var cd=el.closest('.card');[].forEach.call(cd.querySelectorAll(sel),function(g){{g.style.display=el.checked?'':'none'}})}}
-function showAgree(btn,key){{var s=document.querySelector('#infostore [data-info="'+key+'"]');if(!s)return;var old=document.getElementById('agreepop');if(old){{old.remove();if(old.getAttribute('data-k')===key)return}}var d=document.createElement('div');d.id='agreepop';d.setAttribute('data-k',key);d.innerHTML='<button class="agx" onclick="this.parentNode.remove()">close</button><h3>'+(s.getAttribute('data-title')||'')+'</h3>'+s.innerHTML;document.body.appendChild(d)}}
+function showAgree(el,key){{var chip=el.closest?el.closest('.agreechip'):el;var s=document.querySelector('#infostore [data-info="'+key+'"]');var old=document.getElementById('agreepop');if(old){{old.remove();if(old.getAttribute('data-k')===key)return}}var votes=[];try{{votes=JSON.parse(chip.getAttribute('data-votes')||'[]')}}catch(e){{}}var h='<button class="agx" onclick="this.parentNode.remove()">close</button><h3>Which indicators lean up or down</h3><p class="hint">Green leans UP, red leans DOWN, grey has no lean. Click the i beside an indicator to read what it is.</p>';votes.forEach(function(v){{var col=v[1]===1?'#3fb950':(v[1]===-1?'#f85149':'#6e7681');h+='<div class="vrow"><i class="vdot" style="background:'+col+'"></i><b>'+v[0]+'</b><span class="vst" style="color:'+col+'">'+(v[1]===1?'UP':(v[1]===-1?'DOWN':'no lean'))+'</span><span class="hint"> '+v[2]+'</span><button class="ibtn vi" title="What is this indicator?">i</button></div><div class="vexp" style="display:none">'+(v[3]||'')+'</div>'}});if(s)h+='<h3 style="margin-top:14px">What the history says</h3>'+s.innerHTML;var d=document.createElement('div');d.id='agreepop';d.setAttribute('data-k',key);d.innerHTML=h;d.addEventListener('click',function(e){{var t=e.target;if(t.classList&&t.classList.contains('vi')){{var n=t.parentNode.nextSibling;n.style.display=n.style.display==='block'?'none':'block'}}}});document.body.appendChild(d)}}
 function showInfo(btn,key){{var cd=btn.closest('.indgrid');var s=document.querySelector('#infostore [data-info="'+key+'"]');if(!s)return;cd.querySelector('.infoin').innerHTML='<h3>'+(s.getAttribute('data-title')||'')+'</h3>'+s.innerHTML;cd.querySelector('.infopanel').scrollTop=0;[].forEach.call(cd.querySelectorAll('.ibtn'),function(b){{b.classList.toggle('on',b===btn)}})}}
 function toggleFl(on,el){{var cd=el.closest('.card');cd.classList.toggle('nofl',!on)}}
 function setLad(c,m,btn){{var cd=card(c);cd.className='card lad-'+m+(cd.classList.contains('nofl')?' nofl':'')+(cd.classList.contains('alllines')?' alllines':'');[].forEach.call(cd.querySelectorAll('.bar2 button'),function(x){{x.classList.toggle('on',x===btn)}})}}
 function setBase(c,b,btn){{var cd=card(c);[].forEach.call(cd.querySelectorAll('.view'),function(v){{v.style.display=v.className.indexOf('v-'+c+'-'+b)>=0?'block':'none'}});[].forEach.call(cd.querySelectorAll('.basebar button'),function(x){{x.classList.toggle('on',x===btn)}});var sel=cd.querySelector('.isel');if(sel){{sel.value=b;}}setShade(c,b)}}
 [].forEach.call(document.querySelectorAll('.view svg'),initZoom);
+(function(){{var SW='.card .sw input, .card label.chip input';
+ function key(x){{var cd=x.closest('.card'),l=[].slice.call(cd.querySelectorAll(SW));return 'mtfchk:'+cd.querySelector('h2').textContent+':'+l.indexOf(x)}}
+ [].forEach.call(document.querySelectorAll(SW),function(x){{var v=null;try{{v=localStorage.getItem(key(x))}}catch(e){{}}
+  if(v!==null&&(v==='1')!==x.checked){{x.checked=v==='1';x.dispatchEvent(new Event('change'))}}}});
+ document.addEventListener('change',function(ev){{var x=ev.target;if(!x||!x.matches||!x.matches(SW))return;try{{localStorage.setItem(key(x),x.checked?'1':'0')}}catch(e){{}}}},true)}})();
 </script></body></html>"""
 EMBED_CSS = """.zoomv > svg{max-height:var(--fit,none)} body{padding:0 !important;margin:0} .card{background:transparent !important;border:0 !important;padding:0 !important;margin:0 !important} .card > h2{display:none} .modebar{display:none} .mback{float:right;background:#21262d;color:#e6edf3;border:1px solid #58a6ff;border-radius:10px;padding:8px 16px;font-size:14px;font-weight:700;cursor:pointer}"""
 tstate_save()
@@ -1573,7 +1589,7 @@ EMBED_JS = r"""
    if(side!==0){if(prev!==undefined&&prev!==side&&(!narLast[id]||now-narLast[id]>300)){narLast[id]=now;var dwn=side<0;
      var lvl=(L.k==='floor'||L.k==='ceiling'||L.k.indexOf('tunnel')===0);var what=lvl?('the '+(L.tf==='1m'?'one minute':L.tf==='5m'?'five minute':L.tf==='15m'?'fifteen minute':'one hour')+' '+L.k):('the '+L.k);
      say(nm+'. Price broke '+(dwn?'below ':'above ')+what+(lvl?' at '+fp(v):'')+'. It is now '+fp(Math.abs(px-v))+(dwn?' under':' over')+' it.'+(L.n>=3?' That level was tested '+L.n+' times.':''),'lvl:'+id+':'+side,300000,dwn?'support_break':'resistance_break')}narSide[id]=side}else if(prev===undefined){narSide[id]=px>v?1:-1}});
-  if(tgt){var ts=px>tgt+hy*0.6?1:(px<tgt-hy*0.6?-1:0),pv=narSide.tgt;if(ts!==0){if(pv!==undefined&&pv!==ts&&(!narLast.tgt||now-narLast.tgt>60)){narLast.tgt=now;say(nm+'. Price crossed '+(ts>0?'above':'below')+' the fifteen minute target at '+fp(tgt)+'.','tgt:'+Math.floor((now+left)/900)+':'+ts+':'+Math.floor(now/60),60000)}narSide.tgt=ts}}
+  if(tgt){var ts=px>tgt+hy*0.6?1:(px<tgt-hy*0.6?-1:0),pv=narSide.tgt;if(ts!==0){if(pv!==undefined&&pv!==ts&&(!narLast.tgt||now-narLast.tgt>60)){narLast.tgt=now;say(nm+'. Price crossed '+(ts>0?'above':'below')+' the target.','tgt:'+Math.floor((now+left)/900)+':'+ts+':'+Math.floor(now/60),60000,ts>0?'target_cross_up':'target_cross_down')}narSide.tgt=ts}}
   }
  var lastLive=null,LT=0,LTa=0;
  function applyLive(j){[].forEach.call(document.querySelectorAll('svg[data-live]'),function(s){var k=s.getAttribute('data-live');if(!k||!s.getBoundingClientRect().width)return;var cd=j.c[k];if(cd)liveCandle(s,cd,j.px,j.target,j.left)})}
