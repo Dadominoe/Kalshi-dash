@@ -5011,7 +5011,8 @@ details.pat > summary { cursor:pointer; }
 .tb-price .lbl { font-size:12px; color:#8b949e; text-transform:uppercase; }
 .tb-big { font-size:22px; font-weight:800; line-height:1.1; font-variant-numeric:tabular-nums; }
 .tb-price .line-diff { display:inline-block; font-size:14px; margin-left:6px; }
-.mk { font-size:14px; font-weight:800; padding:3px 12px; border-radius:14px; border:2px solid; letter-spacing:0.3px; white-space:nowrap; }
+.mk { display:inline-flex; align-items:center; gap:8px; font-size:15px; font-weight:800; padding:6px 14px; border-radius:12px; border:2px solid; letter-spacing:0.3px; white-space:nowrap; color:#fff; }
+.mk::before { content:''; width:12px; height:12px; border-radius:50%; background:rgba(255,255,255,.85); box-shadow:0 0 0 4px rgba(255,255,255,.2); flex:none; }
 .mk small { font-weight:600; opacity:0.85; }
 .mk-drop { position:relative; display:inline-block; }
 .mk-drop > summary { cursor:pointer; }
@@ -5025,9 +5026,9 @@ details.pat > summary { cursor:pointer; }
 .mk-tbl th { text-align:left; color:#8b949e; font-weight:600; font-size:12px; border-bottom:1px solid #30363d; padding:2px 10px 2px 0; }
 .mk-tbl td { padding:2px 10px 2px 0; border-bottom:1px solid #21262d; }
 .mk4 { font-size:13px; color:#a6b0bb; border:1px dashed #484f58; border-radius:12px; padding:2px 10px; white-space:nowrap; }
-.mk-bear { color:#ff7b72; border-color:#da3633; background:rgba(218,54,51,0.14); }
-.mk-bull { color:#56d364; border-color:#238636; background:rgba(35,134,54,0.16); }
-.mk-neutral { color:#c9d1d9; border-color:#6e7681; background:rgba(110,118,129,0.14); }
+.mk-bear { color:#fff; border-color:#ff7b72; background:linear-gradient(90deg,#da3633,#9e1c1c); box-shadow:0 0 0 3px rgba(248,81,73,.3); }
+.mk-bull { color:#fff; border-color:#3fb950; background:linear-gradient(90deg,#238636,#1a6b2b); box-shadow:0 0 0 3px rgba(63,185,80,.3); }
+.mk-neutral { color:#fff; border-color:#8b949e; background:linear-gradient(90deg,#3d444d,#21262d); box-shadow:0 0 0 3px rgba(139,148,158,.25); }
 .tb-chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
 .tb-chip { font-size:13px; padding:2px 9px; border-radius:10px; border:1px solid #30363d; background:#0d1117; white-space:nowrap; }
 .tb-chip .tb-k { color:#8b949e; font-size:12px; text-transform:uppercase; margin-right:2px; }
@@ -9216,6 +9217,24 @@ def _sig_scan_candles(coin):
                 _sig_emit(coin, "bear_div", f"{coin}. Bearish divergence on the five minute chart. Price made a higher high but momentum did not. Buying may be running out of steam.", px, f"brd:{coin}:{cs[i][0]}", 60)
             lastH = (i, cs[i][2], r[i])
     _sig_scan_patterns(coin, cs, r)
+    _sig_scan_sweep(coin, cs)
+
+
+def _sig_scan_sweep(coin, cs):
+    """Possible liquidity sweep, LIVE (information only): the price is poking just past the lowest low / highest high of the last 30 closed 5-minute candles, where the stops sit.
+    It may snap back (a stop hunt) or keep going (a real break) - this only says to watch. A push deeper than 0.35% is a real break, not a sweep, so it stays quiet."""
+    now = time.time()
+    if len(cs) < 40 or now - (cs[-1][0] + 300) > 900:
+        return
+    px = get_live_price(_SIG_SYM[coin])
+    if not px:
+        return
+    lo30 = min(x[1] for x in cs[-30:])
+    hi30 = max(x[2] for x in cs[-30:])
+    if lo30 * 0.9965 <= px < lo30:
+        _sig_emit(coin, "liquidity_sweep_low", f"{coin}. Possible liquidity sweep of the lows. Price is under the low of the last two and a half hours. Stops may be getting hunted - watch for a snap back.", px, f"lsl:{coin}", 1500)
+    if hi30 < px <= hi30 * 1.0035:
+        _sig_emit(coin, "liquidity_sweep_high", f"{coin}. Possible liquidity sweep of the highs. Price is over the high of the last two and a half hours. Stops may be getting hunted - watch for a drop back.", px, f"lsh:{coin}", 1500)
 
 
 def _sig_scan_deriv(coin):
