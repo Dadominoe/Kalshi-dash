@@ -1092,18 +1092,9 @@ IND_EXPLAIN = {
 _BUCKET_NAME = {"0-1": "0 or 1 of 6 agree", "2-3": "2 or 3 of 6 agree", "4": "4 of 6 agree", "5": "5 of 6 agree", "6": "all 6 agree"}
 
 
-def agree_live(cs, coin):
-    """Six indicators, each leaning up (+1), down (-1) or neutral (0), on the 1-minute chart: moving-average tilt, green over/under red, price over/under blue, averaged MACD, RSI, tunnel direction.
-    Where are we in the current 15-minute window, which side of the window's start is price on, and how did windows like this end in the past? -> (label html for the list row, explanation html for the 'i' panel)"""
-    closed = cs[:-1] if cs[-1][0] + 60 > time.time() else cs
-    cl = [x[4] for x in closed]
-    j = len(closed) - 1
-    t_last = closed[j][0]
-    W = t_last - t_last % 900
-    m = (t_last - W) // 60 + 1                                       # closed candles so far in this window
-    k0 = j - (m - 1)
-    open_px, px = closed[k0][1], cl[j]
-    side = 1 if px > open_px else -1
+def _agree_votes(closed, cl):
+    """The six readings (+1 up / -1 down / 0 none) on whichever candles are given - each chart size reads its OWN candles."""
+    px = cl[-1]
     g, r, b = sma(cl, 15), sma(cl, 34), sma(cl, 111)
     tilt = angle_pct(g, closed)
     rs = rsi_list(cl)[-1]
@@ -1115,7 +1106,45 @@ def agree_live(cs, coin):
              ("MACD (average of 5)", 1 if mc > 0 else -1, "bullish side" if mc > 0 else "bearish side"),
              ("RSI", 1 if rs > 55 else (-1 if rs < 45 else 0), f"{rs:.0f} - {'leaning up' if rs > 55 else ('leaning down' if rs < 45 else 'middle, no lean')}"),
              ("tunnel direction", 0 if f is None else (1 if f[5] == "up" else -1), "no tunnel" if f is None else ("rising tunnel" if f[5] == "up" else "falling tunnel"))]
-    AGREE_VOTES[coin] = [[v[0], v[1], v[2], IND_EXPLAIN.get(v[0], "")] for v in votes]
+    return votes
+
+
+def _agree_other(closed, cl, coin, base):
+    """The same six readings for the 15-minute or 1-hour chart, from that chart's own candles. (The 'how did windows like this end' history is only measured from the 1-minute chart, so it is not repeated here.)"""
+    nm = {"15m": "15-minute", "1h": "1-hour"}.get(base, base)
+    votes = _agree_votes(closed, cl)
+    AGREE_VOTES[coin + "|" + base] = [[v[0], v[1], v[2], IND_EXPLAIN.get(v[0], "")] for v in votes]
+    up, dn = sum(1 for v in votes if v[1] == 1), sum(1 for v in votes if v[1] == -1)
+    dots = "".join(f'<i style="display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:3px;background:{"#3fb950" if v[1] == 1 else ("#f85149" if v[1] == -1 else "#6e7681")}" title="{v[0]}: {v[2]}"></i>' for v in votes)
+    lead = "UP" if up > dn else ("DOWN" if dn > up else "split")
+    col = "#3fb950" if up > dn else ("#f85149" if dn > up else "#8b949e")
+    label = f'{dots} <b style="color:{col}">' + (f"{max(up, dn)} of 6 lean {lead}" if up != dn else f"split - {up} up, {dn} down") + f'</b> <span style="color:#8b949e">- {nm} chart</span>'
+    info = (f"<p><b>Right now.</b> On the {nm} chart, {up} of the six indicators lean up, {dn} lean down, {6 - up - dn} are neutral.</p>"
+            f"<p><b>What it counts.</b> Six readings from the {nm} candles, each leaning up, down or neutral: the moving-average tilt, whether the green line is above or below the red, whether price is above or below the blue line, "
+            "the averaged MACD, RSI (over 55 leans up, under 45 leans down), and which way the tunnel runs. Every chart size works these out from its own candles, so the 1-minute, 15-minute and 1-hour charts each have their own reading. "
+            "The dots in the row are those six, in that order (green = up, red = down, grey = neutral); hover a dot to read it.</p>"
+            "<p class='hint'>The past-windows history (how often a window ended on the side price was on) was measured from the 1-minute chart only, so it is shown on the 1-minute chart's reading. "
+            "Information only - it describes what the chart is doing and never tells anyone to do anything.</p>")
+    AGREE_INFO[f"agree-{coin}-{base}"] = (f"Do the indicators agree? ({coin}, {nm} chart)", info)
+    return label
+
+
+def agree_live(cs, coin, base="1m", gran=60):
+    """Six indicators, each leaning up (+1), down (-1) or neutral (0), on the 1-minute chart: moving-average tilt, green over/under red, price over/under blue, averaged MACD, RSI, tunnel direction.
+    Where are we in the current 15-minute window, which side of the window's start is price on, and how did windows like this end in the past? -> (label html for the list row, explanation html for the 'i' panel)"""
+    closed = cs[:-1] if cs[-1][0] + gran > time.time() else cs
+    cl = [x[4] for x in closed]
+    if base != "1m":
+        return _agree_other(closed, cl, coin, base)
+    j = len(closed) - 1
+    t_last = closed[j][0]
+    W = t_last - t_last % 900
+    m = (t_last - W) // 60 + 1                                       # closed candles so far in this window
+    k0 = j - (m - 1)
+    open_px, px = closed[k0][1], cl[j]
+    side = 1 if px > open_px else -1
+    votes = _agree_votes(closed, cl)
+    AGREE_VOTES[coin + "|1m"] = [[v[0], v[1], v[2], IND_EXPLAIN.get(v[0], "")] for v in votes]
     up, dn = sum(1 for v in votes if v[1] == 1), sum(1 for v in votes if v[1] == -1)
     dots ="".join(f'<i style="display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:3px;background:{"#3fb950" if v[1] == 1 else ("#f85149" if v[1] == -1 else "#6e7681")}" title="{v[0]}: {v[2]}"></i>' for v in votes)
     lead = "UP" if up > dn else ("DOWN" if dn > up else "split")
@@ -1155,7 +1184,7 @@ def agree_live(cs, coin):
             "(within about a point). Indicators tend to agree when price has already moved far, and the distance itself is what predicts the end. So this row is a description of how lined up the chart is; the number that carries the information is the distance below.</p>"
             + dtable + "<p class='hint'>Limits: the start price is Coinbase's price at the start of the window, not the exact reference Kalshi uses; about 60 days of one market mood; it says how windows ended, nothing about what a contract cost at that moment. "
             "Information only - it describes what happened before and never tells anyone to do anything.</p>")
-    AGREE_INFO[f"agree-{coin}"] = (f"Do the indicators agree? ({coin})", info)
+    AGREE_INFO[f"agree-{coin}-1m"] = (f"Do the indicators agree? ({coin}, 1-minute chart)", info)
     return label
 
 
@@ -1249,16 +1278,23 @@ for coin, sym, dec in COINS:
             stat_txt = (f'<p class="stat"><b>How the green/red cross has done on the 1-minute chart (last {days:.1f} days):</b> after the green line crossed <b style="color:#2ee86b">UP</b> through the red, price was higher '
                         f'5 minutes later {pct(st["up"][5])} of the time and 15 minutes later {pct(st["up"][15])}. After it crossed <b style="color:#ff5d5d">DOWN</b>, price was lower 5 minutes later {pct(st["down"][5])} and 15 minutes later {pct(st["down"][15])}. (50% would be a coin flip.)</p>')
             stat_txt = ""                                    # removed at the owner's request 2026-10-24: a fixed 5/15-minute look-ahead is misleading, the calls are about where price is when the 15-minute window ENDS
-    try:
-        agree_label = agree_live(tfc["1m"], coin)
-    except Exception as _ae:
-        agree_label = "not available right now"
-        print("agree row failed:", repr(_ae))
-    agree_votes = __import__("html").escape(json.dumps(AGREE_VOTES.get(coin, [])), quote=True)
+    agree_label = "not available right now"
+    chips_html = ""
+    for _bi, (_bn, _bk) in enumerate(BASES):                    # each chart size reads its OWN six indicators; only the chip for the chart on show is visible
+        try:
+            _lab = agree_live(tfc[_bk], coin, _bk, {"1m": 60, "15m": 900, "1h": 3600}[_bk])
+        except Exception as _ae:
+            _lab = "not available right now"
+            print("agree row failed:", _bk, repr(_ae))
+        if _bi == 0:
+            agree_label = _lab
+        _v = __import__("html").escape(json.dumps(AGREE_VOTES.get(coin + "|" + _bk, [])), quote=True)
+        chips_html += (f'<span class="agreechip" data-base="{_bk}" title="Click to see which indicators are green or red" data-votes="{_v}" style="display:{"inline-flex" if _bi == 0 else "none"}" '
+                       f'onclick="showAgree(this,' + chr(39) + f'agree-{coin}-{_bk}' + chr(39) + f')">{_lab}<button class="ibtn" title="What is this?">i</button></span>')
     base_btns = "".join(f'<button class="{"on" if i == 0 else ""}" onclick="setBase(\'{coin}\',\'{b[1]}\',this)">{b[0]}</button>' for i, b in enumerate(BASES))
     tf_boxes = "".join(f'<label class="chip"><input type="checkbox" data-k="{key}" {"checked" if on else ""} onchange="toggleTf(\'{coin}\',\'{key}\',this.checked)"><i style="background:{color}"></i>{key}</label>' for key, mins, color, w, on, keep in TFS)
     lad_btns = "".join(f'<button class="{"on" if m == "both" else ""}" onclick="setLad(\'{coin}\',\'{m}\',this)">{nm}</button>' for m, nm in (("both", "Both ladders"), ("up", "Up ladder (rising lines)"), ("down", "Down ladder (falling lines)")))
-    blocks.append(f'<section class="card lad-both"><h2>{coin}</h2><div class="modebar"><button class="on" onclick="setMode(\'{coin}\',\'pat\',this)">Patterns</button><button onclick="setMode(\'{coin}\',\'tun\',this)">Tunnel</button></div><div class="mpat"><div class="bar basebar">{base_btns}<span class="agreechip" title="Click to see which indicators are green or red" data-votes="{agree_votes}" onclick="showAgree(this,\'agree-{coin}\')">{agree_label}<button class="ibtn" title="What is this?">i</button></span></div><div class="pgrid"><div class="pleft">{"".join(views)}<div class="bar2"><b>Show:</b> {lad_btns} <button class="fs" onclick="goFull(this)">Full screen</button> <button class="fs" style="background:#30363d;border-color:#484f58" onclick="toggleAll(this)">Show every line</button> <button class="fs" style="background:#30363d;border-color:#484f58" onclick="resetZoom(this)">Reset zoom</button> <span class="hint">scroll wheel = zoom - drag = move - double-click = reset</span></div>{stat_txt}</div><div class="pright">{ind_panel(coin, tf_boxes, agree_label)}</div></div></div><div class="mtun" style="display:none">{build_tunnel_tab(coin, tfc, dec)}</div></section>')
+    blocks.append(f'<section class="card lad-both"><h2>{coin}</h2><div class="modebar"><button class="on" onclick="setMode(\'{coin}\',\'pat\',this)">Patterns</button><button onclick="setMode(\'{coin}\',\'tun\',this)">Tunnel</button></div><div class="mpat"><div class="bar basebar">{base_btns}{chips_html}</div><div class="pgrid"><div class="pleft">{"".join(views)}<div class="bar2"><b>Show:</b> {lad_btns} <button class="fs" onclick="goFull(this)">Full screen</button> <button class="fs" style="background:#30363d;border-color:#484f58" onclick="toggleAll(this)">Show every line</button> <button class="fs" style="background:#30363d;border-color:#484f58" onclick="resetZoom(this)">Reset zoom</button> <span class="hint">scroll wheel = zoom - drag = move - double-click = reset</span></div>{stat_txt}</div><div class="pright">{ind_panel(coin, tf_boxes, agree_label)}</div></div></div><div class="mtun" style="display:none">{build_tunnel_tab(coin, tfc, dec)}</div></section>')
 
 def _load_stats():
     try:
@@ -1479,7 +1515,7 @@ function showAgree(el,key){{var chip=el.closest?el.closest('.agreechip'):el;var 
 function showInfo(btn,key){{var cd=btn.closest('.indgrid');var s=document.querySelector('#infostore [data-info="'+key+'"]');if(!s)return;cd.querySelector('.infoin').innerHTML='<h3>'+(s.getAttribute('data-title')||'')+'</h3>'+s.innerHTML;cd.querySelector('.infopanel').scrollTop=0;[].forEach.call(cd.querySelectorAll('.ibtn'),function(b){{b.classList.toggle('on',b===btn)}})}}
 function toggleFl(on,el){{var cd=el.closest('.card');cd.classList.toggle('nofl',!on)}}
 function setLad(c,m,btn){{var cd=card(c);cd.className='card lad-'+m+(cd.classList.contains('nofl')?' nofl':'')+(cd.classList.contains('alllines')?' alllines':'');[].forEach.call(cd.querySelectorAll('.bar2 button'),function(x){{x.classList.toggle('on',x===btn)}})}}
-function setBase(c,b,btn){{var cd=card(c);[].forEach.call(cd.querySelectorAll('.view'),function(v){{v.style.display=v.className.indexOf('v-'+c+'-'+b)>=0?'block':'none'}});[].forEach.call(cd.querySelectorAll('.basebar button'),function(x){{x.classList.toggle('on',x===btn)}});var sel=cd.querySelector('.isel');if(sel){{sel.value=b;}}setShade(c,b)}}
+function setBase(c,b,btn){{var cd=card(c);[].forEach.call(cd.querySelectorAll('.view'),function(v){{v.style.display=v.className.indexOf('v-'+c+'-'+b)>=0?'block':'none'}});[].forEach.call(cd.querySelectorAll('.basebar button'),function(x){{x.classList.toggle('on',x===btn)}});[].forEach.call(cd.querySelectorAll('.agreechip'),function(x){{x.style.display=x.getAttribute('data-base')===b?'inline-flex':'none'}});var sel=cd.querySelector('.isel');if(sel){{sel.value=b;}}setShade(c,b)}}
 [].forEach.call(document.querySelectorAll('.view svg'),initZoom);
 (function(){{var SW='.card .sw input, .card label.chip input';
  function key(x){{var cd=x.closest('.card'),l=[].slice.call(cd.querySelectorAll(SW));return 'mtfchk:'+cd.querySelector('h2').textContent+':'+l.indexOf(x)}}
@@ -1537,7 +1573,7 @@ EMBED_JS = r"""
  function postH(){try{parent.postMessage({mtf:1,coin:COIN,h:Math.ceil(document.body.offsetHeight)},'*')}catch(e){}}
  window.addEventListener('load',postH);setInterval(postH,700);
  var lastPtr=0;['pointerdown','pointermove','wheel','keydown'].forEach(function(t){window.addEventListener(t,function(){lastPtr=Date.now()},{passive:true})});
- var SEL=['.view','.zoomv','.tunv','.mpat','.mtun'];
+ var SEL=['.view','.zoomv','.tunv','.mpat','.mtun','.agreechip'];
  function snap(cd){var s={cls:cd.className,chk:[],sel:[],on:[],rng:[],disp:{},info:'',all:null,vb:{}};
   [].forEach.call(cd.querySelectorAll('input[type=checkbox]'),function(x){s.chk.push(x.checked)});
   [].forEach.call(cd.querySelectorAll('select'),function(x){s.sel.push(x.value)});
