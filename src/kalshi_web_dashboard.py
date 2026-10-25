@@ -805,7 +805,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-25-voice4"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-25-flip5"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -4530,6 +4530,9 @@ def poll_loop():
             except Exception as exc:
                 snapshot[pseudo_asset["name"]] = {"error": str(exc)}
 
+        for _dd in snapshot.values():
+            if isinstance(_dd, dict):
+                _dd["_snap_ts"] = time.time()
         with _lock:
             _state.update(snapshot)
         for _n, _dd in snapshot.items():
@@ -6611,7 +6614,7 @@ function filePlay(f, then, voice) {
     return true;
   } catch (e) { return false; }
 }
-function narSay(text, key, ttl, clip, file) {
+function narSay(text, key, ttl, clip, file, urgent) {
   if (!narratorOn || !text) return;
   const nm0 = /^(BTC|XRP)\b/.exec(text);
   if (nm0 && !narCoin[nm0[1]]) return;                              // that coin's narrator is off
@@ -6619,6 +6622,12 @@ function narSay(text, key, ttl, clip, file) {
   const now = Date.now();
   if (key && narSeen[key] && now - narSeen[key] < (ttl || 20000)) return;
   if (key) narSeen[key] = now;
+  if (urgent) {                                                       // the flip alerts: stop whatever is talking, throw away everything waiting, and say it NOW
+    narQueue.length = 0;
+    try { window.speechSynthesis.cancel(); } catch (e) {}
+    try { if (ttsAudio) { ttsAudio.onended = null; ttsAudio.onerror = null; ttsAudio.pause(); } } catch (e) {}
+    narBusyUntil = 0;
+  }
   narQueue.push({text: text, at: now, clip: clip || null, file: file || null});
   narFlush();
 }
@@ -6731,27 +6740,37 @@ function checkNarrator() {
   });
 }
 const flipRiskSaid = {};
-function checkFlipRiskAlerts() {
-  document.querySelectorAll('.flip-risk').forEach(el => {
-    const name = el.getAttribute('data-name'), key = el.getAttribute('data-key'), r = parseFloat(el.getAttribute('data-risk'));
+function flipLadder(name, key, r, call, sd) {
     if (!name || !key || isNaN(r)) return;
+    if (sd !== undefined && sd !== null && sd < 0) r = Math.max(r, flipSteps.flip);                    // price is already PAST the line: that is a flip, whatever the percentage says
     const said = flipRiskSaid[key] || (flipRiskSaid[key] = {});
     if (!narCoin[name] && (!soundEnabled || !soundOn(name))) return;
     // three steps, each at its own flip-risk percentage (set in Alert voices; back-test of 1,451 locked calls at 20 / 30 / 55%: about 5:45 / 4:30 / 3:30 before the end - the earlier it fires the more false alarms)
-    const call = el.getAttribute('data-call');
     if (r >= flipSteps.flip && !said.flip) {
       said.flip = true; said.rise = true; said.early = true;
       const rc = call === 'YES' ? 'reversal_down' : (call === 'NO' ? 'reversal_up' : 'reversal');          // an UP call flipping DOWN gets the bulls-weakening line, a DOWN call flipping UP the mirror line
-      if (narCoin[name]) narSay(name + '. We are flipping.', 'flip:' + key, 600000, rc); else speakUrgent(name + '. We are flipping.');
+      if (narCoin[name]) narSay(name + '. We are flipping.', 'flip:' + key, 600000, rc, null, true); else speakUrgent(name + '. We are flipping.');
     } else if (r >= flipSteps.rise && !said.rise) {
       said.rise = true; said.early = true;
-      if (narCoin[name]) narSay(name + '. Flip incoming. ' + Math.round(r * 100) + ' percent.', 'rise:' + key, 600000, 'flip_incoming'); else speakUrgent(name + '. Flip incoming. ' + Math.round(r * 100) + ' percent.');
+      if (narCoin[name]) narSay(name + '. Flip incoming. ' + Math.round(r * 100) + ' percent.', 'rise:' + key, 600000, 'flip_incoming', null, true); else speakUrgent(name + '. Flip incoming. ' + Math.round(r * 100) + ' percent.');
     } else if (r >= flipSteps.early && !said.early) {
       said.early = true;
-      if (narCoin[name]) narSay(name + '. Warning. Possible flip incoming. ' + Math.round(r * 100) + ' percent.', 'early:' + key, 600000, 'flip_warn'); else speakUrgent(name + '. Warning. Possible flip incoming. ' + Math.round(r * 100) + ' percent.');
+      if (narCoin[name]) narSay(name + '. Warning. Possible flip incoming. ' + Math.round(r * 100) + ' percent.', 'early:' + key, 600000, 'flip_warn', null, true); else speakUrgent(name + '. Warning. Possible flip incoming. ' + Math.round(r * 100) + ' percent.');
     }
-  });
 }
+function checkFlipRiskAlerts() {
+  document.querySelectorAll('.flip-risk').forEach(el => flipLadder(el.getAttribute('data-name'), el.getAttribute('data-key'), parseFloat(el.getAttribute('data-risk')), el.getAttribute('data-call'), null));
+}
+// the fast lane: the flip meter re-worked from the LIVE price about twice a second, independent of the page refresh
+let flipFastBusy = false;
+function flipFast() {
+  if (flipFastBusy) return;
+  flipFastBusy = true;
+  fetch('/flip_now', {cache: 'no-store'}).then(r => r.json()).then(j => {
+    Object.keys(j || {}).forEach(n => { const v = j[n]; flipLadder(n, v.key, v.risk, v.call, v.sd); });
+  }).catch(() => {}).then(() => { flipFastBusy = false; });
+}
+setInterval(flipFast, 500);
 function checkWhaleAlerts() {
   const els = document.querySelectorAll('.whale-alert');
   els.forEach(el => {
@@ -9019,6 +9038,29 @@ def _clip_map(voice="dominator"):
         return ent["map"]
     except Exception:
         return (_clip_cache.get(voice) or {"map": {}})["map"]
+
+
+def _flip_now():
+    """The flip meter, worked out RIGHT NOW from the live price (not the 2-second poll): {coin: {call, risk, sd, key, left}} for every coin that has a locked call this round.
+    Information only - it reads the lock, never makes one."""
+    out = {}
+    now = time.time()
+    for a in DASHBOARD_ASSETS:
+        name = a["name"]
+        with _lock:
+            d = dict(_state.get(name) or {})
+        ticker, line, left0 = d.get("ticker"), d.get("target_price"), d.get("seconds_left")
+        if not ticker or not line or left0 is None:
+            continue
+        lk = _end_locks.get(f"{name}|{ticker}")
+        if not lk or lk.get("side") not in ("YES", "NO"):
+            continue
+        spot = get_live_price(a["symbol"]) or d.get("spot_price")
+        left = left0 - (now - d.get("_snap_ts", now))
+        fr = _flip_risk(name, lk["side"], spot, line, left) if spot else None
+        if fr:
+            out[name] = {"call": lk["side"], "risk": round(fr[0], 3), "sd": round(fr[1], 3), "key": f"{name}::{ticker}", "left": int(left)}
+    return out
 
 
 _SIG_CLIP_ALIAS = {"bull_div": "divergence", "bear_div": "divergence"}
@@ -13035,6 +13077,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.wfile.write(audio)
             else:
                 self.send_response(404); self.send_header("Content-Length", "0"); self.end_headers()
+            return
+        if parsed.path == "/flip_now" and _voice_client(self.client_address[0]):
+            try:
+                body = json.dumps(_flip_now()).encode()
+            except Exception as _fe:
+                body = b"{}"
+                print(f"[flip_now] failed: {_fe!r}")
+            self.send_response(200); self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body))); self.send_header("Cache-Control", "no-store"); self.end_headers()
+            self.wfile.write(body)
             return
         if parsed.path == "/signals" and _voice_client(self.client_address[0]):
             try:
