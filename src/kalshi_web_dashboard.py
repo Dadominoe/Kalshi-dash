@@ -805,7 +805,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-25-final11"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-25-pre12"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -5035,6 +5035,8 @@ details.pat > summary { cursor:pointer; }
 .mk4 { font-size:13px; color:#a6b0bb; border:1px dashed #484f58; border-radius:12px; padding:2px 10px; white-space:nowrap; }
 .mk-bear { color:#fff; border-color:#ff7b72; background:linear-gradient(90deg,#da3633,#9e1c1c); box-shadow:0 0 0 3px rgba(248,81,73,.3); }
 .mk-bull { color:#fff; border-color:#3fb950; background:linear-gradient(90deg,#238636,#1a6b2b); box-shadow:0 0 0 3px rgba(63,185,80,.3); }
+.mk-lean-up { border-color:#3fb950 !important; background:linear-gradient(90deg,#3d444d,#1f5f33) !important; box-shadow:0 0 0 3px rgba(63,185,80,.3) !important; }
+.mk-lean-down { border-color:#ff7b72 !important; background:linear-gradient(90deg,#3d444d,#8a2a27) !important; box-shadow:0 0 0 3px rgba(248,81,73,.3) !important; }
 .mk-neutral { color:#fff; border-color:#8b949e; background:linear-gradient(90deg,#3d444d,#21262d); box-shadow:0 0 0 3px rgba(139,148,158,.25); }
 .tb-chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
 .tb-chip { font-size:13px; padding:2px 9px; border-radius:10px; border:1px solid #30363d; background:#0d1117; white-space:nowrap; }
@@ -6779,12 +6781,27 @@ function checkFlipRiskAlerts() {
   document.querySelectorAll('.flip-risk').forEach(el => flipLadder(el.getAttribute('data-name'), el.getAttribute('data-key'), parseFloat(el.getAttribute('data-risk')), el.getAttribute('data-call'), null));
 }
 // the fast lane: the flip meter re-worked from the LIVE price about twice a second, independent of the page refresh
+const flipPreState = {};
+function flipPre(name, v) {                                            // before the call (or in a no-call round): scalp opportunity when price is right at the line, and "flipping" each time it crosses
+  if (!narCoin[name] && (!soundEnabled || !soundOn(name))) return;
+  const st = flipPreState[v.key] || (flipPreState[v.key] = {side: null, scalp: false, cross: 0});
+  const now = Date.now();
+  if (st.side !== null && st.side !== v.side && now - st.cross > 30000) {
+    st.cross = now;
+    const rc = v.side === 'UP' ? 'reversal_up' : 'reversal_down';
+    if (narCoin[name]) narSay(name + '. We are flipping.', 'pc:' + v.key + ':' + now, 60000, rc, null, true); else speakUrgent(name + '. We are flipping.');
+  } else if (v.risk >= 0.40 && !st.scalp) {
+    st.scalp = true;
+    if (narCoin[name]) narSay(name + '. Scalp opportunity. Possible flip. ' + Math.round(v.risk * 100) + ' percent.', 'ps:' + v.key, 600000, 'flip_warn', null, true); else speakUrgent(name + '. Scalp opportunity. Possible flip.');
+  }
+  st.side = v.side;
+}
 let flipFastBusy = false;
 function flipFast() {
   if (flipFastBusy) return;
   flipFastBusy = true;
   fetch('/flip_now', {cache: 'no-store'}).then(r => r.json()).then(j => {
-    Object.keys(j || {}).forEach(n => { const v = j[n]; flipLadder(n, v.key, v.risk, v.call, v.sd); });
+    Object.keys(j || {}).forEach(n => { const v = j[n]; if (v.call === 'PRE') flipPre(n, v); else flipLadder(n, v.key, v.risk, v.call, v.sd); });
   }).catch(() => {}).then(() => { flipFastBusy = false; });
 }
 setInterval(flipFast, 500);
@@ -7147,9 +7164,10 @@ function applyMarketPick() {
     const badge = d.querySelector('summary .mk');
     if (!row || !badge) return;
     const st = row.getAttribute('data-state'), chg = parseFloat(row.getAttribute('data-chg'));
-    badge.className = 'mk mk-' + st.toLowerCase();
+    const lean = row.getAttribute('data-lean') || '';
+    badge.className = 'mk mk-' + st.toLowerCase() + (lean ? ' mk-lean-' + lean.toLowerCase() : '');
     const a = badge.querySelector('.mk-state'), b = badge.querySelector('.mk-per');
-    if (a) a.textContent = st;
+    if (a) a.textContent = st + (lean ? ' - LEANING ' + lean : '');
     if (b) b.textContent = want + ' ' + (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
   });
 }
@@ -9110,10 +9128,15 @@ def _flip_now():
         if not ticker or not line or left0 is None:
             continue
         lk = _end_locks.get(f"{name}|{ticker}")
-        if not lk or lk.get("side") not in ("YES", "NO"):
-            continue
         spot = get_live_price(a["symbol"]) or d.get("spot_price")
         left = left0 - (now - d.get("_snap_ts", now))
+        if not lk or lk.get("side") not in ("YES", "NO"):                       # no locked call (yet, or a no-call round): read the flip risk against the side price is on
+            if lk and lk.get("side") == "LATE":
+                continue
+            pr = _flip_pre(name, spot, line, left)
+            if pr:
+                out[name] = {"call": "PRE", "risk": round(pr[0], 3), "sd": round(pr[1], 3), "side": "UP" if pr[2] == 1 else "DOWN", "key": f"{name}::{ticker}::pre", "left": int(left)}
+            continue
         fr = _flip_risk(name, lk["side"], spot, line, left) if spot else None
         if fr:
             out[name] = {"call": lk["side"], "risk": round(fr[0], 3), "sd": round(fr[1], 3), "key": f"{name}::{ticker}", "left": int(left)}
@@ -9427,6 +9450,51 @@ def _flip_risk(name, side, spot, line, left):
         return None
 
 
+def _flip_pre(name, spot, line, left):
+    """Flip risk BEFORE there is a locked call (minutes 2 to 8) or in a no-call round: how often rounds like this ended on the OTHER side of the line from where price is right now.
+    Returns (risk 0-1, distance from the line in candle ranges (>= 0), +1 if price is above the line / -1 below) or None. Information only."""
+    try:
+        if not spot or not line or left is None or left <= 0:
+            return None
+        side = 1 if spot >= line else -1
+        elapsed = int((900 - left) // 60)
+        if elapsed >= 9:                                         # past the 8th minute the main table (built on the side price is on) applies
+            fr = _flip_risk(name, "YES" if side == 1 else "NO", spot, line, left)
+            return (fr[0], abs(fr[1]), side) if fr else None
+        if elapsed < 2:
+            return None
+        tbl = (_flip_risk_table() or {}).get("pre")
+        sym = {a["name"]: a["symbol"] for a in DASHBOARD_ASSETS}.get(name)
+        cs = ((_mtf.windows.get(sym) or {}).get("1m")) if (_mtf is not None and sym) else None
+        if not tbl or not cs or len(cs) < 32:
+            return None
+        rng = sum(x[2] - x[3] for x in cs[-31:-1]) / 30 or 1e-9
+        sd = abs(spot - line) / rng
+        import bisect as _bs
+        b = _bs.bisect_right(tbl["edges"], sd)
+        t = tbl["table"].get(str(max(2, min(8, elapsed))), {})
+        for k in (b, b - 1, b + 1):
+            v = t.get(str(k))
+            if v and v[1] >= 30:
+                return v[0], sd, side
+        return None
+    except Exception:
+        return None
+
+
+def _pre_risk_html(name, spot, line, left):
+    fr = _flip_pre(name, spot, line, left)
+    if not fr:
+        return ""
+    r, sd, side = fr
+    cls = "down" if r >= 0.45 else ("warn" if r >= 0.30 else "ok")
+    txt = "price is right at the line - it can cross either way" if r >= 0.40 else ("price is near the line" if r >= 0.30 else "price is well clear of the line")
+    return (f'<div class="flip-risk-bar {cls}"><span class="frb-l">FLIP RISK</span> <b>{r * 100:.0f}%</b> <span class="frb-t">{txt}</span>'
+            f'<span class="frb-track"><i style="width:{min(100, r * 100):.0f}%"></i></span>'
+            f'<span class="hint">no call yet &middot; price is {sd:.1f} candle-ranges {"above" if side == 1 else "below"} the line &middot; from the last 60 days of rounds: when price was this far from the line at this point, '
+            f'{r * 100:.0f}% of rounds ended on the OTHER side. Information only.</span></div>')
+
+
 # ---- ElevenLabs voice for the narrator (optional; the key lives only in data_cache/elevenlabs.json, which the owner edits) -------------------------------------------
 _TTS_CFG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data_cache", "elevenlabs.json")
 _TTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data_cache", "tts_cache")
@@ -9619,7 +9687,7 @@ def _end_call_html(name, d, tn, fair, left, spot, line):
         return (f'<div class="tug-end tug-end-wait"><span class="tug-end-l">END CALL</span> '
                 f'<span class="tug-wait-badge">NOT LOCKED YET - locks in {mm_}:{ss_:02d}</span> '
                 f'<span class="tug-wait-lean {"up" if yes else "down"}">Leaning {"YES / UP" if yes else "NO / DOWN"} {lean:.0f}%</span> '
-                f'<span class="tug-wait-note">right now - this can still change until it locks at the 8th minute</span></div>')
+                f'<span class="tug-wait-note">right now - this can still change until it locks at the 8th minute</span>{_pre_risk_html(name, spot, line, left)}</div>')
     lm, ls = divmod(int(lk["left"]), 60)
     if lk["side"] == "LATE":
         return ('<div class="tug-end tug-end-none"><span class="tug-end-l">END CALL</span> <b>no locked call this round</b> '
@@ -9632,7 +9700,7 @@ def _end_call_html(name, d, tn, fair, left, spot, line):
     if lk["side"] == "NONE":
         return (f'<div class="tug-end tug-end-none"><span class="tug-end-l">END CALL - LOCKED</span> <b>NO CALL - too close to call</b> {_fb} '
                 f'<span class="hint">- at the 8th minute ({lm}:{ls:02d} left) the lean was only {lk["lean"]:.0f}%. Reads that weak have been right only about 50-56% of the time, '
-                f'so there is no call this round. It will not change.</span>{_fn}</div>')
+                f'so there is no call this round. It will not change.</span>{_fn}{_pre_risk_html(name, spot, line, left)}</div>')
     yes = lk["side"] == "YES"
     lean = lk["lean"]
     tier = "STRONG" if lean >= 80 else ("GOOD" if lean >= 70 else "WEAK")
@@ -9946,6 +10014,13 @@ MARKET_24H, MARKET_3D, MARKET_3D_STRONG = 1.0, 1.5, 3.0     # percent: how far p
 
 _MKT_HORIZONS = [("5 min", 5, 0.06), ("15 min", 15, 0.10), ("30 min", 30, 0.15), ("1 hour", 60, 0.20), ("4 hours", 240, 0.40),
                  ("12 hours", 720, 0.70), ("24 hours", 1440, 1.0), ("3 days", 4320, 1.5), ("7 days", 10080, 2.5)]
+
+
+def _mk_lean(st, chg, t):
+    """'UP' / 'DOWN' when the market reads NEUTRAL but the move is already at least half of what it needs (so it is leaning), else ''."""
+    if st != "NEUTRAL" or not t:
+        return ""
+    return "UP" if chg >= 0.5 * t else ("DOWN" if chg <= -0.5 * t else "")
 
 
 def market_horizons(asset_name):
@@ -12643,19 +12718,19 @@ def render_html():
                 return "" if not r else f'{lbl.replace(" min", "m").replace("1 hour", "1h")} <span class="{"up" if r[2] == "BULL" else "down" if r[2] == "BEAR" else "flat"}">{r[1]:+.2f}%</span>'
             _now_line = (' <span class="mk-now">right now: ' + ' &middot; '.join(x for x in (_now_txt("30 min"), _now_txt("1 hour")) if x) + '</span>') if _hz else ''
             _tbl = "".join(
-                f'<tr class="mk-row" data-period="{lbl}" data-chg="{chg:.2f}" data-state="{st}" onclick="pickMarket(&#39;{name}&#39;, &#39;{lbl}&#39;)" title="click to show this period on the tag">'
+                f'<tr class="mk-row" data-period="{lbl}" data-chg="{chg:.2f}" data-state="{st}" data-lean="{_mk_lean(st, chg, t)}" onclick="pickMarket(&#39;{name}&#39;, &#39;{lbl}&#39;)" title="click to show this period on the tag">'
                 f'<td>{lbl}</td><td class="{"up" if st == "BULL" else "down" if st == "BEAR" else "flat"}"><b>{chg:+.2f}%</b></td>'
-                f'<td class="{"up" if st == "BULL" else "down" if st == "BEAR" else "flat"}"><b>{st}</b></td><td class="hint">needs +/-{t:.2f}%</td></tr>'
+                f'<td class="{"up" if st == "BULL" or _mk_lean(st, chg, t) == "UP" else "down" if st == "BEAR" or _mk_lean(st, chg, t) == "DOWN" else "flat"}"><b>{st}{(" - leaning " + _mk_lean(st, chg, t).lower()) if _mk_lean(st, chg, t) else ""}</b></td><td class="hint">needs +/-{t:.2f}%</td></tr>'
                 for lbl, chg, st, t in _hz)
             _mk_body = (f'<div class="mk-body"><b>What kind of market - from the last 15 minutes up to 7 days</b>'
                         f'<table class="mk-tbl"><tr><th>Period</th><th>Price change</th><th>Market</th><th></th></tr>{_tbl}</table>'
-                        f'<div class="hint"><b>Click a row to show that period on the tag.</b> BULL = up more than the move shown, BEAR = down more than it, otherwise NEUTRAL (the needed move grows with the period). '
+                        f'<div class="hint"><b>Click a row to show that period on the tag.</b> BULL = up more than the move shown, BEAR = down more than it, otherwise NEUTRAL; NEUTRAL turns to leaning up or down once the move is at least half of what is needed (the needed move grows with the period). '
                         f'The big label counts the days (24h / 3 days); the short rows show what is happening right now. Information only.</div></div>') if _hz else ''
             _dflt = _hzd.get("1 hour") or (_hz[0] if _hz else None)
             if _dflt:
-                regime_badge_html = (f'<details class="mk-drop" data-pat="MKT|{name}" data-coin="{name}"><summary><span class="mk mk-{_dflt[2].lower()}" '
+                regime_badge_html = (f'<details class="mk-drop" data-pat="MKT|{name}" data-coin="{name}"><summary><span class="mk mk-{_dflt[2].lower()}{(" mk-lean-" + _mk_lean(_dflt[2], _dflt[1], _dflt[3]).lower()) if _mk_lean(_dflt[2], _dflt[1], _dflt[3]) else ""}" '
                                      f'title="The market over the period you picked (click the tag, then click a period). BULL = up more than the move needed, BEAR = down more than it, '
-                                     f'otherwise NEUTRAL. Information only."><span class="mk-state">{_dflt[2]}</span> MARKET '
+                                     f'otherwise NEUTRAL (leaning when the move is at least half of what is needed). Information only."><span class="mk-state">{_dflt[2]}{(" - LEANING " + _mk_lean(_dflt[2], _dflt[1], _dflt[3])) if _mk_lean(_dflt[2], _dflt[1], _dflt[3]) else ""}</span> MARKET '
                                      f'<small class="mk-per">{_dflt[0]} {_dflt[1]:+.2f}%</small></span></summary>{_mk_body}</details>')
             else:
                 regime_badge_html = (f'<span class="mk mk-{_mt["label"].lower()}">{_mt["label"]} MARKET <small>24h {_fp(_mt["r24"])}</small></span>')
