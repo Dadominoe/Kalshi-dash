@@ -271,6 +271,49 @@ def is_pending(name):
         return (name or "").strip().lower() in _load_reqs()
 
 
+# ---- accounts made on the spot + paid-membership fields (only used when the host sets MEMBERSHIP_ON=1; see membership.py)
+MEMBER_FIELDS = ("email", "member_until", "trial_used", "stripe_customer", "plan")
+
+
+def set_fields(name, **kw):
+    """Add or change fields on one person's record. Returns False if there is no such person."""
+    name = (name or "").strip().lower()
+    with _mu:
+        users = dict(_load())
+        u = users.get(name)
+        if u is None:
+            return False
+        users[name] = {**u, **kw}
+        _save(users)
+    return True
+
+
+def create_instant(name, pw, email, note, ip, terms=""):
+    """(ok, message). A new person gets an account at once - no waiting for approval - with NO access time yet (member_until = 0): they start the free pass or pay."""
+    name = (name or "").strip().lower()
+    if not valid_name(name):
+        return False, "User name: 2-24 letters, numbers, dot, dash or underscore."
+    if len(pw or "") < 8:
+        return False, "Password must be at least 8 characters."
+    now = time.time()
+    hits = [t for t in _signup_hits.get(ip, []) if now - t < 3600]
+    if len(hits) >= 3:
+        return False, "Too many accounts made from here. Try again in an hour."
+    with _mu:
+        if name in _load() or name in _load_reqs():
+            return False, "That user name is taken. Pick another."
+        salt = secrets.token_hex(16)
+        users = dict(_load())
+        users[name] = {"salt": salt, "hash": _hash(pw, salt), "note": (note or "").strip()[:200], "created": now, "asked_at": now, "agreed_terms": terms, "agreed_at": now,
+                       "email": (email or "").strip().lower(), "member_until": 0, "trial_used": False}
+        _save(users)
+    _signup_hits[ip] = hits + [now]
+    if len(_signup_hits) > 2000:
+        _signup_hits.clear()
+    _log("account created (instant)", name, discord=(note or "").strip()[:200], terms=terms)
+    return True, "Created."
+
+
 # ---- backup / restore (the owner can save a copy of who is approved, and put it back)
 def export_all():
     return {"users": list_users(), "requests": list_requests(), "log": read_log(), "saved_at": time.time()}
@@ -286,7 +329,7 @@ def import_all(data):
             if (isinstance(u, dict) and valid_name(name) and name not in users
                     and ok_hex.match(str(u.get("salt", ""))) and ok_hex.match(str(u.get("hash", "")))):
                 users[name] = {"salt": u["salt"], "hash": u["hash"], "note": u.get("note", ""), "created": u.get("created", time.time()),
-                               "agreed_terms": u.get("agreed_terms", ""), "agreed_at": u.get("agreed_at")}
+                               "agreed_terms": u.get("agreed_terms", ""), "agreed_at": u.get("agreed_at"), **{k: u[k] for k in MEMBER_FIELDS if k in u}}
                 added += 1
         if added:
             _save(users)

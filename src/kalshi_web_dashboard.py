@@ -805,7 +805,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-25-pre12"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-25-all14"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -2070,7 +2070,7 @@ def compute_cumulative_bet_pnl(asset_history, bet_size=100.0, series_prefix=None
 
 ET_ZONE = ZoneInfo("America/New_York")
 from src import viewtz as _viewtz
-from src import accounts as _acc, account_pages as _accp
+from src import accounts as _acc, account_pages as _accp, membership as _mem
 
 
 def _parse_ticker_et_uncached(ticker):
@@ -12912,7 +12912,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self._who = self._identify()
         if HOSTED_PASSWORD:
             if self._who is None:
-                if path in ("/login", "/signup", "/terms"):
+                if path in ("/login", "/signup", "/terms", "/stripe_webhook"):
                     return True
                 if "text/html" in (self.headers.get("Accept", "") or ""):
                     self.send_response(302); self.send_header("Location", "/login"); self.send_header("Content-Length", "0"); self.end_headers()
@@ -12921,6 +12921,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return False
             if self._who[0] != "admin":
                 _acc.last_seen[self._who[0]] = time.time()
+            if (_mem.MEMBERSHIP_ON and self._who[0] != "admin" and not getattr(self, "_master_ok", False) and not _mem.has_access(self._who[0])
+                    and path not in ("/join", "/trial", "/logout", "/terms", "/stripe_webhook", "/login")):          # paid memberships: an expired person only sees the Membership page
+                if "text/html" in (self.headers.get("Accept", "") or ""):
+                    self.send_response(302); self.send_header("Location", "/join"); self.send_header("Content-Length", "0"); self.end_headers()
+                else:
+                    self._send(402, b'{"error": "membership needed"}', "application/json")
+                return False
         if HOSTED_READ_ONLY and (path == "/arm_live" or (path.startswith("/set_") and path != "/set_pattern_tf")) or (HOSTED_READ_ONLY and path == "/bookmap_ingest"):
             body = b'{"error": "this copy is read-only"}'
             self.send_response(403); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(body))); self.end_headers()
@@ -12981,6 +12988,51 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if not self._hosted_gate():
             return
         _ppath = urllib.parse.urlparse(self.path).path
+        if HOSTED_PASSWORD and _ppath == "/stripe_webhook":
+            try:
+                n = int(self.headers.get("Content-Length", 0))
+                raw = self.rfile.read(n) if 0 < n <= 1_000_000 else b""
+            except Exception:
+                raw = b""
+            if not _mem.WEBHOOK_SECRET:
+                self._send(503, b'{"error": "webhook not set up"}', "application/json")
+            elif not _mem.verify_signature(raw, self.headers.get("Stripe-Signature", ""), _mem.WEBHOOK_SECRET):
+                self._send(400, b'{"error": "bad signature"}', "application/json")
+            else:
+                try:
+                    note = _mem.handle_event(json.loads(raw.decode("utf-8")))
+                except Exception as _we:
+                    print(f"[stripe webhook] failed: {_we!r}")
+                    self._send(500, b'{"error": "failed"}', "application/json")
+                    return
+                self._send(200, json.dumps({"ok": note}).encode(), "application/json")
+            return
+        if HOSTED_PASSWORD and _mem.MEMBERSHIP_ON and _ppath == "/trial":
+            who = self._who[0] if self._who else None
+            if not who or who == "admin":
+                self._send(403, b"sign in first", "text/plain")
+                return
+            ok, why = _mem.start_trial(who, self._ip())
+            if ok:
+                self.send_response(302); self.send_header("Location", "/"); self.send_header("Content-Length", "0"); self.end_headers()
+            else:
+                self._send(200, _mem.join_page(who, self._ip(), why, True).encode("utf-8"))
+            return
+        if HOSTED_PASSWORD and _mem.MEMBERSHIP_ON and _ppath == "/signup":
+            f = self._read_form()
+            if f.get("agree") != "1":
+                self._send(200, _accp.signup_page("Tick the box to agree to the terms first.", True).encode("utf-8"))
+                return
+            ok, m = _mem.create_account(f.get("u"), f.get("p"), f.get("e"), f.get("n"), self._ip(), terms=_accp.TERMS_DATE)
+            if not ok:
+                self._send(200, _accp.signup_page(m, True).encode("utf-8"))
+                return
+            self.send_response(302)
+            self.send_header("Location", "/join")
+            self.send_header("Set-Cookie", "sess=" + _acc.make_session((f.get("u") or "").strip().lower(), HOSTED_PASSWORD) + self._cookie_flags() + f"; Max-Age={_acc.SESSION_DAYS * 86400}")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         if HOSTED_PASSWORD and _ppath == "/login":
             ip = self._ip()
             wait = _acc.throttled(ip)
@@ -13066,6 +13118,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         if parsed.path == "/terms":
             self._send(200, _accp.terms_page().encode("utf-8"))
+            return
+        if HOSTED_PASSWORD and _mem.MEMBERSHIP_ON and parsed.path == "/join" and self._who:
+            self._send(200, _mem.join_page(self._who[0], self._ip()).encode("utf-8"))
             return
         if HOSTED_PASSWORD and parsed.path == "/login":
             if self._who:

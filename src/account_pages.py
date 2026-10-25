@@ -1,6 +1,9 @@
 """The sign-in page, the owner's admin page and the little 'signed in as' bar for a hosted copy. Plain HTML; display only."""
 import html
+import os
 import time
+
+MEMBERSHIP_ON = os.environ.get("MEMBERSHIP_ON", "") == "1"        # paid memberships on (see membership.py); off = the site behaves exactly as before
 
 _CSS = ("body{margin:0;background:#0f1419;color:#e6edf3;font-family:Segoe UI,Arial,sans-serif;font-size:17px}"
         ".box{max-width:420px;margin:8vh auto;padding:26px;background:#161b22;border:1px solid #30363d;border-radius:12px}"
@@ -43,6 +46,12 @@ def terms_page():
         ("Your access", "Access is by approval and can be changed or removed at any time, without notice. Do not share your login. Do not copy, redistribute or republish the content without the owner's written permission. The owner may change these terms; using the site after a change means you accept it."),
         ("Your information", "We keep the user name you choose, a scrambled (hashed) version of your password, and when you agreed to these terms. Your chart choices are kept in your own browser. We do not share your information with anyone. We never ask for, and you should never type here, any exchange keys, bank or card details."),
     ]
+    if MEMBERSHIP_ON:
+        sections = [(t, x) for t, x in sections if t not in ("Fees", "Your access", "Your information")] + [
+            ("Memberships and fees", "Access is by paid membership: 10 days for $65, 30 days for $165, or 3.5 months for $379. Every new account gets one free 3-hour pass (one per person). Each plan renews automatically at the same price when its time is up, until you cancel; you keep what you already paid for after you cancel. Payments are handled by Stripe, so we never see or store your card details. The fee is only for access to the information. It is never a share of, a payment for, or a promise about any trading result."),
+            ("Your access", "Access lasts for the time you have paid for and can be changed or removed at any time. Do not share your login. Do not copy, redistribute or republish the content without the owner's written permission. The owner may change these terms; using the site after a change means you accept it."),
+            ("Your information", "We keep the user name you choose, your e-mail address, a scrambled (hashed) version of your password, when you agreed to these terms, and when your membership starts and ends. Your chart choices are kept in your own browser. Card payments are taken by Stripe, not by us. We do not sell or share your information. We never ask for, and you should never type here, any exchange keys or bank details."),
+        ]
     body = "".join(f"<h2>{html.escape(t)}</h2><p>{html.escape(x)}</p>" for t, x in sections)
     body = (f'<h1>Terms and disclaimers</h1><p style="color:#8b949e;font-size:14px">Last updated {TERMS_DATE}.</p>{body}'
             '<p style="color:#8b949e;font-size:14px;margin-top:24px">By using this site you agree to these terms. If you do not agree, do not use it.</p>'
@@ -63,10 +72,19 @@ def login_page(msg="", err=True):
                  '<form method="post" action="/login"><label>User name</label><input name="u" autocomplete="username" autofocus required>'
                  '<label>Password</label><input name="p" type="password" autocomplete="current-password" required>'
                  '<button type="submit">Sign in</button></form>'
-                 '<p style="margin-top:18px;font-size:15px">No account yet? Access is a <b>$300 flat rate</b>. <a href="/signup">Ask for access</a></p>' + _tiny())
+                 + ('<p style="margin-top:18px;font-size:15px">New here? <a href="/signup"><b>Create an account</b></a> - one free 3-hour pass, then plans from $65.</p>' if MEMBERSHIP_ON else
+                    '<p style="margin-top:18px;font-size:15px">No account yet? Access is a <b>$300 flat rate</b>. <a href="/signup">Ask for access</a></p>') + _tiny())
 
 
 def signup_page(msg="", err=True, done=False):
+    if MEMBERSHIP_ON:
+        return _page("Create an account", f'<h1>Create an account</h1>{_msg(msg, err)}<div class="msg" style="font-size:16px">Free: one <b>3-hour pass</b> per person to try it. Then plans from <b>$65</b>. Payment is handled by Stripe.</div>'
+                     '<form method="post" action="/signup"><label>Pick a user name (letters, numbers, dot, dash, underscore)</label><input name="u" autocomplete="username" required>'
+                     '<label>Your e-mail address</label><input name="e" type="email" autocomplete="email" required>'
+                     '<label>Pick a password (at least 8 characters)</label><input name="p" type="password" autocomplete="new-password" minlength="8" required>'
+                     '<label>Your Discord name (optional)</label><input name="n" maxlength="100" placeholder="for example  nate_trades">'
+                     '<label style="display:flex;gap:10px;align-items:flex-start;margin-top:16px;color:#e6edf3"><input type="checkbox" name="agree" value="1" required style="width:auto;margin-top:4px"><span>I am of legal age where I live, I understand this is for information only and not gambling or advice, and I agree to the <a href="/terms" target="_blank">Terms and disclaimers</a>.</span></label>'
+                     '<button type="submit">Create my account</button></form><p style="margin-top:18px;font-size:15px"><a href="/login">Back to sign in</a></p>')
     if done:
         return _page("Request sent", '<h1>The Dominator Live Dashboard</h1>' + _msg(msg, False) + '<p>Access is a $300 flat rate. Your account is waiting for the owner to approve it. Once access has been arranged with the owner and approved, you can sign in here with the user name and password you just chose.</p><p><a href="/login">Back to sign in</a></p>')
     return _page("Ask for access", f'<h1>Ask for access</h1>{_msg(msg, err)}<div class="msg" style="font-size:17px"><b>Price: $300 flat rate.</b> You pay the owner directly, and your account is approved once it is arranged. The price is for access to the information only.</div>'
@@ -74,6 +92,14 @@ def signup_page(msg="", err=True, done=False):
                  '<label>Pick a password (at least 8 characters)</label><input name="p" type="password" autocomplete="new-password" minlength="8" required>'
                  '<label>Your Discord name (so the owner knows who you are)</label><input name="n" maxlength="100" placeholder="for example  nate_trades" required>'
                  '<label style="display:flex;gap:10px;align-items:flex-start;margin-top:16px;color:#e6edf3"><input type="checkbox" name="agree" value="1" required style="width:auto;margin-top:4px"><span>I am of legal age where I live, I understand this is for information only and not gambling or advice, and I agree to the <a href="/terms" target="_blank">Terms and disclaimers</a>.</span></label><button type="submit">Send request</button></form><p style="margin-top:18px;font-size:15px"><a href="/login">Back to sign in</a></p>')
+
+
+def _member_line(u):
+    if "member_until" not in u:
+        return '<br><span class="off">no end date</span>' if MEMBERSHIP_ON else ""
+    until = float(u.get("member_until") or 0)
+    left = "ended" if until <= time.time() else "until " + time.strftime("%b %d %H:%M UTC", time.gmtime(until))
+    return f'<br><span class="off">{html.escape(u.get("plan") or "no plan")} - {left}{" - " + html.escape(u["email"]) if u.get("email") else ""}</span>'
 
 
 def admin_page(users, online, msg="", err=False, requests=None, warn=""):
@@ -87,7 +113,7 @@ def admin_page(users, online, msg="", err=False, requests=None, warn=""):
         else:
             st = '<span class="off">not since the site restarted</span>'
         n = html.escape(name)
-        rows.append(f'<tr><td><b>{n}</b><br><span class="off">Discord: {html.escape(users[name].get("note") or "-")}</span></td><td>{st}</td>'
+        rows.append(f'<tr><td><b>{n}</b><br><span class="off">Discord: {html.escape(users[name].get("note") or "-")}</span>{_member_line(users[name])}</td><td>{st}</td>'
                     f'<td><form method="post" action="/admin/passwd" class="row"><input type="hidden" name="u" value="{n}">'
                     f'<input name="p" type="password" placeholder="new password" minlength="8" required><button class="grey">Change password</button></form></td>'
                     f'<td><form method="post" action="/admin/delete" onsubmit="return confirm(\'Remove {n}? They will be signed out right away.\')">'
@@ -120,7 +146,7 @@ def admin_page(users, online, msg="", err=False, requests=None, warn=""):
 
 
 def userbar(name, is_admin):
-    link = '<a href="/admin" style="color:#58a6ff">People</a> &nbsp; ' if is_admin else ""
+    link = '<a href="/admin" style="color:#58a6ff">People</a> &nbsp; ' if is_admin else ('<a href="/join" style="color:#58a6ff">Membership</a> &nbsp; ' if MEMBERSHIP_ON else "")
     return ('<div style="position:fixed;top:3px;right:8px;z-index:99999;font:12px Segoe UI,Arial,sans-serif;color:#9da7b3;background:rgba(15,20,25,.78);padding:2px 8px;border-radius:6px">'
             f'{html.escape(name)} &nbsp; {link}<a href="/logout" style="color:#58a6ff">Sign out</a></div>')
 
