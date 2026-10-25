@@ -9,6 +9,7 @@ Public, key-less WebSocket / REST endpoints only.  Venues that are geo-blocked o
 Coinbase and Kraken trades are fed in by the dashboard's own sockets (hub.record), so they are not opened twice.
 """
 import csv
+import gzip
 import json
 import os
 import threading
@@ -35,6 +36,10 @@ VENUES = {
     "kucoin": ("KuCoin", "spot"), "binance": ("Binance", "spot"), "binanceus": ("Binance.US", "spot"),
     "okx_perp": ("OKX perp", "perp"), "bybit_perp": ("Bybit perp", "perp"), "hyperliquid": ("Hyperliquid perp", "perp"),
     "deribit": ("Deribit perp", "perp"),
+    "bitget_perp": ("Bitget perp", "perp"), "gate_perp": ("Gate perp", "perp"), "mexc_perp": ("MEXC perp", "perp"), "kraken_perp": ("Kraken perp", "perp"),
+    "dydx": ("dYdX perp", "perp"), "bingx_perp": ("BingX perp", "perp"), "htx": ("HTX", "spot"), "htx_perp": ("HTX perp", "perp"),
+    "upbit": ("Upbit (won)", "spot"), "bithumb": ("Bithumb (won)", "spot"),
+    "whitebit": ("WhiteBIT", "spot"), "lbank": ("LBank", "spot"), "hashkey": ("HashKey", "spot"), "bitflyer": ("bitFlyer (yen)", "spot"),
 }
 
 
@@ -404,7 +409,14 @@ class _Feed:
 
     def _msg(self, ws, m):
         try:
-            if isinstance(m, str) and m in ("pong", "ping"):
+            if isinstance(m, bytes):
+                try:
+                    m = gzip.decompress(m).decode("utf-8")
+                except Exception:
+                    m = m.decode("utf-8", "ignore")
+            if isinstance(m, str) and m in ("pong", "ping", "Ping", "Pong"):
+                if m in ("Ping", "ping") and self.name in ("bingx_perp",):
+                    ws.send("Pong")
                 return
             self.parse(json.loads(m), ws, self.state)
         except Exception:
@@ -518,6 +530,160 @@ def _binance(d, ws, st):
             HUB.record("binance", a, p * _f(t["q"]), "sell" if t.get("m") else "buy", p)
 
 
+# ---------------------------------------------------------------- more venues (2026-10-24): offshore derivatives + Korean spot
+def _bitget_perp(d, ws, st):
+    if d.get("arg", {}).get("channel") == "trade" and d.get("action") != "snapshot":
+        a = {"BTCUSDT": "BTC", "XRPUSDT": "XRP"}.get(d["arg"].get("instId"))
+        if a:
+            for t in d.get("data", []):
+                p = _f(t["price"]); HUB.record("bitget_perp", a, p * _f(t["size"]), "buy" if t.get("side") == "buy" else "sell", p)
+
+
+_CONTRACT_MULT = {}
+
+
+def _contract_mult(venue, sym):
+    """Contract size (coins per contract) for venues that quote trade size in contracts. Fetched once from the venue's public contract list; None if it cannot be read."""
+    k = (venue, sym)
+    if k in _CONTRACT_MULT:
+        return _CONTRACT_MULT[k]
+    v = None
+    try:
+        if venue == "gate_perp":
+            v = _f(_get(f"https://api.gateio.ws/api/v4/futures/usdt/contracts/{sym}")["quanto_multiplier"])
+        elif venue == "mexc_perp":
+            v = _f(_get(f"https://contract.mexc.com/api/v1/contract/detail?symbol={sym}")["data"]["contractSize"])
+    except Exception:
+        v = None
+    if v:
+        _CONTRACT_MULT[k] = v
+    return v
+
+
+def _gate_perp(d, ws, st):
+    if d.get("channel") == "futures.trades" and d.get("event") == "update":
+        for t in d.get("result") or []:
+            sym = t.get("contract")
+            a = {"BTC_USDT": "BTC", "XRP_USDT": "XRP"}.get(sym)
+            m = _contract_mult("gate_perp", sym) if a else None
+            if a and m:
+                sz = _f(t.get("size")); p = _f(t.get("price"))
+                HUB.record("gate_perp", a, abs(sz) * m * p, "buy" if sz > 0 else "sell", p)       # size > 0 = taker BUY: checked on Gate's own trade tape on 2026-10-25 (price rose after positive-size trades 98% of the time, BTC). A wrong flip to the opposite sign was live 2026-10-24 23:16 -> 2026-10-25 02:10.
+
+
+def _mexc_perp(d, ws, st):
+    if d.get("channel") == "push.deal":
+        sym = d.get("symbol")
+        a = {"BTC_USDT": "BTC", "XRP_USDT": "XRP"}.get(sym)
+        m = _contract_mult("mexc_perp", sym) if a else None
+        if a and m:
+            for t in d.get("data") or []:
+                p = _f(t.get("p")); HUB.record("mexc_perp", a, p * _f(t.get("v")) * m, "buy" if t.get("T") == 1 else "sell", p)
+
+
+def _kraken_perp(d, ws, st):
+    if d.get("feed") == "trade":
+        a = {"PF_XBTUSD": "BTC", "PF_XRPUSD": "XRP"}.get(d.get("product_id"))
+        if a:
+            p = _f(d.get("price")); HUB.record("kraken_perp", a, p * _f(d.get("qty")), "buy" if d.get("side") == "buy" else "sell", p)
+
+
+def _dydx(d, ws, st):
+    if d.get("type") == "channel_data" and d.get("channel") == "v4_trades":
+        a = {"BTC-USD": "BTC", "XRP-USD": "XRP"}.get(d.get("id"))
+        if a:
+            for t in (d.get("contents") or {}).get("trades", []):
+                p = _f(t.get("price")); HUB.record("dydx", a, p * _f(t.get("size")), "buy" if t.get("side") == "BUY" else "sell", p)
+
+
+def _bingx_perp(d, ws, st):
+    if isinstance(d.get("data"), list) and str(d.get("dataType", "")).endswith("@trade"):
+        for t in d["data"]:
+            a = {"BTC-USDT": "BTC", "XRP-USDT": "XRP"}.get(t.get("s"))
+            if a:
+                p = _f(t.get("p")); HUB.record("bingx_perp", a, p * _f(t.get("q")), "sell" if t.get("m") else "buy", p)       # m = buyer is the maker -> the taker SOLD
+
+
+def _htx(venue, mult_key=None):
+    def parse(d, ws, st):
+        if "ping" in d:
+            ws.send(json.dumps({"pong": d["ping"]}))
+            return
+        ch = str(d.get("ch", ""))
+        if not ch.endswith(".trade.detail"):
+            return
+        a = {"btcusdt": "BTC", "xrpusdt": "XRP", "BTC-USDT": "BTC", "XRP-USDT": "XRP"}.get(ch.split(".")[1])
+        if not a:
+            return
+        for t in (d.get("tick") or {}).get("data", []):
+            p = _f(t.get("price"))
+            coins = _f(t.get("quantity")) if "quantity" in t else _f(t.get("amount"))
+            HUB.record(venue, a, p * coins, "buy" if t.get("direction") == "buy" else "sell", p)
+    return parse
+
+
+def _won_usd(a, coins):
+    """Korean-won venues quote in won: value the coins at the Coinbase dollar price (so the 'Korean premium' does not distort the dollar flow)."""
+    p = HUB.last_price.get(("coinbase", a))
+    return coins * p if p else None
+
+
+def _upbit(d, ws, st):
+    if d.get("type") == "trade":
+        a = {"KRW-BTC": "BTC", "KRW-XRP": "XRP"}.get(d.get("code"))
+        usd = _won_usd(a, _f(d.get("trade_volume"))) if a else None
+        if usd:
+            HUB.record("upbit", a, usd, "buy" if d.get("ask_bid") == "BID" else "sell")
+
+
+def _bithumb(d, ws, st):
+    if d.get("type") == "transaction":
+        for t in (d.get("content") or {}).get("list", []):
+            a = {"BTC_KRW": "BTC", "XRP_KRW": "XRP"}.get(t.get("symbol"))
+            usd = _won_usd(a, _f(t.get("contQty"))) if a else None
+            if usd:
+                HUB.record("bithumb", a, usd, "buy" if str(t.get("buySellGb")) == "2" else "sell")
+
+
+def _whitebit(d, ws, st):
+    if d.get("method") == "trades_update":
+        pair, rows = d["params"][0], d["params"][1]
+        a = {"BTC_USDT": "BTC", "XRP_USDT": "XRP"}.get(pair)
+        if a:
+            now = time.time()
+            for t in rows:
+                if now - _f(t.get("time")) < 10:                       # the first message replays recent history - skip it
+                    p = _f(t.get("price")); HUB.record("whitebit", a, p * _f(t.get("amount")), "buy" if t.get("type") == "buy" else "sell", p)
+
+
+def _lbank(d, ws, st):
+    if d.get("type") == "trade":
+        a = {"btc_usdt": "BTC", "xrp_usdt": "XRP"}.get(d.get("pair"))
+        t = d.get("trade") or {}
+        if a:
+            HUB.record("lbank", a, _f(t.get("amount")), "buy" if t.get("direction") == "buy" else "sell", _f(t.get("price")))
+
+
+def _hashkey(d, ws, st):
+    if d.get("topic") == "trade":
+        a = {"BTCUSDT": "BTC", "XRPUSDT": "XRP"}.get(d.get("symbol"))
+        if a:
+            now_ms = time.time() * 1000
+            for t in d.get("data", []):
+                if now_ms - _f(t.get("t")) < 10000:                    # skip the 24-hour snapshot sent on connect
+                    p = _f(t.get("p")); HUB.record("hashkey", a, p * _f(t.get("q")), "sell" if t.get("m") else "buy", p)
+
+
+def _bitflyer(d, ws, st):
+    if d.get("method") == "channelMessage":
+        pr = d.get("params") or {}
+        if pr.get("channel") == "lightning_executions_BTC_JPY":
+            for t in pr.get("message", []):
+                usd = _won_usd("BTC", _f(t.get("size")))               # yen venue: value the coins at the Coinbase dollar price
+                if usd:
+                    HUB.record("bitflyer", "BTC", usd, "buy" if t.get("side") == "BUY" else "sell")
+
+
 def _binanceus_poll_loop():
     """Binance.US streams are silent from here, so poll its public REST trades (new trades since the last id)."""
     last = {}
@@ -577,6 +743,35 @@ def _feeds():
               _kucoin, ping={"id": 2, "type": "ping"}, ping_every=15, url_fn=_kucoin_url),
         _Feed("deribit", "wss://www.deribit.com/ws/api/v2",
               [{"jsonrpc": "2.0", "id": 1, "method": "public/subscribe", "params": {"channels": ["trades.BTC-PERPETUAL.100ms"]}}], _deribit),
+        _Feed("bitget_perp", "wss://ws.bitget.com/v2/ws/public",
+              [{"op": "subscribe", "args": [{"instType": "USDT-FUTURES", "channel": "trade", "instId": i} for i in ("BTCUSDT", "XRPUSDT")]}],
+              _bitget_perp, ping="ping", ping_every=25),
+        _Feed("gate_perp", "wss://fx-ws.gateio.ws/v4/ws/usdt",
+              [{"time": int(time.time()), "channel": "futures.trades", "event": "subscribe", "payload": ["BTC_USDT", "XRP_USDT"]}],
+              _gate_perp, ping={"channel": "futures.ping"}),
+        _Feed("mexc_perp", "wss://contract.mexc.com/edge",
+              [{"method": "sub.deal", "param": {"symbol": s}} for s in ("BTC_USDT", "XRP_USDT")], _mexc_perp, ping={"method": "ping"}, ping_every=15),
+        _Feed("kraken_perp", "wss://futures.kraken.com/ws/v1",
+              [{"event": "subscribe", "feed": "trade", "product_ids": ["PF_XBTUSD", "PF_XRPUSD"]}], _kraken_perp),
+        _Feed("dydx", "wss://indexer.dydx.trade/v4/ws",
+              [{"type": "subscribe", "channel": "v4_trades", "id": i} for i in ("BTC-USD", "XRP-USD")], _dydx),
+        _Feed("bingx_perp", "wss://open-api-swap.bingx.com/swap-market",
+              [{"id": f"s{i}", "reqType": "sub", "dataType": f"{s}@trade"} for i, s in enumerate(("BTC-USDT", "XRP-USDT"))], _bingx_perp),
+        _Feed("htx", "wss://api.huobi.pro/ws",
+              [{"sub": "market.btcusdt.trade.detail", "id": "a"}, {"sub": "market.xrpusdt.trade.detail", "id": "b"}], _htx("htx")),
+        _Feed("htx_perp", "wss://api.hbdm.com/linear-swap-ws",
+              [{"sub": "market.BTC-USDT.trade.detail", "id": "a"}, {"sub": "market.XRP-USDT.trade.detail", "id": "b"}], _htx("htx_perp")),
+        _Feed("upbit", "wss://api.upbit.com/websocket/v1",
+              [[{"ticket": "dash"}, {"type": "trade", "codes": ["KRW-BTC", "KRW-XRP"]}]], _upbit),
+        _Feed("bithumb", "wss://pubwss.bithumb.com/pub/ws",
+              [{"type": "transaction", "symbols": ["BTC_KRW", "XRP_KRW"]}], _bithumb),
+        _Feed("whitebit", "wss://api.whitebit.com/ws", [{"id": 1, "method": "trades_subscribe", "params": ["BTC_USDT", "XRP_USDT"]}], _whitebit,
+              ping={"id": 2, "method": "ping", "params": []}, ping_every=30),
+        _Feed("lbank", "wss://www.lbkex.net/ws/V2/",
+              [{"action": "subscribe", "subscribe": "trade", "pair": p_} for p_ in ("btc_usdt", "xrp_usdt")], _lbank),
+        _Feed("hashkey", "wss://stream-glb.hashkey.com/quote/ws/v1", [{"symbol": "BTCUSDT,XRPUSDT", "topic": "trade", "event": "sub"}], _hashkey),
+        _Feed("bitflyer", "wss://ws.lightstream.bitflyer.com/json-rpc",
+              [{"method": "subscribe", "params": {"channel": "lightning_executions_BTC_JPY"}, "id": 1}], _bitflyer),
     ]
 
 
