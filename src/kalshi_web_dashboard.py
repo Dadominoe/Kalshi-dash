@@ -809,6 +809,7 @@ SITE_VERSION = "2026-10-25-voice"                                   # shown on /
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
+_follow_wake = threading.Event()                                              # set when this copy is waiting for the shared END CALL: the follower fetches it NOW instead of at its next turn
 _sync_last = [0.0]                                                            # when the owner's bot last sent its state (website copy)
 MIRROR_FRESH_SECONDS = 180                                                     # the owner's bot counts as "online" if it sent something within this long
 _FOLLOW_CONFIG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data_cache", "follow_config.json")
@@ -7969,7 +7970,8 @@ def end_call_lock(name, ticker, fair, left, spot, line):
         if fair is None or left is None or left > END_CALL_LOCK_LEFT or left <= 0:
             return None
         if _mirror_active():
-            return None                                       # mirror mode: the shared END CALL is made elsewhere; it arrives within a few seconds
+            _follow_wake.set()                                # the follower loop fetches the shared call right now
+            return None                                       # mirror mode: the shared END CALL is made elsewhere; it arrives within a second or two
         lean = max(fair, 1 - fair) * 100
         side = ("YES" if fair >= 0.5 else "NO") if lean >= END_CALL_MIN_LEAN else "NONE"
         if left < END_CALL_LOCK_LEFT - END_CALL_LATE_GRACE:
@@ -8733,6 +8735,12 @@ def _sync_loop():
         time.sleep(45)
 
 
+def _follow_interval():
+    """Seconds between fetches of the shared calls: every second around the 8th minute (the lock), otherwise every 6 seconds."""
+    left = 900 - (time.time() % 900)
+    return 1.0 if 360 <= left <= 480 else 6.0
+
+
 def _follow_loop():
     """A friend's copy with data_cache/follow_config.json: every 20 s fetch the shared END CALLs + record book from the website copy, so everyone has the same calls and
     the same streak. Never raises; with no config file it does nothing."""
@@ -8756,7 +8764,8 @@ def _follow_loop():
             if last_ok is not False:
                 print(f"[follow] could not reach the shared website: {str(e)[:100]} (using this copy's own calls meanwhile)")
             last_ok = False
-        time.sleep(20)
+        _follow_wake.wait(_follow_interval())
+        _follow_wake.clear()
 
 
 # ---- Flip risk meter (information only) ----------------------------------------------------------------------------------------------------------------------------
@@ -11195,7 +11204,8 @@ def data_bodies():
 # ---- Patterns & Tunnel chart (owner's own copy only; information only, never touches trading) ----
 _MTF_GEN = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mtf_chart", "gen.py")
 _MTF_OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data_cache", "mtf_chart")
-_MTF_ON = (os.path.exists(_MTF_GEN) and not HOSTED_PASSWORD
+_SITE_CHART = os.environ.get("SITE_CHART", "1") != "0"                  # on the website the chart can be switched OFF from Railway (variable SITE_CHART=0) without a new upload
+_MTF_ON = (os.path.exists(_MTF_GEN) and (not HOSTED_PASSWORD or _SITE_CHART)
            and not os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "VERSION.txt")))      # shared copies and the website never get it
 _MTF_LAST_REQ = [0.0]
 SHOW_HEAT_MAP = False                                       # the order-book heat map pull-down (owner turned it off 2026-10-24; the data collection behind it keeps running)
@@ -11244,22 +11254,24 @@ def _mtf_loop():
     between builds). Runs as a low-priority child so the dashboard never stalls."""
     import subprocess as _sp, sys as _sys
     os.makedirs(_MTF_OUT, exist_ok=True)
+    site = bool(HOSTED_PASSWORD)                                       # the website is gentler: only while somebody has the chart open right now, at most every 30 s
     while True:
         _MTF_WAKE.wait(2)
         _MTF_WAKE.clear()
         try:
-            if time.time() - _MTF_LAST_REQ[0] > 900:
+            if time.time() - _MTF_LAST_REQ[0] > (120 if site else 900):
                 continue
             f = os.path.join(_MTF_OUT, "mtf_BTC.html")
             now = time.time()
             if os.path.exists(f):
                 built = os.path.getmtime(f)
-                new_candle = int(now) // 60 != int(built) // 60 and now % 60 >= 2          # a new minute began since the pages were built: build for the new candle
-                if not (now - built >= 15 or new_candle):
+                new_candle = int(now) // 60 != int(built) // 60 and now % 60 >= 2 and (not site or now - built >= 20)          # a new minute began since the pages were built: build for the new candle
+                if not (now - built >= (30 if site else 15) or new_candle):
                     continue
             flags = (0x00004000 | 0x08000000) if os.name == "nt" else 0             # below-normal priority, no console window
             with open(os.path.join(_MTF_OUT, "gen_log.txt"), "w", encoding="utf-8") as lg:
-                _sp.run([_sys.executable, "-I", _MTF_GEN, "--embed", _MTF_OUT], timeout=240, creationflags=flags, stdout=lg, stderr=_sp.STDOUT)
+                _sp.run([_sys.executable, "-I", _MTF_GEN, "--embed", _MTF_OUT], timeout=(120 if site else 240), creationflags=flags, stdout=lg, stderr=_sp.STDOUT,
+                        preexec_fn=((lambda: os.nice(10)) if os.name != "nt" else None))
         except Exception as _e:
             print(f"[mtf-chart] build failed: {_e!r}")
 
@@ -11274,14 +11286,16 @@ def _keepwarm_loop():
     time.sleep(20)
     while True:
         try:
-            if time.time() - _last_page_build[0] > 4:
+            _left_now = 900 - (time.time() % 900)
+            _at_lock = 414 <= _left_now <= 430                                   # the END CALL locks at 7:00 left (420 s): build the page right then, so the lock is made within a fraction of a second
+            if (_at_lock and time.time() - _last_page_build[0] > 0.3) or time.time() - _last_page_build[0] > 4:
                 _viewtz.set_view(None, None)
                 _view_tf.m = {}
                 render_html()
                 _last_page_build[0] = time.time()
         except Exception as e:
             print(f"[keep-warm] page build failed: {e!r}")
-        time.sleep(3)
+        time.sleep(0.4 if 414 <= 900 - (time.time() % 900) <= 430 else 3)
 
 
 def render_html_cached(max_age=0.9):
