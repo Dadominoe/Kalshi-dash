@@ -805,7 +805,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-26-bar24"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-26-bar25"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -9490,10 +9490,14 @@ def _flip_pre(name, spot, line, left):
         return None
 
 
+_FLIP_WAIT_BAR = ('<div class="flip-risk-bar ok"><span class="frb-l">FLIP RISK</span> <b>--</b> <span class="frb-t">waiting for price data</span>'
+                  '<span class="frb-track"><i style="width:0%"></i></span><span class="hint">the bar fills in as soon as the numbers arrive - it is never turned off</span></div>')
+
+
 def _pre_risk_html(name, spot, line, left):
     fr = _flip_pre(name, spot, line, left)
     if not fr:
-        return ""
+        return _FLIP_WAIT_BAR
     r, sd, side = fr
     cls = "down" if r >= 0.45 else ("warn" if r >= 0.30 else "ok")
     txt = "price is right at the line - it can cross either way" if r >= 0.40 else ("price is near the line" if r >= 0.30 else "price is well clear of the line")
@@ -9683,7 +9687,7 @@ def _private_client(addr):
 def _end_call_html(name, d, tn, fair, left, spot, line):
     ticker = d.get("ticker")
     if fair is None or not ticker:
-        return ""
+        return '<div class="tug-end tug-end-wait"><span class="tug-end-l">END CALL</span> <span class="tug-wait-badge">waiting for the price model</span>' + _pre_risk_html(name, spot, line, left) + '</div>'
     lk = end_call_lock(name, ticker, fair, left, spot, line)
     if lk is None and _mirror_active() and left is not None and left <= END_CALL_LOCK_LEFT:
         return ('<div class="tug-end tug-end-wait"><span class="tug-end-l">END CALL</span> <span class="tug-wait-badge">WAITING FOR THE MAIN BOT\'S LOCK</span> '
@@ -9699,7 +9703,7 @@ def _end_call_html(name, d, tn, fair, left, spot, line):
     lm, ls = divmod(int(lk["left"]), 60)
     if lk["side"] == "LATE":
         return ('<div class="tug-end tug-end-none"><span class="tug-end-l">END CALL</span> <b>no locked call this round</b> '
-                '<span class="hint">- the dashboard was started after the 8th minute, so it could not lock in time. The next round will lock normally.</span></div>')
+                '<span class="hint">- the dashboard was started after the 8th minute, so it could not lock in time. The next round will lock normally.</span>' + _pre_risk_html(name, spot, line, left) + '</div>')
     _fl = end_call_flip(name, ticker, fair, left)             # still logged (bot_state/end_call_flips.csv) even where it is not shown
     if lk["side"] == "NONE":
         _fb, _fn = _leans_html(name, fair, left)              # NO CALL round: just say which way it leans right now and how little that means
@@ -9717,7 +9721,7 @@ def _end_call_html(name, d, tn, fair, left, spot, line):
                'locked calls are right about 78% of the time overall')
     holding = (spot >= line) == yes
     _fr = _flip_risk(name, lk["side"], spot, line, left)
-    risk_html = ""
+    risk_html = _FLIP_WAIT_BAR
     if _fr:
         _r, _sd = _fr
         _cls = "down" if _r >= 0.55 else ("warn" if _r >= 0.30 else "ok")
