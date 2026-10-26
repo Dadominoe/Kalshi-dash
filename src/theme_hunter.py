@@ -2,8 +2,7 @@
 
 apply(html)       -> the same page with the old grey-blue palette swapped for the hunter palette (deep black canvas, charcoal panels with fine crimson borders, neon red accents,
                      neon emerald for UP / winning, neon hunter red for DOWN / losing) - colours only, every word and number stays.
-page_css()        -> extra CSS for the main dashboard: full-width layout (the old 1800px cap is gone), the wide 3-column workstation (signals | chart | telemetry) on big screens,
-                     tabular numbers, compact panel padding, red glow on the critical cards.
+page_css()        -> a little extra CSS for the main dashboard: tabular numbers, crimson panel borders, the red glow on the critical cards. The layout is the ORIGINAL one (owner's choice 2026-10-25).
 Switch it all off with the host variable DASH_THEME=classic (the old look comes back on the next restart)."""
 import os
 import re
@@ -57,29 +56,10 @@ h1{letter-spacing:.5px}
 .card{border-color:var(--hx-line) !important;box-shadow:0 0 0 1px rgba(255,0,63,.04),0 0 22px rgba(255,0,63,.06)}
 .tug-end,.flip-risk-bar,.hr-warn,.tug-end.up,.tug-end.down{box-shadow:var(--hx-glow)}
 .tug-end.down,.flip-risk-bar.down,.hr-warn{box-shadow:0 0 15px rgba(255,0,63,.28)}
-.view-bar button,.size-mode-btn{border-color:var(--hx-line) !important;text-transform:uppercase;letter-spacing:.8px;font-size:12px}
+.view-bar button,.size-mode-btn{border-color:var(--hx-line) !important}
 .size-mode-active{border-color:#ff003f !important;box-shadow:0 0 10px rgba(255,0,63,.35)}
 details>summary{letter-spacing:.2px}
 ::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-track{background:#070709}::-webkit-scrollbar-thumb{background:#3d1420;border-radius:6px}::-webkit-scrollbar-thumb:hover{background:#ff003f}
-/* compact panel padding */
-.card{padding-left:10px !important;padding-right:10px !important}
-.tug,.press-row,.pat-win{margin-top:6px}
-/* full width: the old 1800px cap is gone, in every view */
-body[data-view="BTC"] .card,body[data-view="XRP"] .card{max-width:none !important}
-@media (min-width:1000px){body[data-view="both"] .card{flex:1 1 0 !important;max-width:none !important;min-width:0}}
-/* the wide 3-column workstation: signals | chart | telemetry (+ the volume bar) */
-@media (min-width:1700px){
- body[data-view="BTC"] .card[data-asset="BTC"],body[data-view="XRP"] .card[data-asset="XRP"]{display:grid !important;grid-template-columns:minmax(400px,.95fr) minmax(0,2.7fr) minmax(360px,.9fr) 92px !important;column-gap:10px;row-gap:6px;align-items:start}
- body[data-view="BTC"] .card[data-asset="BTC"]>*,body[data-view="XRP"] .card[data-asset="XRP"]>*{grid-column:1/-1}
- body[data-view="BTC"] .card[data-asset="BTC"]>.tugrow,body[data-view="XRP"] .card[data-asset="XRP"]>.tugrow,
- body[data-view="BTC"] .card[data-asset="BTC"] .tugcol,body[data-view="XRP"] .card[data-asset="XRP"] .tugcol{display:contents}
- body[data-view="BTC"] .card[data-asset="BTC"] .tug,body[data-view="XRP"] .card[data-asset="XRP"] .tug{grid-column:1;order:1;margin-top:0}
- body[data-view="BTC"] .card[data-asset="BTC"]>.pat-win,body[data-view="XRP"] .card[data-asset="XRP"]>.pat-win{grid-column:2;order:2;margin-top:0}
- body[data-view="BTC"] .card[data-asset="BTC"] .press-row,body[data-view="XRP"] .card[data-asset="XRP"] .press-row{grid-column:3;order:3;margin-top:0}
- body[data-view="BTC"] .card[data-asset="BTC"] .tugvol,body[data-view="XRP"] .card[data-asset="XRP"] .tugvol{grid-column:4;order:4;align-self:stretch}
- body[data-view="BTC"] .card[data-asset="BTC"]>.lc-drop,body[data-view="BTC"] .card[data-asset="BTC"]>.mh-drop,body[data-view="BTC"] .card[data-asset="BTC"]>.more-info,body[data-view="BTC"] .card[data-asset="BTC"]>.live-pull,
- body[data-view="XRP"] .card[data-asset="XRP"]>.lc-drop,body[data-view="XRP"] .card[data-asset="XRP"]>.mh-drop,body[data-view="XRP"] .card[data-asset="XRP"]>.more-info,body[data-view="XRP"] .card[data-asset="XRP"]>.live-pull{order:9}
-}
 """
 
 

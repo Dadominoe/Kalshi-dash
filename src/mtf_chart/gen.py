@@ -879,12 +879,17 @@ def dedupe(lines_by_tf, vis):
     return out, kept_big, times, tol
 
 
-def line_svg(lines, color, w, sx, sy, t0, tmax, keep=None):
+def line_svg(lines, color, w, sx, sy, t0, tmax, keep=None, ybounds=None):
+    """ybounds = (top, bottom) in chart pixels: a line that lies completely above or below the picture (the plot area is clipped anyway) is not written at all - the page is ~3x lighter and redraws far faster."""
     out = []
     for ln_ in lines:
         (ta, pa, sl, touches, kind, side, *_rest) = ln_
         ts = max(ta, t0)
         t_end = _rest[0] if (_rest and _rest[0] is not None) else tmax              # a glove edge stops at the point it joins; the newest one runs on into the future
+        if ybounds is not None:
+            _y1, _y2 = sy(pa + sl * (ts - ta)), sy(pa + sl * (t_end - ta))
+            if (_y1 < ybounds[0] and _y2 < ybounds[0]) or (_y1 > ybounds[1] and _y2 > ybounds[1]):
+                continue
         dash = ' stroke-dasharray="9 6"' if kind == "project" else (' stroke-dasharray="2 5"' if kind == "floor" else (' stroke-dasharray="4 4"' if kind.startswith("body") else ""))
         extra = " ln-body" if kind.startswith("body") else (" ln-floor" if kind == "floor" else "")
         lw = w * 1.5 if kind == "live" else (1.0 if kind == "floor" else w)                    # the in-time lines are the heavy ones
@@ -1048,9 +1053,9 @@ def build_svg(coin, base_cs, lines_by_tf, emas, srs, frames, uid, dec, nshow, wi
                 keep_ids.add(i_)
     for key, mins, color, w, on, keep in TFS:
         o.append(f'<g class="tf tf-{key}" clip-path="url(#{uid}c)" style="display:{"inline" if on else "none"}">'
-                 + line_svg(lines_by_tf.get(key, []), color, max(0.6, w * 0.3), sx, sy, t0, tmax, keep_ids) + "</g>")
+                 + line_svg(lines_by_tf.get(key, []), color, max(0.6, w * 0.3), sx, sy, t0, tmax, keep_ids, (T_ - 0.15 * ph, T_ + 1.15 * ph)) + "</g>")
     for k, (fe, fpx, fl, frc) in enumerate(frames):
-        o.append(f'<g class="rf rf-{k}" clip-path="url(#{uid}c)" style="display:none">' + channel_svg(frc, fe - step / 2, sx, sy, t0, tmax) + line_svg(fl, next((t_[2] for t_ in TFS if t_[0] == own), "#ffd54a"), 0.7, sx, sy, t0, tmax) + "</g>")
+        o.append(f'<g class="rf rf-{k}" clip-path="url(#{uid}c)" style="display:none">' + channel_svg(frc, fe - step / 2, sx, sy, t0, tmax) + line_svg(fl, next((t_[2] for t_ in TFS if t_[0] == own), "#ffd54a"), 0.7, sx, sy, t0, tmax, None, (T_ - 0.15 * ph, T_ + 1.15 * ph)) + "</g>")
     ang = angle_pct(emas["green"], base_cs)
     word = "FLAT" if abs(ang) < 10 else ("UP" if ang > 0 else "DOWN")
     col = "#9da7b3" if word == "FLAT" else ("#2ee86b" if ang > 0 else "#ff5d5d")
@@ -1262,13 +1267,13 @@ for coin, sym, dec in COINS:
             inner = ""
             for zi, nz in enumerate((45, 100, 200)):
                 uid = f"{coin}{bkey}z{nz}"
-                inner += f'<div class="zoomv zv-{nz}" style="display:{"block" if zi == 0 else "none"}">' + build_svg(coin, cs, lines_v, emas, srs, frames, uid, dec, nz, bias=bias, own=bkey) + replay_bar(uid) + f'<div class="macdpane">{macd_svg(cs, nz, uid + "m")}</div>' + "</div>"
+                inner += f'<div class="zoomv zv-{nz}" style="display:{"block" if zi == 0 else "none"}">' + build_svg(coin, cs, lines_v, emas, srs, (frames if nz in (45, 100) else []), uid, dec, nz, bias=bias, own=bkey) + (replay_bar(uid) if nz in (45, 100) else '<div class="bar"><span class="hint">Replay is on the 45 and 100 candle views (keeps this page light and fast).</span></div>') + f'<div class="macdpane">{macd_svg(cs, nz, uid + "m")}</div>' + "</div>"
             zbar = ('<div class="bar zbar"><b>Candles shown:</b> <button class="on" onclick="setCandles(\'' + coin + '\',45,this)">45 (standard)</button>'
                     '<button onclick="setCandles(\'' + coin + '\',100,this)">100</button><button onclick="setCandles(\'' + coin + '\',200,this)">200 (zoomed out)</button></div>')
             body = inner + zbar
         else:
             uid = f"{coin}{bkey}"
-            body = ('<div class="zoomv" style="display:block">' + build_svg(coin, cs, lines_v, emas, srs, frames, uid, dec, SHOW[bkey], bias=bias, own=bkey) + replay_bar(uid)
+            body = ('<div class="zoomv" style="display:block">' + build_svg(coin, cs, lines_v, emas, srs, [], uid, dec, SHOW[bkey], bias=bias, own=bkey) + '<div class="bar"><span class="hint">Replay is on the 1-minute chart (keeps this page light and fast).</span></div>'
                     + f'<div class="macdpane">{macd_svg(cs, SHOW[bkey], f"{coin}{bkey}m")}</div></div>')
         views.append(f'<div class="view v-{coin}-{bkey}" style="display:{"block" if bi == 0 else "none"}">{body}</div>')
         if bkey == "1m":
