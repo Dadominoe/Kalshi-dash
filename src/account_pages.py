@@ -17,8 +17,16 @@ _CSS = ("body{margin:0;background:#0f1419;color:#e6edf3;font-family:Segoe UI,Ari
         ".on{color:#3fb950}.off{color:#8b949e}a{color:#58a6ff}.row{display:flex;gap:8px;align-items:center}.row input{width:auto;flex:1;padding:6px;font-size:14px}")
 
 
+def _themed(h):
+    try:
+        from src import theme_hunter as _t
+        return _t.apply(h)
+    except Exception:
+        return h
+
+
 def _page(title, body, wide=False):
-    return (f'<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
+    return _themed(f'<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
             f'<title>{html.escape(title)}</title><style>{_CSS}</style></head><body><div class="box{" wide" if wide else ""}">{body}</div></body></html>')
 
 

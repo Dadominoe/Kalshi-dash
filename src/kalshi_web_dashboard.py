@@ -805,7 +805,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-25-bars17"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-25-theme18"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -2070,7 +2070,7 @@ def compute_cumulative_bet_pnl(asset_history, bet_size=100.0, series_prefix=None
 
 ET_ZONE = ZoneInfo("America/New_York")
 from src import viewtz as _viewtz
-from src import accounts as _acc, account_pages as _accp, membership as _mem
+from src import accounts as _acc, account_pages as _accp, membership as _mem, theme_hunter as _theme
 
 
 def _parse_ticker_et_uncached(ticker):
@@ -11536,7 +11536,7 @@ def data_bodies():
     m = _data_memo.get(k)
     if m and m[0] is html:
         return m[1], m[2]
-    raw = json.dumps({"html": html, "build": BUILD_ID}).encode()
+    raw = json.dumps({"html": _theme.apply(html), "build": BUILD_ID}).encode()
     gz = gzip.compress(raw, 4)
     if len(_data_memo) > 80:
         _data_memo.clear()
@@ -13328,7 +13328,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 _MTF_WAKE.set()
                 try:
                     with open(os.path.join(_MTF_OUT, f"mtf_{_coin}.html"), "rb") as _f:
-                        body = _f.read()
+                        body = _theme.apply_bytes(_f.read())
                 except OSError:
                     _st = _MTF_STATE
                     _why = "" if not _st["runs"] else (" Last attempt: " + ("finished" if _st["ok"] else "FAILED") + " after " + str(_st["secs"]) + " s (attempt " + str(_st["runs"]) + "). " + __import__("html").escape(str(_st["note"])[-300:]))
@@ -13815,7 +13815,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
         else:
-            body = PAGE_TEMPLATE.replace('__PATTERN_LIB_JSON__', pattern_lib_json()).replace('__VERSION_TAG__', _version_tag()).replace('__LEGAL__', _accp.legal_footer()).replace('__USERBAR__', _accp.userbar(*self._who) if (HOSTED_PASSWORD and self._who) else '').encode()
+            body = PAGE_TEMPLATE.replace('__PATTERN_LIB_JSON__', pattern_lib_json()).replace('__VERSION_TAG__', _version_tag()).replace('__LEGAL__', _accp.legal_footer()).replace('__USERBAR__', _accp.userbar(*self._who) if (HOSTED_PASSWORD and self._who) else '').replace('</head>', _theme.page_css() + '</head>', 1)
+            body = _theme.apply(body).encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
             if "gzip" in (self.headers.get("Accept-Encoding", "") or ""):
