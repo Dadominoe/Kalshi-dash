@@ -52,11 +52,21 @@ def terms_page():
             ("Your access", "Access lasts for the time you have paid for and can be changed or removed at any time. Do not share your login. Do not copy, redistribute or republish the content without the owner's written permission. The owner may change these terms; using the site after a change means you accept it."),
             ("Your information", "We keep the user name you choose, your e-mail address, a scrambled (hashed) version of your password, when you agreed to these terms, and when your membership starts and ends. Your chart choices are kept in your own browser. Card payments are taken by Stripe, not by us. We do not sell or share your information. We never ask for, and you should never type here, any exchange keys or bank details."),
         ]
+    if MEMBERSHIP_ON and _manual():
+        sections = [(t, x.replace('Each plan renews automatically at the same price when its time is up, until you cancel; you keep what you already paid for after you cancel. Payments are handled by Stripe, so we never see or store your card details.', 'Plans are paid by hand (Cash App, Venmo or PayPal) and are added to your account by the owner; a plan lasts for its time and then ends - nothing renews by itself. Pay again any time to add more days on top of what you have left.')) for t, x in sections]
     body = "".join(f"<h2>{html.escape(t)}</h2><p>{html.escape(x)}</p>" for t, x in sections)
     body = (f'<h1>Terms and disclaimers</h1><p style="color:#8b949e;font-size:14px">Last updated {TERMS_DATE}.</p>{body}'
             '<p style="color:#8b949e;font-size:14px;margin-top:24px">By using this site you agree to these terms. If you do not agree, do not use it.</p>'
             '<p><a href="javascript:history.back()">Back</a></p>')
     return _page("Terms and disclaimers", body, wide=True)
+
+
+def _manual():
+    try:
+        from src import membership as _m
+        return _m.manual()
+    except Exception:
+        return False
 
 
 def _msg(m, err=False):
@@ -82,7 +92,7 @@ def login_page(msg="", err=True):
         return _page("The Dominator", '<div style="text-align:center"><div style="font-size:13px;letter-spacing:3px;color:#8b949e">LIVE MARKET INTELLIGENCE</div>'
                      '<h1 style="font-size:34px;margin:6px 0 4px">THE DOMINATOR</h1><div style="color:#9da7b3;margin-bottom:18px">Live calls, flip warnings, order flow and charts for the 15-minute BTC and XRP rounds.</div></div>'
                      f'<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">{cards}</div>'
-                     '<div class="msg" style="text-align:center">Try it free: <b>one 3-hour pass</b> for every new account. Plans renew automatically until you cancel.</div>'
+                     '<div class="msg" style="text-align:center">Try it free: <b>one 3-hour pass</b> for every new account. ' + ('Pay by Cash App, Venmo or PayPal - no card needed.' if _manual() else 'Plans renew automatically until you cancel.') + '</div>'
                      '<a href="/signup"><button type="button" style="width:100%;margin-top:4px;font-size:19px">Create an account</button></a>'
                      f'<h2 style="margin-top:26px">Already a member? Sign in</h2>{_msg(msg, err)}'
                      '<form method="post" action="/login"><label>User name</label><input name="u" autocomplete="username" required>'
@@ -98,7 +108,7 @@ def login_page(msg="", err=True):
 
 def signup_page(msg="", err=True, done=False):
     if MEMBERSHIP_ON:
-        return _page("Create an account", f'<h1>Create an account</h1>{_msg(msg, err)}<div class="msg" style="font-size:16px">Free: one <b>3-hour pass</b> per person to try it. Then plans from <b>$65</b>. Payment is handled by Stripe.</div>'
+        return _page("Create an account", f'<h1>Create an account</h1>{_msg(msg, err)}<div class="msg" style="font-size:16px">Free: one <b>3-hour pass</b> per person to try it. Then plans from <b>$65</b>. ' + ('You pay the owner by Cash App, Venmo or PayPal.' if _manual() else 'Payment is handled by Stripe.') + '</div>'
                      '<form method="post" action="/signup"><label>Pick a user name (letters, numbers, dot, dash, underscore)</label><input name="u" autocomplete="username" required>'
                      '<label>Your e-mail address</label><input name="e" type="email" autocomplete="email" required>'
                      '<label>Pick a password (at least 8 characters)</label><input name="p" type="password" autocomplete="new-password" minlength="8" required>'
@@ -138,6 +148,7 @@ def admin_page(users, online, msg="", err=False, requests=None, warn=""):
         rows.append(f'<tr><td><b>{n}</b><br><span class="off">Discord: {html.escape(users[name].get("note") or "-")}</span>{_member_line(users[name])}</td><td>{st}</td>'
                     f'<td><form method="post" action="/admin/passwd" class="row"><input type="hidden" name="u" value="{n}">'
                     f'<input name="p" type="password" placeholder="new password" minlength="8" required><button class="grey">Change password</button></form></td>'
+                    f'<td><form method="post" action="/admin/grant" style="margin:0 0 6px;display:flex;gap:4px;flex-wrap:wrap"><input type="hidden" name="u" value="{n}"><button class="grey" name="days" value="10">+10 days</button><button class="grey" name="days" value="30">+30 days</button><button class="grey" name="days" value="105">+3.5 months</button></form>'
                     f'<td><form method="post" action="/admin/lifetime" style="margin:0 0 6px"><input type="hidden" name="u" value="{n}"><input type="hidden" name="on" value="{0 if users[name].get("lifetime") else 1}"><button class="grey">{"Lifetime: ON (click to turn off)" if users[name].get("lifetime") else "Make lifetime"}</button></form>'
                     f'<td><form method="post" action="/admin/delete" onsubmit="return confirm(\'Remove {n}? They will be signed out right away.\')">'
                     f'<input type="hidden" name="u" value="{n}"><button class="red">Remove</button></form></td></tr>')

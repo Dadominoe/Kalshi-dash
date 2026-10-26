@@ -36,6 +36,12 @@ DEFAULT_PLANS = {                    # Stripe TEST mode (made 2026-10-25). Repla
         {"name": "3.5 months", "days": 105, "price": 379, "price_id": "price_1UUZTlI713HGFPqTKC0h7zxH", "plink_id": "plink_1UUZcTI713HGFPqTth8Hna2m", "link": "https://buy.stripe.com/test_eVq00j9whguX2Nj66K8Zq02", "best": True},
     ],
     "portal_url": "https://billing.stripe.com/p/login/test_5kQdR937T7Yr4Vrdzc8Zq00",      # where members manage or cancel (Stripe TEST mode)
+    "mode": "manual",              # "manual" = people pay the owner by Cash App / Venmo / PayPal and the owner adds days on /admin; "stripe" = checkout links + webhook
+    "pay_methods": [               # where people send the money (public handles)
+        {"name": "Cash App", "handle": "$nateyj91", "url": "https://cash.app/$nateyj91"},
+        {"name": "Venmo", "handle": "@Nathan-joyce-8", "url": "https://venmo.com/u/Nathan-joyce-8"},
+        {"name": "PayPal", "handle": "Nathan Joyce (scan the code)", "qr": True},
+    ],
 }
 
 
@@ -247,19 +253,47 @@ def _fmt(ts):
     return time.strftime("%b %d, %Y %I:%M %p UTC", time.gmtime(ts))
 
 
+def manual():
+    """True while people pay the owner by hand (Cash App / Venmo / PayPal) instead of Stripe checkout."""
+    return plans().get("mode") == "manual"
+
+
+def pay_box(name):
+    pm = plans().get("pay_methods") or []
+    def _row(p):
+        h = html.escape(p["handle"])
+        h = f'<a href="{html.escape(p["url"])}" target="_blank" rel="noopener">{h}</a>' if p.get("url") else h
+        return f'<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #30363d"><b>{html.escape(p["name"])}</b><span>{h}</span></div>'
+    rows = "".join(_row(p) for p in pm)
+    qr = ""
+    if any(p.get("qr") for p in pm):
+        from src.paypal_qr import QR_B64
+        qr = f'<div style="text-align:center;margin:10px 0"><img alt="PayPal QR code" src="data:image/png;base64,{QR_B64}" style="width:260px;max-width:100%;border-radius:12px"><div style="font-size:13px;color:#8b949e">PayPal - scan with your phone camera or the PayPal app</div></div>'
+    if not rows:
+        rows = '<p style="color:#8b949e">Payment details are being added - check back soon.</p>'
+    return ('<h2>How to pay</h2><ol style="padding-left:20px;line-height:1.6;margin:0"><li>Pick a plan below and send that amount to one of these:</li></ol>'
+            f'<div style="margin:8px 0 6px">{rows}{qr}</div>'
+            f'<ol start="2" style="padding-left:20px;line-height:1.6;margin:0"><li>Put your user name <b>{html.escape(name)}</b> in the payment note.</li>'
+            '<li>Your days are added by the owner as soon as the payment is seen - usually within a few hours. Refresh this page to see your new end date.</li></ol>')
+
+
 def join_page(name, ip, msg="", err=False):
     from src.account_pages import _page, _msg, _tiny
     st, until = status(name)
     u = _acc.list_users().get(name) or {}
     pl = plans()
+    man = manual()
     cards = []
     for p in pl["plans"]:
-        link = p["link"] + ("&" if "?" in p["link"] else "?") + "client_reference_id=" + html.escape(name) + ("&prefilled_email=" + html.escape(u["email"]) if u.get("email") else "")
+        if man:
+            btn = f'<div style="margin-top:10px;padding:8px;border-radius:8px;background:#161b22;font-size:14px">Pay ${p["price"]}</div>'
+        else:
+            link = p["link"] + ("&" if "?" in p["link"] else "?") + "client_reference_id=" + html.escape(name) + ("&prefilled_email=" + html.escape(u["email"]) if u.get("email") else "")
+            btn = f'<a href="{link}"><button type="button" style="width:100%;margin-top:10px">Get {html.escape(p["name"])}</button></a>'
         cards.append(f'<div style="flex:1 1 150px;border:1px solid {"#d29922" if p.get("best") else "#30363d"};border-radius:10px;padding:14px;background:#0d1117">'
                      f'{"<div style=color:#d29922;font-size:12px;font-weight:700>BEST VALUE</div>" if p.get("best") else ""}'
                      f'<div style="font-size:14px;color:#9da7b3">{html.escape(p["name"].upper())}</div><div style="font-size:30px;font-weight:700">${p["price"]}</div>'
-                     f'<div style="font-size:13px;color:#8b949e">${p["price"] / p["days"]:.2f} a day</div>'
-                     f'<a href="{link}"><button type="button" style="width:100%;margin-top:10px">Get {html.escape(p["name"])}</button></a></div>')
+                     f'<div style="font-size:13px;color:#8b949e">${p["price"] / p["days"]:.2f} a day</div>{btn}</div>')
     ok, why = trial_available(name, ip)
     if st == "lifetime":
         head = '<div class="msg">You are a <b>lifetime member</b>. You paid once and you are locked in for life - there is nothing more to pay, ever. <a href="/">Back to the dashboard</a></div>'
@@ -276,9 +310,11 @@ def join_page(name, ip, msg="", err=False):
     if st == "expired":
         trial = (f'<h2>Try it first</h2><p>One free {TRIAL_HOURS}-hour pass per person.</p><form method="post" action="/trial"><button type="submit">Start my free {TRIAL_HOURS}-hour pass</button></form>'
                  if ok else f'<h2>Try it first</h2><p style="color:#8b949e">{html.escape(why)}</p>')
-    portal = (f'<p style="font-size:14px"><a href="{html.escape(pl["portal_url"])}">Manage or cancel a membership</a></p>' if pl.get("portal_url") else "")
-    body = (f'<h1>Memberships</h1>{_msg(msg, err)}{head}<h2>Pick a plan</h2>'
+    portal = (f'<p style="font-size:14px"><a href="{html.escape(pl["portal_url"])}">Manage or cancel a membership</a></p>' if (pl.get("portal_url") and not man) else "")
+    note = ('<p style="font-size:14px;color:#9da7b3;margin-top:12px">Each plan lasts for its time and then ends - nothing renews by itself. Pay again when you want more time; the days are added on top of what you have left.</p>' if man else
+            '<p style="font-size:14px;color:#9da7b3;margin-top:12px">Every plan renews automatically at the same price when its time is up, until you cancel. Payment is handled by Stripe - we never see or keep your card.</p>')
+    body = (f'<h1>Memberships</h1>{_msg(msg, err)}{head}<h2>Plans</h2>'
             f'<div style="display:flex;gap:12px;flex-wrap:wrap">{"".join(cards)}</div>'
-            '<p style="font-size:14px;color:#9da7b3;margin-top:12px">Every plan renews automatically at the same price when its time is up, until you cancel. Payment is handled by Stripe - we never see or keep your card.</p>'
+            f'{pay_box(name) if man else ""}{note}'
             f'{portal}{trial}<p style="margin-top:20px"><a href="/logout">Sign out</a> &nbsp; <a href="/terms">Terms</a></p>' + _tiny())
     return _page("Memberships", body, wide=True)
