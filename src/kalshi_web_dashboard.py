@@ -805,7 +805,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-26-agree26"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-26-same27"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -6902,10 +6902,15 @@ try { const sv = JSON.parse(localStorage.getItem('mtfH') || 'null'); if (sv && s
 const mtfReady = {};
 function mtfSetView(a, v) {
   mtfView[a] = (mtfView[a] === 'tun' ? 'pat' : (mtfView[a] || 'pat')) === v ? 'none' : v;               // click the open one again to close it
+  if (document.body.getAttribute('data-view') === 'both') mtfView[a === 'BTC' ? 'XRP' : 'BTC'] = mtfView[a];   // side by side: both coins always show the same chart, so the two screens match
   try { localStorage.setItem('mtfViews', JSON.stringify(mtfView)); } catch (e) {}
   applyMtf();
 }
 function applyMtf() {
+  if (document.body.getAttribute('data-view') === 'both' && (mtfView.XRP || 'pat') !== (mtfView.BTC || 'pat')) {   // side by side: XRP follows BTC so the two charts are always the same kind and size
+    mtfView.XRP = mtfView.BTC || 'pat';
+    try { localStorage.setItem('mtfViews', JSON.stringify(mtfView)); } catch (e) {}
+  }
   ['BTC', 'XRP'].forEach(a => {
     const win = document.querySelector('.pat-win[data-asset="' + a + '"]');
     if (!win) return;
