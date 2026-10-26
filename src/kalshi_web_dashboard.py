@@ -805,7 +805,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-26-flipbar23"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-26-bar24"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -5039,8 +5039,8 @@ details.pat > summary { cursor:pointer; }
 .mk4 { font-size:13px; color:#a6b0bb; border:1px dashed #484f58; border-radius:12px; padding:2px 10px; white-space:nowrap; }
 .mk-bear { color:#fff; border-color:#ff7b72; background:linear-gradient(90deg,#da3633,#9e1c1c); box-shadow:0 0 0 3px rgba(248,81,73,.3); }
 .mk-bull { color:#fff; border-color:#3fb950; background:linear-gradient(90deg,#238636,#1a6b2b); box-shadow:0 0 0 3px rgba(63,185,80,.3); }
-.mk-lean-up { border-color:#3fb950 !important; background:linear-gradient(90deg,#3d444d,#1f5f33) !important; box-shadow:0 0 0 3px rgba(63,185,80,.3) !important; }
-.mk-lean-down { border-color:#ff7b72 !important; background:linear-gradient(90deg,#3d444d,#8a2a27) !important; box-shadow:0 0 0 3px rgba(248,81,73,.3) !important; }
+.mk-lean-up { border-color:#8fe3b0 !important; background:linear-gradient(90deg,#3d444d,#4a8a6a) !important; box-shadow:0 0 0 3px rgba(143,227,176,.22) !important; }
+.mk-lean-down { border-color:#f2a3ae !important; background:linear-gradient(90deg,#3d444d,#8a5560) !important; box-shadow:0 0 0 3px rgba(242,163,174,.22) !important; }
 .mk-neutral { color:#fff; border-color:#8b949e; background:linear-gradient(90deg,#3d444d,#21262d); box-shadow:0 0 0 3px rgba(139,148,158,.25); }
 .tb-chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
 .tb-chip { font-size:13px; padding:2px 9px; border-radius:10px; border:1px solid #30363d; background:#0d1117; white-space:nowrap; }
@@ -9470,8 +9470,7 @@ def _flip_pre(name, spot, line, left):
         if elapsed >= 9:                                         # past the 8th minute the main table (built on the side price is on) applies
             fr = _flip_risk(name, "YES" if side == 1 else "NO", spot, line, left)
             return (fr[0], abs(fr[1]), side) if fr else None
-        if elapsed < 2:
-            return None
+        elapsed = max(2, elapsed)                                # the first two minutes use the minute-2 numbers, so the bar is there from the first second of a round
         tbl = (_flip_risk_table() or {}).get("pre")
         sym = {a["name"]: a["symbol"] for a in DASHBOARD_ASSETS}.get(name)
         cs = ((_mtf.windows.get(sym) or {}).get("1m")) if (_mtf is not None and sym) else None
