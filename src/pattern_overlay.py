@@ -282,7 +282,7 @@ def _x(i, n, left, right):
     return left + step * (i + 1), step
 
 
-def render_window_svg(cs, labels, title="", width=1100, height=880, max_labels=7, events=None, levels=None, sweeps=None):
+def render_window_svg(cs, labels, title="", width=1100, height=880, max_labels=7, events=None, levels=None, sweeps=None, fvg=None):
     """SVG of the candles with the drawings of the most important labels. Returns (svg, shown_labels).
     Text labels are collision-avoided (pushed to a free spot) and outlined so they stay readable over candles."""
     n = len(cs)
@@ -365,6 +365,24 @@ def render_window_svg(cs, labels, title="", width=1100, height=880, max_labels=7
             x0, x1 = xi(d["i0"]) - step / 2, xi(d["i1"]) + step / 2
             o.append(f'<rect x="{x0:.1f}" y="{y(d["hi"]):.1f}" width="{x1 - x0:.1f}" height="{max(2.0, y(d["lo"]) - y(d["hi"])):.1f}" fill="{d["col"]}" opacity="0.11" stroke="{d["col"]}" stroke-opacity="0.5" stroke-dasharray="3 3"/>')
             lab(x0 + 3, y(d["hi"]) + fs, d["text"], "start", d["col"], prio=4)
+    if fvg:         # open fair value gaps: a light white box with green (bull) / red (bear) diagonal lines, reaching to the right edge; the whole group is switched on / off by the Fair value gaps switch
+        o.append('<defs><pattern id="pfvg-g" patternUnits="userSpaceOnUse" width="9" height="9" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="9" stroke="#2ee86b" stroke-width="1.3" stroke-opacity="0.75"/></pattern>'
+                 '<pattern id="pfvg-r" patternUnits="userSpaceOnUse" width="9" height="9" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="9" stroke="#ff5d5d" stroke-width="1.3" stroke-opacity="0.75"/></pattern></defs><g class="pfvg">')
+        tix = {c_[0]: k_ for k_, c_ in enumerate(cs)}
+        last_px = cs[-1][4]
+        zs = [z for z in fvg if z[3] >= lo and z[2] <= hi]
+        zs.sort(key=lambda z: abs((z[2] + z[3]) / 2 - last_px))
+        for tz, dz, bz, tpz, *_r in zs[:8]:
+            j = tix.get(tz)
+            x0 = max(L, (xi(j) - step / 2) if j is not None else L)
+            ya, yb = max(T, y(tpz)), min(height - B, y(bz))
+            if yb <= ya:
+                continue
+            colz = "#2ee86b" if dz == 1 else "#ff5d5d"
+            o.append(f'<rect x="{x0:.1f}" y="{ya:.1f}" width="{max(width - R - x0, 1):.1f}" height="{max(yb - ya, 2):.1f}" fill="#ffffff" fill-opacity="0.07" stroke="#ffffff" stroke-opacity="0.45" stroke-dasharray="5 4"/>'
+                     f'<rect x="{x0:.1f}" y="{ya:.1f}" width="{max(width - R - x0, 1):.1f}" height="{max(yb - ya, 2):.1f}" fill="url(#pfvg-{"g" if dz == 1 else "r"})"/>'
+                     f'<text x="{width - R - 6}" y="{ya + fs * 1.1:.1f}" text-anchor="end" font-size="{fs:.0f}" font-weight="800" fill="{colz}" fill-opacity="0.95" font-family="sans-serif">{"BULL" if dz == 1 else "BEAR"} GAP</text>')
+        o.append('</g>')
     for i, (ts, op, h, l, c) in enumerate(cs):
         col = "#3fb950" if c >= op else "#f85149"
         forming = i == n - 1

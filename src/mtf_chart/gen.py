@@ -1243,7 +1243,7 @@ def ind_panel(coin, chips, agree=""):
     rows = (row("Trend lines", "one color per chart size", chips, "trend", True)
             + row("Floors, ceilings, body lines", "fine dotted levels", chk(True, "toggleFl(this.checked,this)"), "trend")
             + row("Support / resistance bands", "shaded zones price has turned at", chk(True, "toggleTf(\'" + coin + "\',\'sr\',this.checked)"), "sr")
-            + row("Fair value gaps", "open gaps price may come back to", chk(True, "toggleTf(\'" + coin + "\',\'fvg\',this.checked)"), "fvg")
+            + row("Fair value gaps", "light box: green lines = bull gap, red lines = bear gap", chk(True, "toggleTf(\'" + coin + "\',\'fvg\',this.checked)"), "fvg")
             + row("Moving averages", "green (15), red (34) and blue (111)", chk(True, "toggleSel(this,\'.ema\')"), "ma")
             + row("Tunnel shading", "which chart size to shade", sel, "tunnel")
             + row("RSI", "strength meter (on the dashboard)", "", "rsi")

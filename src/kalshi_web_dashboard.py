@@ -805,7 +805,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-26-fvg31"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-26-fvg32"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -4912,6 +4912,7 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .ct-chip.up { background:#073b22; border-color:#00e676; color:#fff; } .ct-chip.down { background:#4a0f1b; border-color:#e5384f; color:#fff; } .ct-chip.wait { background:#1b1d24; border-color:#4a4f5c; color:#9aa1ad; font-weight:700; font-size:17px; }
 .ct-body { font-size:14px; padding:6px 4px; }
 .pat-old-box { margin:6px 0; }
+body.no-pfvg .pfvg { display:none; } .pfvg-sw { cursor:pointer; color:#e6edf3; } .pfvg-sw input { vertical-align:middle; }
 .mtf-btn { background:#1f6feb !important; border-color:#58a6ff !important; color:#fff !important; font-weight:700; margin-right:14px; }
 .mtf-btn.size-mode-active { background:#238636 !important; border-color:#3fb950 !important; }
 .pat-win-head { margin-bottom:6px; }
@@ -7190,6 +7191,14 @@ function pickMarket(coin, period) {
   try { localStorage.setItem('mktPick', JSON.stringify(mktPick)); } catch (e) {}
   applyMarketPick();
 }
+let pfvgOn = true;
+try { pfvgOn = localStorage.getItem('pfvg') !== '0'; } catch (e) {}
+function pfvgPaint() {
+  document.body.classList.toggle('no-pfvg', !pfvgOn);
+  document.querySelectorAll('.pfvg-cb').forEach(c => { c.checked = pfvgOn; });
+}
+function pfvgSet(on) { pfvgOn = !!on; try { localStorage.setItem('pfvg', pfvgOn ? '1' : '0'); } catch (e) {} pfvgPaint(); }
+setTimeout(pfvgPaint, 0); setInterval(pfvgPaint, 1000);
 function toggleFit() {
   fitScreen = !fitScreen;
   try { localStorage.setItem('fitScreen', String(fitScreen)); } catch (e) {}
@@ -7542,6 +7551,7 @@ async function refreshInner() {
   renderDock();
   reapplySavedChartTimeframes();
   applyMtf();
+  pfvgPaint();
   restorePatternTabs();
   drawAllBm();                         // after the pull-downs are restored, so an open heat map is drawn
   applyMarketPick();
@@ -9987,7 +9997,7 @@ def chart_live_payload(asset_name):
     else:
         labels = _st(cs, tf) + _cp(cs, tf, max_age=3)
         _live_labels[key] = (time.time(), labels, len(cs))
-    svg, shown = render_window_svg(cs, _stable_labels(asset_name, tf, labels), title=f"{asset_name} - {_MTF_NAMES[tf]} candles (dashed outline = still forming)", events=_cpi_chart_events(cs), levels=_chart_levels(asset_name), sweeps=_sweep_stars(asset_name, tf, labels, cs))
+    svg, shown = render_window_svg(cs, _stable_labels(asset_name, tf, labels), title=f"{asset_name} - {_MTF_NAMES[tf]} candles (dashed outline = still forming)", events=_cpi_chart_events(cs), levels=_chart_levels(asset_name), sweeps=_sweep_stars(asset_name, tf, labels, cs), fvg=_fvg_open(cs[-90:]))
     return {"svg": svg, "vol": build_volume_bar(asset_name), "tf": tf, "rsi": rsi_tradingview(asset_name)}
 
 
@@ -11073,7 +11083,7 @@ def build_pattern_window(asset_name):
             _l["done_ts"] = cs[len(cs) - 2 - _l.get("age", 0)][0] + _TFS.get(tf, 0)
     from src.pattern_detector import FailTracker
     ghosts = _win_trackers.setdefault((asset_name, tf), FailTracker()).update(labels)
-    svg, shown = render_window_svg(cs, _stable_labels(asset_name, tf, labels), title=f"{asset_name} - {_MTF_NAMES[tf]} candles (dashed outline = still forming)", events=_cpi_chart_events(cs), levels=_chart_levels(asset_name), sweeps=_sweep_stars(asset_name, tf, labels, cs))
+    svg, shown = render_window_svg(cs, _stable_labels(asset_name, tf, labels), title=f"{asset_name} - {_MTF_NAMES[tf]} candles (dashed outline = still forming)", events=_cpi_chart_events(cs), levels=_chart_levels(asset_name), sweeps=_sweep_stars(asset_name, tf, labels, cs), fvg=_fvg_open(cs[-90:]))
     items = []
     for l in list(shown) + list(ghosts):
         e = _pat_explain(l["name"])
@@ -11152,7 +11162,7 @@ def build_pattern_window(asset_name):
     return (f'<div class="row pat-win" data-asset="{asset_name}">{flags}{build_call_timing_panel(asset_name)}{voice_bar}{mtf_part}{old_open}'
             f'<div class="pat-old-grid">{head}{cpi_strip}'
             f"<div class=\"pat-chart-row\"><div class=\"pat-chart\" data-tf=\"{tf}\" onclick=\"expandPatternChart('{asset_name}')\" title=\"click to make it full-screen\">{svg}</div></div>"
-            f'<div class="hint">click the chart to make it full-screen (Esc to close)</div>'
+            f'<div class="hint">click the chart to make it full-screen (Esc to close) &middot; <label class="pfvg-sw" title="Show or hide the fair value gaps on this chart"><input type="checkbox" class="pfvg-cb" checked onchange="pfvgSet(this.checked)"> <b>Fair value gaps</b></label> <span>light white box, green lines = BULL gap (left by a jump up), red lines = BEAR gap (left by a jump down); 8 nearest, bigger ones only</span></div>'
             f'<div class="pat-win-legend">{legend}</div></div>{old_close}</div>')
 
 
