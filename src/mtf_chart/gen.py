@@ -1018,7 +1018,9 @@ def build_svg(coin, base_cs, lines_by_tf, emas, srs, frames, uid, dec, nshow, wi
     sy = lambda v: T_ + (hi - v) / (hi - lo) * ph
     xs = ",".join(f"{sx(fe):.1f}" for fe, _px, _fl, _rc in frames) if frames else ""
     o = [f'<svg id="{uid}" data-own="{own}" data-live="{own}" data-dec="{dec}" data-geo="{L_},{T_},{pw},{ph},{t0},{tmax},{lo},{hi},{step}" data-xs="{xs}" data-right="{width - R_}" data-n="{len(frames)}" viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="{coin} candles with trend lines">',
-         f'<defs><clipPath id="{uid}c"><rect x="{L_}" y="{T_}" width="{pw}" height="{ph}"/></clipPath></defs>',
+         f'<defs><clipPath id="{uid}c"><rect x="{L_}" y="{T_}" width="{pw}" height="{ph}"/></clipPath>'
+         f'<pattern id="{uid}fg" patternUnits="userSpaceOnUse" width="9" height="9" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="9" stroke="#2ee86b" stroke-width="1.3" stroke-opacity="0.75"/></pattern>'
+         f'<pattern id="{uid}fr" patternUnits="userSpaceOnUse" width="9" height="9" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="9" stroke="#ff5d5d" stroke-width="1.3" stroke-opacity="0.75"/></pattern></defs>',
          f'<rect width="{width}" height="{height}" fill="#0d1117"/>']
     for k in range(6):
         v = lo + (hi - lo) * k / 5
@@ -1036,9 +1038,10 @@ def build_svg(coin, base_cs, lines_by_tf, emas, srs, frames, uid, dec, nshow, wi
         zs = [z for z in fvg_zones(base_cs) if z[3] >= lo and z[2] <= hi]
         zs.sort(key=lambda z: abs((z[2] + z[3]) / 2 - px_now))
         for tz, dz, bz, tpz in zs[:8]:
-            colz = "#22d3ee" if dz == 1 else "#c084fc"
+            colz = "#2ee86b" if dz == 1 else "#ff5d5d"                                                  # a light white box with green (bull) or red (bear) diagonal lines inside - not a solid colour
             xa, ya, yb = max(L_, sx(tz)), sy(tpz), sy(bz)
-            o.append(f'<rect x="{xa:.1f}" y="{ya:.1f}" width="{max(width - R_ - xa, 1):.1f}" height="{max(yb - ya, 2):.1f}" fill="{colz}" fill-opacity="0.20" stroke="{colz}" stroke-opacity="0.55" stroke-width="1" stroke-dasharray="5 4"/>'
+            o.append(f'<rect x="{xa:.1f}" y="{ya:.1f}" width="{max(width - R_ - xa, 1):.1f}" height="{max(yb - ya, 2):.1f}" fill="#ffffff" fill-opacity="0.07" stroke="#ffffff" stroke-opacity="0.45" stroke-width="1" stroke-dasharray="5 4"/>'
+                     f'<rect x="{xa:.1f}" y="{ya:.1f}" width="{max(width - R_ - xa, 1):.1f}" height="{max(yb - ya, 2):.1f}" fill="url(#{uid}{"fg" if dz == 1 else "fr"})"/>'
                      f'<text x="{width - R_ - 6}" y="{ya + 13:.1f}" text-anchor="end" font-size="12" font-weight="800" fill="{colz}" fill-opacity="0.9">{"BULL" if dz == 1 else "BEAR"} GAP</text>')
     except Exception as e_:
         print(f"[chart] fair value gaps skipped: {e_!r}")
@@ -1469,7 +1472,7 @@ if len(INFO_LIST) >= 7:
     for _k, _ix in (("ma", (0, 1)), ("sr", (2,)), ("trend", (3,)), ("tunnel", (4,)), ("rsi", (5,)), ("macd", (6,))):
         _t = " and ".join(_re.sub(r"^\d+\.\s*", "", INFO_LIST[i][0]) for i in _ix)
         _INFO[_k] = (_t, "".join(INFO_LIST[i][1] for i in _ix))
-_INFO["fvg"] = ("Fair value gaps", "<p><b>What it is.</b> A fair value gap is a hole left when price jumps so fast that the first candle of a three-candle run and the third candle do not overlap. The shaded zone is that hole: cyan (BULL GAP) was left by a jump up, violet (BEAR GAP) by a jump down. Cyan and violet are used so the gaps are never mistaken for the red / green of candles and the tunnel. "
+_INFO["fvg"] = ("Fair value gaps", "<p><b>What it is.</b> A fair value gap is a hole left when price jumps so fast that the first candle of a three-candle run and the third candle do not overlap. The zone is that hole, drawn as a light white box with lines inside: green lines (BULL GAP) mean it was left by a jump up, red lines (BEAR GAP) by a jump down. It is lightly shaded so it never hides the candles. "
                 "A gap stays on the chart, reaching to the right, until a candle CLOSES through its far edge. Only gaps at least half a candle-range tall are drawn, the 8 nearest to price.</p>"
                 "<p><b>What it did, tested on 130 days of 1-minute BTC and XRP.</b> Price came back into a gap within 15 minutes about 82% of the time, but it also comes back to any ordinary level the same distance away about 81% of the time, so most of that is just price moving around. "
                 "On XRP the bigger gaps held a little better than ordinary levels (a full candle-range bounce 61% of the time against 57%), the same in both halves of the days; on BTC they were no different from ordinary levels. "
