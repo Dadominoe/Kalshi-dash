@@ -843,9 +843,9 @@ def channel_svg(tun, t_now, sx, sy, t0, tmax):
     bot = lambda t: bp + bs_ * (t - ta)
     col = "#e3b341" if kind == "pinch" else ("#f85149" if kind == "down" else "#3fb950")
     pts_now = f"{sx(ts):.1f},{sy(top(ts)):.1f} {sx(t_now):.1f},{sy(top(t_now)):.1f} {sx(t_now):.1f},{sy(bot(t_now)):.1f} {sx(ts):.1f},{sy(bot(ts)):.1f}"
-    out = f'<polygon points="{pts_now}" fill="{col}" fill-opacity="0.13"/>'
+    out = f'<polygon points="{pts_now}" fill="{col}" fill-opacity="0.08"/>'
     if te > t_now:
-        out += f'<polygon points="{sx(t_now):.1f},{sy(top(t_now)):.1f} {sx(te):.1f},{sy(top(te)):.1f} {sx(te):.1f},{sy(bot(te)):.1f} {sx(t_now):.1f},{sy(bot(t_now)):.1f}" fill="{col}" fill-opacity="0.24"/>'
+        out += f'<polygon points="{sx(t_now):.1f},{sy(top(t_now)):.1f} {sx(te):.1f},{sy(top(te)):.1f} {sx(te):.1f},{sy(bot(te)):.1f} {sx(t_now):.1f},{sy(bot(t_now)):.1f}" fill="{col}" fill-opacity="0.15"/>'
     out += (f'<line x1="{sx(ts):.1f}" y1="{sy(top(ts)):.1f}" x2="{sx(te):.1f}" y2="{sy(top(te)):.1f}" stroke="{col}" stroke-width="1.1" stroke-opacity="0.8"/>'
             f'<line x1="{sx(ts):.1f}" y1="{sy(bot(ts)):.1f}" x2="{sx(te):.1f}" y2="{sy(bot(te)):.1f}" stroke="{col}" stroke-width="1.1" stroke-opacity="0.8"/>')
     if kind == "pinch" and _m and _m[0] <= tmax:
@@ -973,6 +973,28 @@ def time_axis_svg(t0, tmax, step, sx, T_, ph, uid_unused=None):
 WND_SVG = '''<g class="wnd" style="display:none"><line x1="0" y1="{T_}" x2="0" y2="{y2}" stroke="#ffa657" stroke-opacity="0.25" stroke-width="1" stroke-dasharray="3 6"/><line x1="0" y1="{T_}" x2="0" y2="{y2}" stroke="#ffa657" stroke-opacity="0.55" stroke-width="1" stroke-dasharray="6 5"/><rect x="0" y="{ya}" width="150" height="22" rx="4" fill="#3d2a0c" stroke="#ffa657"/><text x="0" y="{yb}" text-anchor="middle" font-size="15" font-weight="800" fill="#ffa657"></text></g>'''
 
 
+def fvg_zones(cs, minw=0.5):
+    """Open fair value gaps (the LuxAlgo three-candle gaps): (time of the middle candle, +1 bullish / -1 bearish, bottom, top) for every gap at least `minw` candle-ranges wide that no later candle has CLOSED through.
+    Backtest (research/fvg_backtest.py, 130 days of 1-minute BTC + XRP): price comes back into a gap about as often as it comes back to any level the same distance away, so these are places to watch, not signals. Information only."""
+    out = []
+    n = len(cs)
+    for i in range(32, n):
+        h2, l2 = cs[i - 2][2], cs[i - 2][3]
+        if cs[i][3] > h2 and cs[i - 1][4] > h2:
+            d, bot, top = 1, h2, cs[i][3]
+        elif cs[i][2] < l2 and cs[i - 1][4] < l2:
+            d, bot, top = -1, cs[i][2], l2
+        else:
+            continue
+        rg = sum(x[2] - x[3] for x in cs[i - 31:i - 1]) / 30 or 1e-9
+        if top - bot < minw * rg:
+            continue
+        if any((x[4] < bot) if d == 1 else (x[4] > top) for x in cs[i + 1:]):
+            continue
+        out.append((cs[i - 1][0], d, bot, top))
+    return out
+
+
 def build_svg(coin, base_cs, lines_by_tf, emas, srs, frames, uid, dec, nshow, width=1100, height=960, bias=None, own='1m'):
     L_, R_, T_, B_ = 84, 14, 30, 46
     pw, ph = width - L_ - R_, height - T_ - B_
@@ -1008,6 +1030,18 @@ def build_svg(coin, base_cs, lines_by_tf, emas, srs, frames, uid, dec, nshow, wi
         col = "#3fb950" if px_now > h_ else ("#f85149" if px_now < l_ else "#8b949e")
         yt, yb = sy(h_), sy(l_)
         o.append(f'<rect x="{L_}" y="{yt:.1f}" width="{pw}" height="{max(yb - yt, 2):.1f}" fill="{col}" fill-opacity="{min(0.05 + st / 2000, 0.15):.2f}" stroke="{col}" stroke-opacity="0.3" stroke-width="1"/>')
+    o.append("</g>")
+    o.append(f'<g class="fvg" clip-path="url(#{uid}c)" style="display:inline">')                  # open fair value gaps: shaded zones reaching to the right edge until a candle closes through them
+    try:
+        zs = [z for z in fvg_zones(base_cs) if z[3] >= lo and z[2] <= hi]
+        zs.sort(key=lambda z: abs((z[2] + z[3]) / 2 - px_now))
+        for tz, dz, bz, tpz in zs[:8]:
+            colz = "#19d38a" if dz == 1 else "#ff4d6d"
+            xa, ya, yb = max(L_, sx(tz)), sy(tpz), sy(bz)
+            o.append(f'<rect x="{xa:.1f}" y="{ya:.1f}" width="{max(width - R_ - xa, 1):.1f}" height="{max(yb - ya, 2):.1f}" fill="{colz}" fill-opacity="0.20" stroke="{colz}" stroke-opacity="0.55" stroke-width="1" stroke-dasharray="5 4"/>'
+                     f'<text x="{width - R_ - 6}" y="{ya + 13:.1f}" text-anchor="end" font-size="12" font-weight="800" fill="{colz}" fill-opacity="0.9">{"BULL" if dz == 1 else "BEAR"} GAP</text>')
+    except Exception as e_:
+        print(f"[chart] fair value gaps skipped: {e_!r}")
     o.append("</g>")
     bw = max(2.0, pw / (tmax - t0) * step * 0.7)
     for c in vis:
@@ -1206,6 +1240,7 @@ def ind_panel(coin, chips, agree=""):
     rows = (row("Trend lines", "one color per chart size", chips, "trend", True)
             + row("Floors, ceilings, body lines", "fine dotted levels", chk(True, "toggleFl(this.checked,this)"), "trend")
             + row("Support / resistance bands", "shaded zones price has turned at", chk(True, "toggleTf(\'" + coin + "\',\'sr\',this.checked)"), "sr")
+            + row("Fair value gaps", "open gaps price may come back to", chk(True, "toggleTf(\'" + coin + "\',\'fvg\',this.checked)"), "fvg")
             + row("Moving averages", "green (15), red (34) and blue (111)", chk(True, "toggleSel(this,\'.ema\')"), "ma")
             + row("Tunnel shading", "which chart size to shade", sel, "tunnel")
             + row("RSI", "strength meter (on the dashboard)", "", "rsi")
@@ -1434,6 +1469,11 @@ if len(INFO_LIST) >= 7:
     for _k, _ix in (("ma", (0, 1)), ("sr", (2,)), ("trend", (3,)), ("tunnel", (4,)), ("rsi", (5,)), ("macd", (6,))):
         _t = " and ".join(_re.sub(r"^\d+\.\s*", "", INFO_LIST[i][0]) for i in _ix)
         _INFO[_k] = (_t, "".join(INFO_LIST[i][1] for i in _ix))
+_INFO["fvg"] = ("Fair value gaps", "<p><b>What it is.</b> A fair value gap is a hole left when price jumps so fast that the first candle of a three-candle run and the third candle do not overlap. The shaded zone is that hole: green (BULL GAP) was left by a jump up, red (BEAR GAP) by a jump down. "
+                "A gap stays on the chart, reaching to the right, until a candle CLOSES through its far edge. Only gaps at least half a candle-range tall are drawn, the 8 nearest to price.</p>"
+                "<p><b>What it did, tested on 130 days of 1-minute BTC and XRP.</b> Price came back into a gap within 15 minutes about 82% of the time, but it also comes back to any ordinary level the same distance away about 81% of the time, so most of that is just price moving around. "
+                "On XRP the bigger gaps held a little better than ordinary levels (a full candle-range bounce 61% of the time against 57%), the same in both halves of the days; on BTC they were no different from ordinary levels. "
+                "Open gaps near price did not change how often a 15-minute round ended on the other side of the line.</p><p class='hint'>Treat them as places to watch, not as signals. Information only.</p>")
 _INFO["proj"] = ("15-minute projection", "<p><b>What it is.</b> The two tunnel lines are carried forward 15 minutes - the length of one 15-minute window - and the two prices they would reach are written at the end (top and bottom). "
                 "The shading to the right of the dashed 'now' line is that projection.</p><p><b>How to read it.</b> It is only where the lines would be <i>if they hold</i>. It is not a forecast and it moves whenever the tunnel is rebuilt after a break. "
                 "A young tunnel (only a few candles old) or a very steep one swings a lot, so its projection is the least reliable.</p>")
@@ -1491,7 +1531,7 @@ function rep(id,v){{var s=document.getElementById(id),n=+s.getAttribute('data-n'
  for(var k=0;k<n;k++){{var g=s.querySelector('.rf-'+k);if(g)g.style.display=(on&&k===v&&v<n-1)?'inline':'none'}}
  var st=s.querySelector(own==='tun'?'.tn-main':'.tf-'+own);if(st)st.style.display=(on&&v>=n-1)?'inline':'none';
  var isnow=(v>=n-1);s.setAttribute('data-replay',isnow?'':'1');if(!isnow){{[].forEach.call(s.querySelectorAll('g.livepx,g.tgt,g.wnd'),function(g){{g.style.display='none'}})}}}}
-function toggleTf(c,k,on){{var cd=card(c);[].forEach.call(cd.querySelectorAll(k==='sr'?'.sr':'.tf-'+k),function(g){{g.style.display=on?'inline':'none'}});
+function toggleTf(c,k,on){{var cd=card(c);[].forEach.call(cd.querySelectorAll(k==='sr'?'.sr':(k==='fvg'?'.fvg':'.tf-'+k)),function(g){{g.style.display=on?'inline':'none'}});
  [].forEach.call(cd.querySelectorAll('svg[data-n][data-own="'+k+'"]'),function(s){{var z=s.closest('.zoomv');var sl=z&&z.querySelector('input[type=range]');if(sl)rep(s.id,sl.value)}})}}
 function initZoom(svg){{var b=svg.viewBox.baseVal,base={{x:b.x,y:b.y,w:b.width,h:b.height}};svg._vb={{x:base.x,y:base.y,w:base.w,h:base.h}};svg._base=base;
  function setv(v){{svg.setAttribute('viewBox',v.x+' '+v.y+' '+v.w+' '+v.h);svg._vb=v}}
