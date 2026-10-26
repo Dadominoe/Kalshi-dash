@@ -805,7 +805,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-25-final22"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-26-flipbar23"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -4866,13 +4866,15 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .sig-toast span { color:#c9d1d9; font-size:13px; }
 .sig-toast.up { border-left-color:#3fb950; } .sig-toast.up b { color:#56d364; }
 .sig-toast.down { border-left-color:#f85149; } .sig-toast.down b { color:#ff7b72; }
-.flip-risk-bar { margin:6px 0; padding:6px 10px; border-radius:8px; background:#161b22; border:1px solid #30363d; font-size:14px; }
-.flip-risk-bar .frb-l { font-weight:800; letter-spacing:.5px; margin-right:6px; }
-.flip-risk-bar b { font-size:20px; margin-right:8px; }
-.flip-risk-bar .frb-track { display:block; height:7px; background:#30363d; border-radius:4px; margin:5px 0; overflow:hidden; }
-.flip-risk-bar .frb-track i { display:block; height:100%; border-radius:4px; background:#3fb950; }
-.flip-risk-bar.warn { border-color:#d29922; } .flip-risk-bar.warn b { color:#e3b341; } .flip-risk-bar.warn .frb-track i { background:#e3b341; }
-.flip-risk-bar.down { border-color:#f85149; background:#2a1215; } .flip-risk-bar.down b { color:#ff7b72; } .flip-risk-bar.down .frb-track i { background:#f85149; }
+.flip-risk-bar { margin:10px 0; padding:14px 18px; border-radius:12px; background:#101a14; border:3px solid #00e676; font-size:16px; box-shadow:0 0 16px rgba(0,230,118,.35); }
+.flip-risk-bar .frb-l { font-weight:900; font-size:17px; letter-spacing:1.5px; margin-right:12px; text-transform:uppercase; color:#fff; }
+.flip-risk-bar b { font-size:40px !important; font-weight:900; line-height:1; margin-right:12px; vertical-align:middle; color:#00e676; }
+.flip-risk-bar .frb-t { font-size:17px; font-weight:800; color:#e8eaf0; }
+.flip-risk-bar .frb-track { display:block; height:16px; background:#1b1d24; border:1px solid #3d1420; border-radius:8px; margin:10px 0 8px; overflow:hidden; }
+.flip-risk-bar .frb-track i { display:block; height:100%; border-radius:8px; background:#00e676; box-shadow:0 0 10px rgba(0,230,118,.7); }
+.flip-risk-bar.warn { border-color:#ffb020; background:#241b07; box-shadow:0 0 18px rgba(255,176,32,.45); } .flip-risk-bar.warn b { color:#ffb020; } .flip-risk-bar.warn .frb-track i { background:#ffb020; box-shadow:0 0 10px rgba(255,176,32,.8); }
+.flip-risk-bar.down { border-color:#ff3b5c; background:#2a0a10; box-shadow:0 0 22px rgba(255,59,92,.6); animation:frbpulse 1.1s ease-in-out infinite; } .flip-risk-bar.down b { color:#ff4d6d; } .flip-risk-bar.down .frb-track i { background:#ff3b5c; box-shadow:0 0 12px rgba(255,59,92,.9); }
+@keyframes frbpulse { 50% { box-shadow:0 0 34px rgba(255,59,92,.95); } }
 /* ONE coin on screen, wide window: the chart sits BESIDE the top information (price vs the line, END CALL, pressure) so it all fits on one screen */
 @media (min-width:1300px) {
   body[data-view="BTC"] .card[data-asset="BTC"], body[data-view="XRP"] .card[data-asset="XRP"] { display:grid; grid-template-columns:minmax(440px,0.85fr) minmax(0,1.4fr); column-gap:16px; align-items:start; }
