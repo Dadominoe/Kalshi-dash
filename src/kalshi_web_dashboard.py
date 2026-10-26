@@ -805,7 +805,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-26-bar25"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-26-agree26"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -8646,6 +8646,11 @@ def _ct_agreement():
         rows.append({"coin": coin, "e": sd[0], "m": sd[1], "l": sd[2], "ok": sd[1] == res, "pe": pr("11"), "pm": pr("7"), "pl": pr("3"),
                      "close": _window_close_utc(t) or dt.datetime(2000, 1, 1, tzinfo=dt.timezone.utc)})
     rows.sort(key=lambda r: r["close"])
+    # OVERALL restarts at the first real END CALL (the 8-minute lock), 2026-10-15; the older backfilled rounds stay on disk but no longer count here
+    starts = [_window_close_utc(h.get("ticker")) for c in ("BTC", "XRP") for h in _end_hist.get(c, [])[:3]]
+    since = min([s for s in starts if s], default=None)
+    if since:
+        rows = [r for r in rows if r["close"] >= since]
     for i, r in enumerate(rows):
         r["half"] = 0 if i < len(rows) // 2 else 1
     cats = [("Every round with all three calls (the mid call scored)", lambda r: True),
@@ -8668,7 +8673,8 @@ def _ct_agreement():
     for lo, hi, lab in ((0, 0.70, "under 70c"), (0.70, 0.80, "70 to 79c"), (0.80, 0.90, "80 to 89c"), (0.90, 1.01, "90c and up")):
         sel = [r for r in same if r["pm"] is not None and lo <= r["pm"] < hi]
         bands.append({"label": lab, "n": len(sel), "pct": pct(sel), "price": (sum(r["pm"] for r in sel) / len(sel) * 100) if sel else None})
-    data = {"table": table, "bands": bands, "avg": (avgp("pe"), avgp("pm"), avgp("pl")), "n": len(rows)}
+    data = {"table": table, "bands": bands, "avg": (avgp("pe"), avgp("pm"), avgp("pl")), "n": len(rows), "since": since,
+            "w": [(r["close"], r["coin"], r["e"] == r["m"] == r["l"], r["ok"]) for r in rows]}
     _ct_agree_cache.update(t=now, data=data)
     return data
 
@@ -8694,9 +8700,25 @@ def _ct_agree_html(name, marks):
     got = [s for s in sides if s in ("YES", "NO")]
     verdict = ("<b class='up'>all three agree</b>" if len(got) == 3 and len(set(got)) == 1 else ("<b class='down'>the calls disagree</b>" if len(set(got)) > 1 else "<span class='hint'>not all three are in yet</span>"))
     pe, pm, pl = d["avg"]
-    return (f'<details class="ct-recdet" data-pat="CTAGREE|{name}"><summary><b>When the calls agree</b> <span class="hint">- all three the same: </span>{f(head["all"])} <span class="hint">ended as called ({head["n"]} rounds)</span></summary>'
+    now = dt.datetime.now(dt.timezone.utc)
+    et = now.astimezone(_viewtz.get())
+    day0 = et.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(dt.timezone.utc)
+    since = d.get("since")
+    since_lab = f"{since.astimezone(_viewtz.get()):%b} {since.astimezone(_viewtz.get()).day}" if since else "the start"
+    def _wrow(lab, t0):
+        sel = [(c, ok, same) for (cl, c, same, ok) in d["w"] if t0 is None or cl >= t0]
+        def p(x):
+            return (sum(1 for _, ok, _s in x if ok) / len(x) * 100) if x else None
+        a = [x for x in sel if x[2]]; b = [x for x in sel if not x[2]]
+        return (f'<tr><td>{lab}</td><td>{len(a)}</td><td><b>{f(p(a))}</b></td><td>{f(p([x for x in a if x[0] == "BTC"]))}</td><td>{f(p([x for x in a if x[0] == "XRP"]))}</td>'
+                f'<td>{len(b)}</td><td>{f(p(b))}</td></tr>')
+    wins = "".join(_wrow(lab, now - dt.timedelta(hours=h)) for lab, h in (("Last hour", 1), ("Last 3 hours", 3), ("Last 6 hours", 6), ("Last 12 hours", 12), ("Last 24 hours", 24)))
+    wins += _wrow("Today", day0) + _wrow(f"Overall (since {since_lab})", None)
+    return (f'<details class="ct-recdet" data-pat="CTAGREE|{name}"><summary><b>When the calls agree</b> <span class="hint">- all three the same, overall since {since_lab}: </span>{f(head["all"])} <span class="hint">ended as called ({head["n"]} rounds)</span></summary>'
             f'<div class="ct-agree-body"><p class="hint">From every recorded round that has an early (11:00 left), a mid (7:00 left, the real END CALL) and a late (3:00 left) call and none of them a no call. "Ended as called" = the round finished on the side of the mid call.</p>'
             f'<p><b>This round now:</b> {" &middot; ".join(now_bits)} - {verdict}</p>'
+            f'<p><b>How the agree record has been going</b> <span class="hint">- last hour, 3, 6, 12 and 24 hours count back from right now; Today starts at midnight; Overall restarts at the first 8-minute END CALL ({since_lab}), so the older test rounds no longer count.</span></p>'
+            f'<table class="press-table"><tr><th>Window</th><th>All 3 agree</th><th>Ended as called</th><th>BTC</th><th>XRP</th><th>Not all agree</th><th>Ended as called</th></tr>{wins}</table>'
             f'<table class="press-table"><tr><th>Situation</th><th>Rounds</th><th>Ended as called</th><th>BTC</th><th>XRP</th><th>Older half</th><th>Newer half</th></tr>{rows}</table>'
             f'<p class="hint">If the late call flips against the other two, the late call has usually been the right one.</p>'
             f'<p><b>What Kalshi was already charging</b> for the called side when all three agreed: about {pe:.0f}c at the early call, {pm:.0f}c at the mid call, {pl:.0f}c at the late call. So a high win rate only helps against the price. By the mid-call price:</p>'
