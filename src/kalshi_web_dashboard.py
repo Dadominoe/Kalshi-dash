@@ -805,7 +805,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-25-final21"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-25-final22"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -5985,6 +5985,7 @@ function checkSweepStars() {
     flyStar(dir);
     flyAcross(name, 'fly-sweep', '\u2605 ' + head, detail);
     dockPush(name, 'dock-sweep', '\u2605 ' + head, detail, 60000, key);
+    if (narratorOn && narCoin[name]) narSay(name + '. Possible liquidity sweep of the ' + (dir === 'highs' ? 'highs' : 'lows') + '.', 'sweep:' + name + ':' + dir, 900000, dir === 'highs' ? 'liquidity_sweep_high' : 'liquidity_sweep_low');      // the star speaks now: one voice per coin and side every 15 minutes, shared with the live sweep alert
   });
 }
 window.testSweepStar = function(name, dir) {   // console helper: testSweepStar('BTC','highs')
@@ -6685,7 +6686,11 @@ function checkSignals() {
       if (typeof coinShown === 'function' && !coinShown(e.coin)) return;
       if (e.clip && sigOff.indexOf(e.clip) >= 0) return;
       sigToast(e);
-      if (narratorOn) narSay(e.text, 'sig:' + e.id, 600000, e.clip, e.file || null);
+      if (narratorOn) {
+        const sw = /^liquidity_sweep_(low|high)$/.exec(e.kind || '');
+        if (sw) narSay(e.text, 'sweep:' + e.coin + ':' + (sw[1] === 'high' ? 'highs' : 'lows'), 900000, e.clip, null);
+        else narSay(e.text, 'sig:' + e.id, 600000, e.clip, e.file || null);
+      }
     });
   }).catch(() => {});
 }

@@ -26,8 +26,8 @@ UI = {
 # blue accents: only inside <style> blocks (so the blue / red / green moving-average lines on the charts keep the colours the words describe)
 CSS_ONLY = {"#58a6ff": "#e5465c", "#1f6feb": "#a8203a", "#39d0d8": "#e5465c", "#388bfd": "#c9283f", "#4493f8": "#e5465c"}
 
-_RX_UI = re.compile("(" + "|".join(re.escape(k) for k in sorted(UI, key=len, reverse=True)) + ")(?![0-9a-fA-F])", re.I)
-_RX_CSS = re.compile("(" + "|".join(re.escape(k) for k in CSS_ONLY) + ")(?![0-9a-fA-F])", re.I)
+_RX_UI = re.compile("(?<!&)(" + "|".join(re.escape(k) for k in sorted(UI, key=len, reverse=True)) + ")(?![0-9a-fA-F])", re.I)
+_RX_CSS = re.compile("(?<!&)(" + "|".join(re.escape(k) for k in CSS_ONLY) + ")(?![0-9a-fA-F])", re.I)
 _RX_STYLE = re.compile(r"<style[^>]*>.*?</style>", re.S | re.I)
 
 
