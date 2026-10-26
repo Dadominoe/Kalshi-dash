@@ -98,7 +98,7 @@ def login_page(msg="", err=True):
                      '<form method="post" action="/login"><label>User name</label><input name="u" autocomplete="username" required>'
                      '<label>Password</label><input name="p" type="password" autocomplete="current-password" required>'
                      '<button type="submit">Sign in</button></form>'
-                     '<p style="margin-top:14px;font-size:14px;color:#9da7b3;text-align:center">Original <b>$300 members are locked in for life</b> - nothing more to pay. Just sign in.</p>' + _tiny(), wide=True)
+                     + _tiny(), wide=True)
     return _page("Sign in", f'<h1>The Dominator Live Dashboard</h1>{_msg(msg, err)}'
                  '<form method="post" action="/login"><label>User name</label><input name="u" autocomplete="username" autofocus required>'
                  '<label>Password</label><input name="p" type="password" autocomplete="current-password" required>'
@@ -124,19 +124,31 @@ def signup_page(msg="", err=True, done=False):
                  '<label style="display:flex;gap:10px;align-items:flex-start;margin-top:16px;color:#e6edf3"><input type="checkbox" name="agree" value="1" required style="width:auto;margin-top:4px"><span>I am of legal age where I live, I understand this is for information only and not gambling or advice, and I agree to the <a href="/terms" target="_blank">Terms and disclaimers</a>.</span></label><button type="submit">Send request</button></form><p style="margin-top:18px;font-size:15px"><a href="/login">Back to sign in</a></p>')
 
 
+def _expired(u):
+    """Membership time has run out (paid / free-pass people only - lifetime and old-style people never expire)."""
+    return bool(MEMBERSHIP_ON and not u.get("lifetime") and "member_until" in u and float(u.get("member_until") or 0) <= time.time())
+
+
 def _member_line(u):
     if u.get("lifetime"):
         return '<br><span class="on">LIFETIME member ($300) - never expires</span>'
     if "member_until" not in u:
         return '<br><span class="off">no end date</span>' if MEMBERSHIP_ON else ""
     until = float(u.get("member_until") or 0)
-    left = "ended" if until <= time.time() else "until " + time.strftime("%b %d %H:%M UTC", time.gmtime(until))
-    return f'<br><span class="off">{html.escape(u.get("plan") or "no plan")} - {left}{" - " + html.escape(u["email"]) if u.get("email") else ""}</span>'
+    em = (" - " + html.escape(u["email"])) if u.get("email") else ""
+    plan = html.escape(u.get("plan") or "no plan yet")
+    if until <= time.time():
+        when = ("ended " + time.strftime("%b %d %H:%M UTC", time.gmtime(until))) if until else "never activated"
+        return f'<br><span style="color:#f85149;font-weight:700">EXPIRED - {when} - add days to turn them back on</span><br><span class="off">last plan: {plan}{em}</span>'
+    left = (until - time.time()) / 86400
+    left_txt = f"{left:.1f} days left" if left >= 1 else f"{left * 24:.0f} hours left"
+    return f'<br><span class="on">ACTIVE - {plan} - until {time.strftime("%b %d %H:%M UTC", time.gmtime(until))} ({left_txt})</span><span class="off">{em}</span>'
 
 
 def admin_page(users, online, msg="", err=False, requests=None, warn=""):
     rows = []
-    for name in sorted(users):
+    for name in sorted(users, key=lambda k: (0 if _expired(users[k]) else 1, k)):
+        row_style = ' style="background:#2a1215;box-shadow:inset 6px 0 0 #f85149"' if _expired(users[name]) else ''
         seen = online.get(name)
         if seen and time.time() - seen < 90:
             st = '<span class="on">online now</span>'
@@ -145,7 +157,7 @@ def admin_page(users, online, msg="", err=False, requests=None, warn=""):
         else:
             st = '<span class="off">not since the site restarted</span>'
         n = html.escape(name)
-        rows.append(f'<tr><td><b>{n}</b><br><span class="off">Discord: {html.escape(users[name].get("note") or "-")}</span>{_member_line(users[name])}</td><td>{st}</td>'
+        rows.append(f'<tr{row_style}><td><b>{n}</b><br><span class="off">Discord: {html.escape(users[name].get("note") or "-")}</span>{_member_line(users[name])}</td><td>{st}</td>'
                     f'<td><form method="post" action="/admin/passwd" class="row"><input type="hidden" name="u" value="{n}">'
                     f'<input name="p" type="password" placeholder="new password" minlength="8" required><button class="grey">Change password</button></form></td>'
                     f'<td><form method="post" action="/admin/grant" style="margin:0 0 6px;display:flex;gap:4px;flex-wrap:wrap"><input type="hidden" name="u" value="{n}"><button class="grey" name="days" value="10">+10 days</button><button class="grey" name="days" value="30">+30 days</button><button class="grey" name="days" value="105">+3.5 months</button></form>'
@@ -164,6 +176,27 @@ def admin_page(users, online, msg="", err=False, requests=None, warn=""):
                       f'<td><form method="post" action="/admin/approve" style="display:inline"><input type="hidden" name="u" value="{n}"><button class="grey" style="background:#238636">Approve</button></form> '
                       f'<form method="post" action="/admin/deny" style="display:inline"><input type="hidden" name="u" value="{n}"><button class="red">Deny</button></form></td></tr>')
         reqs = (f'<h2>Waiting for your approval ({len(requests)})</h2><table><tr><th>User name</th><th>Discord name</th><th></th></tr>' + "".join(rr) + '</table>')
+    n_exp = sum(1 for u in users.values() if _expired(u))
+    n_life = sum(1 for u in users.values() if u.get("lifetime"))
+    n_act = sum(1 for u in users.values() if (not u.get("lifetime")) and "member_until" in u and not _expired(u))
+    summary = (f'<div class="msg" style="display:flex;gap:18px;flex-wrap:wrap"><span><b class="on">{n_act}</b> active</span><span><b style="color:#f85149">{n_exp}</b> expired</span>'
+               f'<span><b>{n_life}</b> lifetime</span><span><b>{len(users)}</b> people in all</span></div>') if MEMBERSHIP_ON else ""
+    activity = ""
+    if MEMBERSHIP_ON:
+        try:
+            from src import accounts as _a
+            keep = ("membership extended", "free pass started", "account created", "marked lifetime", "lifetime ", "payment from", "renewal")
+            ev = [e for e in _a.read_log() if any(str(e.get("event", "")).startswith(x) for x in keep)][-40:][::-1]
+        except Exception:
+            ev = []
+        lines = []
+        for e in ev:
+            ev_name = str(e.get("event", ""))
+            extra = ""
+            if ev_name.startswith("membership extended"):
+                extra = f' - {html.escape(str(e.get("plan") or ""))} (+{html.escape(str(e.get("days") or ""))} days)'
+            lines.append(f'<tr><td>{time.strftime("%b %d %H:%M UTC", time.gmtime(e.get("time") or 0))}</td><td><b>{html.escape(str(e.get("name") or ""))}</b></td><td>{html.escape(ev_name)}{extra}</td></tr>')
+        activity = ('<h2>Who was added, and when</h2>' + ('<table><tr><th>When</th><th>Person</th><th>What happened</th></tr>' + "".join(lines) + '</table>' if lines else '<p class="off">Nothing yet.</p>'))
     warn_html = (f'<div class="msg err" style="font-size:16px"><b>Warning:</b> {html.escape(warn)}</div>') if warn else ""
     backup = ('<h2>Your records</h2><p><a href="/admin/people.csv"><b>Download the people list</b></a> - everybody who ever asked: user name, Discord name, '
               'when they asked, when you approved them, the terms they agreed to, and anyone denied or removed. Opens in Excel or Google Sheets.</p>'
@@ -172,7 +205,7 @@ def admin_page(users, online, msg="", err=False, requests=None, warn=""):
               'Restoring it puts back the people and the history.</p>'
               '<form method="post" action="/admin/restore"><label>Restore: paste the contents of a backup file here (it only adds people who are missing)</label>'
               '<input name="j" placeholder="paste the backup text here"><button class="grey" style="margin-top:10px">Restore</button></form>')
-    body = (f'<h1>People who can sign in</h1>{warn_html}{_msg(msg, err)}<p><a href="/">Back to the dashboard</a> &nbsp; <a href="/logout">Sign out</a></p>{reqs}{table}'
+    body = (f'<h1>People who can sign in</h1>{warn_html}{_msg(msg, err)}<p><a href="/">Back to the dashboard</a> &nbsp; <a href="/logout">Sign out</a></p>{summary}{reqs}{table}{activity}'
             '<h2>Add a person</h2><form method="post" action="/admin/add"><label>User name (letters, numbers, dot, dash, underscore)</label><input name="u" required>'
             '<label>Their password (at least 8 characters - tell it to them yourself)</label><input name="p" type="password" minlength="8" required>'
             '<button type="submit">Add person</button></form>' + backup)
