@@ -805,7 +805,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-26-fvg29"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-26-fvg30"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -10931,10 +10931,10 @@ def build_fvg_panel(asset_name, spot=None):
     bits = []
     for r, w in ((above, "above"), (below, "below")):
         if r:
-            bits.append(f'<span class="{"up" if r["d"] == 1 else "down"}">{nm(r)}</span> {w} at {r["bot"]:,.{dec}f} - {r["top"]:,.{dec}f} ({r["dist"]:.1f} ranges away, {r["tf"]})')
+            bits.append(f'<span style="color:{"#22d3ee" if r["d"] == 1 else "#c084fc"};font-weight:800">{nm(r)}</span> {w} at {r["bot"]:,.{dec}f} - {r["top"]:,.{dec}f} ({r["dist"]:.1f} ranges away, {r["tf"]})')
     head = "- " + (" &middot; ".join(bits) if bits else "no open gaps near price right now")
     trs = "".join(
-        f'<tr><td>{r["lab"]}</td><td><b class="{"up" if r["d"] == 1 else "down"}">{nm(r)}</b></td><td>{r["bot"]:,.{dec}f} - {r["top"]:,.{dec}f}</td>'
+        f'<tr><td>{r["lab"]}</td><td><b style="color:{"#22d3ee" if r["d"] == 1 else "#c084fc"}">{nm(r)}</b></td><td>{r["bot"]:,.{dec}f} - {r["top"]:,.{dec}f}</td>'
         f'<td>{"price is INSIDE it" if r["inside"] else ("above price" if r["above"] else "below price")}</td><td>{r["dist"]:.1f}</td>'
         f'<td>{_viewtz.t12(dt.datetime.fromtimestamp(r["t"], dt.timezone.utc).astimezone(_viewtz.get()))}</td></tr>' for r in rows)
     table = (f'<table class="press-table"><tr><th>Chart</th><th>Gap</th><th>Zone</th><th>Where</th><th title="candle-ranges between price and the nearest edge of the gap">Distance</th><th>Formed</th></tr>{trs}</table>'
@@ -10942,7 +10942,7 @@ def build_fvg_panel(asset_name, spot=None):
     html = (f'<details class="lc-drop" data-pat="FVG|{asset_name}"><summary><b>Fair value gaps</b> <span class="hint">{head}</span></summary>'
             f'{table}'
             '<div class="help-body"><p><b>What it is.</b> A fair value gap is a hole left when price jumps so fast that the first and third candles of a three-candle run do not overlap. '
-            'Green (BULL GAP) was left by a jump up, red (BEAR GAP) by a jump down. A gap stays open, and is drawn on the chart reaching to the right, until a candle CLOSES through its far edge. '
+            'Cyan (BULL GAP) was left by a jump up, violet (BEAR GAP) by a jump down (not red / green, so they are never mistaken for candles or the tunnel). A gap stays open, and is drawn on the chart reaching to the right, until a candle CLOSES through its far edge. '
             'Only gaps at least half a candle-range tall are listed (the 8 nearest to price); "distance" is in candle-ranges between price and the nearest edge.</p>'
             '<p><b>What it did when tested</b> (130 days of 1-minute BTC and XRP candles, compared with ordinary price levels the same distance away): price came back into a gap within 15 minutes about 82% of the time, '
             'but it comes back to an ordinary level about 81% of the time, so most of that is just price moving around. On BTC the gaps held (a full candle-range bounce) no more often than ordinary levels. '

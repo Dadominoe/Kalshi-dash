@@ -1036,7 +1036,7 @@ def build_svg(coin, base_cs, lines_by_tf, emas, srs, frames, uid, dec, nshow, wi
         zs = [z for z in fvg_zones(base_cs) if z[3] >= lo and z[2] <= hi]
         zs.sort(key=lambda z: abs((z[2] + z[3]) / 2 - px_now))
         for tz, dz, bz, tpz in zs[:8]:
-            colz = "#19d38a" if dz == 1 else "#ff4d6d"
+            colz = "#22d3ee" if dz == 1 else "#c084fc"
             xa, ya, yb = max(L_, sx(tz)), sy(tpz), sy(bz)
             o.append(f'<rect x="{xa:.1f}" y="{ya:.1f}" width="{max(width - R_ - xa, 1):.1f}" height="{max(yb - ya, 2):.1f}" fill="{colz}" fill-opacity="0.20" stroke="{colz}" stroke-opacity="0.55" stroke-width="1" stroke-dasharray="5 4"/>'
                      f'<text x="{width - R_ - 6}" y="{ya + 13:.1f}" text-anchor="end" font-size="12" font-weight="800" fill="{colz}" fill-opacity="0.9">{"BULL" if dz == 1 else "BEAR"} GAP</text>')
@@ -1469,7 +1469,7 @@ if len(INFO_LIST) >= 7:
     for _k, _ix in (("ma", (0, 1)), ("sr", (2,)), ("trend", (3,)), ("tunnel", (4,)), ("rsi", (5,)), ("macd", (6,))):
         _t = " and ".join(_re.sub(r"^\d+\.\s*", "", INFO_LIST[i][0]) for i in _ix)
         _INFO[_k] = (_t, "".join(INFO_LIST[i][1] for i in _ix))
-_INFO["fvg"] = ("Fair value gaps", "<p><b>What it is.</b> A fair value gap is a hole left when price jumps so fast that the first candle of a three-candle run and the third candle do not overlap. The shaded zone is that hole: green (BULL GAP) was left by a jump up, red (BEAR GAP) by a jump down. "
+_INFO["fvg"] = ("Fair value gaps", "<p><b>What it is.</b> A fair value gap is a hole left when price jumps so fast that the first candle of a three-candle run and the third candle do not overlap. The shaded zone is that hole: cyan (BULL GAP) was left by a jump up, violet (BEAR GAP) by a jump down. Cyan and violet are used so the gaps are never mistaken for the red / green of candles and the tunnel. "
                 "A gap stays on the chart, reaching to the right, until a candle CLOSES through its far edge. Only gaps at least half a candle-range tall are drawn, the 8 nearest to price.</p>"
                 "<p><b>What it did, tested on 130 days of 1-minute BTC and XRP.</b> Price came back into a gap within 15 minutes about 82% of the time, but it also comes back to any ordinary level the same distance away about 81% of the time, so most of that is just price moving around. "
                 "On XRP the bigger gaps held a little better than ordinary levels (a full candle-range bounce 61% of the time against 57%), the same in both halves of the days; on BTC they were no different from ordinary levels. "
