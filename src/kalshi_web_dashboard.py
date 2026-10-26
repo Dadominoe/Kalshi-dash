@@ -805,7 +805,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-26-fvg28"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-26-fvg29"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -10884,6 +10884,74 @@ def build_last_windows_panel(asset_name):
     return head + note + "".join(cards) + '</details>'
 
 
+def _fvg_open(cs, minw=0.5):
+    """Open fair value gaps in a list of [t, o, h, l, c] candles (the LuxAlgo three-candle gap): (time of the middle candle, +1 bullish / -1 bearish, bottom, top, candle-range then).
+    Only gaps at least `minw` candle-ranges tall that no later candle has CLOSED through. Same rule the chart draws (src/mtf_chart/gen.py fvg_zones). Information only."""
+    out = []
+    for i in range(32, len(cs)):
+        h2, l2 = cs[i - 2][2], cs[i - 2][3]
+        if cs[i][3] > h2 and cs[i - 1][4] > h2:
+            d, bot, top = 1, h2, cs[i][3]
+        elif cs[i][2] < l2 and cs[i - 1][4] < l2:
+            d, bot, top = -1, cs[i][2], l2
+        else:
+            continue
+        rg = sum(x[2] - x[3] for x in cs[i - 31:i - 1]) / 30 or 1e-9
+        if top - bot < minw * rg or any((x[4] < bot) if d == 1 else (x[4] > top) for x in cs[i + 1:]):
+            continue
+        out.append((cs[i - 1][0], d, bot, top, rg))
+    return out
+
+
+_fvg_cache = {}
+
+
+def build_fvg_panel(asset_name, spot=None):
+    """Pull-down under the chart: the open fair value gaps near price (1-minute and 15-minute charts), how far away each is, plus what the backtest found. Information only."""
+    ck = (asset_name, str(_viewtz.get()), int(time.time() // 5))
+    if _fvg_cache.get(asset_name, (None,))[0] == ck:
+        return _fvg_cache[asset_name][1]
+    sym = {a["name"]: a["symbol"] for a in DASHBOARD_ASSETS}.get(asset_name)
+    win = ((_mtf.windows.get(sym) or {}) if (_mtf is not None and sym) else {})
+    dec = 4 if asset_name == "XRP" else 2
+    rows = []
+    for tf, lab in (("1m", "1-minute chart"), ("15m", "15-minute chart")):
+        cs = win.get(tf) or []
+        if len(cs) < 36:
+            continue
+        px = spot or cs[-1][4]
+        for t_, d_, bot, top, rg in _fvg_open(cs):
+            gap = 0.0 if bot <= px <= top else (bot - px if px < bot else px - top)
+            rows.append({"lab": lab, "tf": tf, "t": t_, "d": d_, "bot": bot, "top": top, "dist": gap / rg, "above": px < bot, "inside": bot <= px <= top})
+    rows.sort(key=lambda r: r["dist"])
+    rows = rows[:8]
+    nm = lambda r: ("BULL GAP" if r["d"] == 1 else "BEAR GAP")
+    above = next((r for r in rows if r["above"]), None)
+    below = next((r for r in rows if not r["above"] and not r["inside"]), None)
+    bits = []
+    for r, w in ((above, "above"), (below, "below")):
+        if r:
+            bits.append(f'<span class="{"up" if r["d"] == 1 else "down"}">{nm(r)}</span> {w} at {r["bot"]:,.{dec}f} - {r["top"]:,.{dec}f} ({r["dist"]:.1f} ranges away, {r["tf"]})')
+    head = "- " + (" &middot; ".join(bits) if bits else "no open gaps near price right now")
+    trs = "".join(
+        f'<tr><td>{r["lab"]}</td><td><b class="{"up" if r["d"] == 1 else "down"}">{nm(r)}</b></td><td>{r["bot"]:,.{dec}f} - {r["top"]:,.{dec}f}</td>'
+        f'<td>{"price is INSIDE it" if r["inside"] else ("above price" if r["above"] else "below price")}</td><td>{r["dist"]:.1f}</td>'
+        f'<td>{_viewtz.t12(dt.datetime.fromtimestamp(r["t"], dt.timezone.utc).astimezone(_viewtz.get()))}</td></tr>' for r in rows)
+    table = (f'<table class="press-table"><tr><th>Chart</th><th>Gap</th><th>Zone</th><th>Where</th><th title="candle-ranges between price and the nearest edge of the gap">Distance</th><th>Formed</th></tr>{trs}</table>'
+             if rows else '<p class="hint">No open gap at least half a candle tall is near price right now.</p>')
+    html = (f'<details class="lc-drop" data-pat="FVG|{asset_name}"><summary><b>Fair value gaps</b> <span class="hint">{head}</span></summary>'
+            f'{table}'
+            '<div class="help-body"><p><b>What it is.</b> A fair value gap is a hole left when price jumps so fast that the first and third candles of a three-candle run do not overlap. '
+            'Green (BULL GAP) was left by a jump up, red (BEAR GAP) by a jump down. A gap stays open, and is drawn on the chart reaching to the right, until a candle CLOSES through its far edge. '
+            'Only gaps at least half a candle-range tall are listed (the 8 nearest to price); "distance" is in candle-ranges between price and the nearest edge.</p>'
+            '<p><b>What it did when tested</b> (130 days of 1-minute BTC and XRP candles, compared with ordinary price levels the same distance away): price came back into a gap within 15 minutes about 82% of the time, '
+            'but it comes back to an ordinary level about 81% of the time, so most of that is just price moving around. On BTC the gaps held (a full candle-range bounce) no more often than ordinary levels. '
+            'On XRP the bigger gaps held a little better (61% against 57%, the same in both halves of the days). Open gaps near price did not change how often a 15-minute round ended on the other side of the line.</p>'
+            '<p class="hint">Treat them as places to watch, not as signals. Information only - it never feeds a call or a trade. The numbers are in bot_state/fvg_backtest_report.txt.</p></div></details>')
+    _fvg_cache[asset_name] = (ck, html)
+    return html
+
+
 def build_line_cross_panel(asset_name):
     """Pull-down: how many times the price crossed the target line this round and in each of the last 4 hours, with a picture of every hour."""
     with _lc_mu:
@@ -12796,6 +12864,10 @@ def render_html():
         except Exception as _lce:
             line_cross_html = ""
             print(f"[line cross] panel failed: {_lce!r}")
+        try:
+            line_cross_html += build_fvg_panel(name, d.get("spot_price")) if name in ("BTC", "XRP") else ""
+        except Exception as _fve:
+            print(f"[fair value gaps] panel failed: {_fve!r}")
         try:
             market_hours_html = build_market_hours_panel(name) if name in ("BTC", "XRP") else ""
         except Exception as _mhe:
