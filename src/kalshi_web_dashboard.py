@@ -805,7 +805,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-25-colors19"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-25-final20"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -4901,11 +4901,13 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .ct-info[open] > summary { background:#0e7c86; border-color:#39d0d8; }
 .ct-info-body { border:1px solid #30363d; border-radius:0 8px 8px 8px; padding:8px 12px; }
 .ct-note { margin-top:10px; }
-.ct-drop > summary { list-style:none; cursor:pointer; font-size:16px; padding:10px 14px; border-radius:12px; display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; color:#fff; background:linear-gradient(90deg,#0e7c86,#9a6700); border:2px solid #39d0d8; user-select:none; }
+.ct-drop > summary { list-style:none; cursor:pointer; font-size:20px; padding:16px 20px; border-radius:14px; display:flex; flex-wrap:wrap; align-items:center; gap:10px 16px; color:#fff; background:linear-gradient(90deg,#0e7c86,#9a6700); border:2px solid #39d0d8; user-select:none; }
 .ct-drop > summary::-webkit-details-marker { display:none; }
 .ct-drop[open] > summary .dd-ic { transform:rotate(90deg); }
-.ct-chip { display:inline-block; padding:3px 10px; border-radius:14px; font-weight:800; font-size:14px; background:rgba(0,0,0,.35); border:1px solid rgba(255,255,255,.35); }
-.ct-chip.up { background:rgba(35,134,54,.55); } .ct-chip.down { background:rgba(218,54,51,.55); } .ct-chip.wait { opacity:.65; font-weight:600; }
+.ct-drop > summary b { font-size:24px; letter-spacing:.3px; }
+.ct-drop > summary .dd-hint { font-size:15px; opacity:.85; }
+.ct-chip { display:inline-block; padding:7px 16px; border-radius:16px; font-weight:900; font-size:20px; letter-spacing:.4px; background:rgba(0,0,0,.45); border:2px solid rgba(255,255,255,.5); }
+.ct-chip.up { background:rgba(35,134,54,.8); border-color:#3fb950; box-shadow:0 0 12px rgba(63,185,80,.55); text-shadow:0 0 6px rgba(0,0,0,.6); } .ct-chip.down { background:rgba(218,54,51,.8); border-color:#f85149; box-shadow:0 0 12px rgba(248,81,73,.55); text-shadow:0 0 6px rgba(0,0,0,.6); } .ct-chip.wait { opacity:.7; font-weight:700; font-size:17px; }
 .ct-body { font-size:14px; padding:6px 4px; }
 .pat-old-box { margin:6px 0; }
 .mtf-btn { background:#1f6feb !important; border-color:#58a6ff !important; color:#fff !important; font-weight:700; margin-right:14px; }
