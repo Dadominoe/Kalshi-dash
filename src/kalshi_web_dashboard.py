@@ -806,7 +806,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-27-join87"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-27-pats89"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -6467,7 +6467,19 @@ function checkPatternAlerts() {                                         // head 
     else if (/resistance ledge/i.test(pat)) dir = 'If the ceiling holds, price turns DOWN; if it breaks, price leans UP.';
     const head = (st === 'forming' ? 'FORMING' : 'FORMED') + ' (' + tf + '): ' + pat.toUpperCase();
     const detail = dir + (rt ? ' It has worked ' + rt + '% of the time (' + rn + ' scored calls).' : ' No track record yet.') + ' Information only.';
-    dockPush(name, bias === 'bullish' ? 'dock-buy' : (bias === 'bearish' ? 'dock-sell' : 'dock-lock'), head, detail, 600000, key);
+    const o = CTB[name];
+    if (ctbOn && o && o.el && o.el.isConnected) {                                                      // the call banner shows formations (owner, 2026-10-27); the alert window keeps the liquidity sweeps
+      const lib = (typeof PATTERN_DATA !== 'undefined' && PATTERN_DATA.lib) ? PATTERN_DATA.lib[el.getAttribute('data-pkey')] : null;
+      const svg = lib && lib.svg ? lib.svg.replace('width="240" height="120"', 'width="170" height="85"') : '';
+      const up = bias === 'bullish', dn = bias === 'bearish', col = up ? 'var(--ctb-up)' : (dn ? 'var(--ctb-down)' : 'var(--ctb-warn)');
+      const html = '<div class="ctb-hd"><span><span class="ctb-coin">' + name + '</span> <span class="ctb-which">' + (st === 'forming' ? 'FORMING' : 'FORMED') + ' &middot; ' + tf + '</span></span></div>'
+        + '<div style="display:flex;gap:12px;align-items:center;margin:4px 0"><div style="flex:0 0 170px;line-height:0">' + svg + '</div>'
+        + '<div><div class="ctb-call" style="font-size:25px;white-space:normal;line-height:1.1;color:' + col + '">' + (up ? '&#9650; UP' : (dn ? '&#9660; DOWN' : 'WATCH')) + '<small>projected</small></div>'
+        + '<div style="font-size:14px;color:#e8eaf0;line-height:1.25">' + (rt ? 'worked <b>' + rt + '%</b> of the time (' + rn + ' scored)' : 'no track record yet') + '</div></div></div>'
+        + '<div class="ctb-bar"><i style="width:' + (rt ? Math.min(100, +rt) : 0) + '%;background:' + col + '"></i></div>'
+        + '<div class="ctb-row"><span>Pattern</span><b class="t">' + pat + '</b></div><div class="ctb-row"><span>If it plays out</span><b class="t">' + dir.replace('If it plays out, ', '') + '</b></div>';
+      ctbNews(name, 'info', html, 'pat:' + key);
+    } else dockPush(name, bias === 'bullish' ? 'dock-buy' : (bias === 'bearish' ? 'dock-sell' : 'dock-lock'), head, detail, 600000, key);
   });
   if (document.querySelector('.card[data-asset]')) patPrimed = true;
 }
@@ -6870,6 +6882,29 @@ function narVoice(text, voice) {
   } catch (e) { speakRaw(text); }
 }
 function narUsd(v) { return v >= 1e6 ? (v / 1e6).toFixed(1) + ' million dollars' : (v >= 1e3 ? Math.round(v / 1e3) + ' thousand dollars' : Math.round(v) + ' dollars'); }
+const shareCardState = {};
+function checkShareCards() {                                             // "buyers / sellers are in control, N percent of the money" as a card on the call banner
+  if (!ctbOn) return;
+  ['BTC', 'XRP'].forEach(name => {
+    const card = document.querySelector('.card[data-asset="' + name + '"]');
+    const bb = card && card.querySelector('.tug-box.up b');
+    const buy = bb ? parseFloat(bb.textContent) : NaN;
+    if (isNaN(buy)) return;
+    const st = shareCardState[name] || (shareCardState[name] = {primed: false});
+    const side = buy >= 66 ? 'buy' : (buy <= 34 ? 'sell' : 'mixed');
+    const pct = Math.round(side === 'buy' ? buy : 100 - buy), t90 = side !== 'mixed' && pct >= 90;
+    const changed = side !== 'mixed' && st.side !== side, first90 = t90 && st.t90 !== side;
+    if (st.primed && (changed || first90) && CTB[name] && CTB[name].el && CTB[name].el.isConnected) {
+      const up = side === 'buy', cl = up ? 'up' : 'down', col = up ? 'var(--ctb-up)' : 'var(--ctb-down)';
+      ctbNews(name, cl, '<div class="ctb-hd"><span><span class="ctb-coin">' + name + '</span> <span class="ctb-which">MONEY THIS ROUND</span></span></div>'
+        + '<div class="ctb-call" style="font-size:30px;white-space:normal;line-height:1.1;color:' + col + '">' + (up ? 'BUYERS' : 'SELLERS') + ' ARE IN CONTROL<small>' + pct + '% of the money</small></div>'
+        + '<div class="ctb-bar"><i style="width:' + pct + '%;background:' + col + '"></i></div>'
+        + '<div class="ctb-row"><span>Buyers</span><b class="up">' + Math.round(buy) + '%</b></div><div class="ctb-row"><span>Sellers</span><b class="down">' + (100 - Math.round(buy)) + '%</b></div>'
+        + '<div class="ctb-row"><span>What it is</span><b class="t">dollars traded this round - information only</b></div>', 'share:' + name + ':' + side + ':' + (t90 ? '90' : '66') + ':' + Date.now());
+    }
+    st.side = side; st.t90 = t90 ? side : null; st.primed = true;
+  });
+}
 function checkNarrator() {
   if (!narratorOn) return;
   ['BTC', 'XRP'].forEach(name => {
@@ -7904,6 +7939,7 @@ async function refreshInner() {
   checkMarketWarn();
   checkMarketChanges();
   checkNarrator();
+  checkShareCards();
   narPaint();
   checkWallAlerts();
   checkWinAlerts();
@@ -11104,7 +11140,7 @@ def pattern_alert_markers(asset_name):
             if key in seen:
                 continue
             seen.add(key)
-            out.append(f'<span class="pat-alert" data-name="{asset_name}" data-tf="{tf}" data-pat="{escape(nm[:1].upper() + nm[1:])}" data-bias="{l["bias"]}" data-status="{l["status"]}" data-key="{escape(key)}"{_sweep_rate_attrs(asset_name, tf, nm)} style="display:none;"></span>')
+            out.append(f'<span class="pat-alert" data-name="{asset_name}" data-tf="{tf}" data-pat="{escape(nm[:1].upper() + nm[1:])}" data-pkey="{escape((_pat_explain(nm) or {}).get("key", ""))}" data-bias="{l["bias"]}" data-status="{l["status"]}" data-key="{escape(key)}"{_sweep_rate_attrs(asset_name, tf, nm)} style="display:none;"></span>')
     return "".join(out)
 
 
