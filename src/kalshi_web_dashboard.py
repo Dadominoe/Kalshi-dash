@@ -805,7 +805,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-27-info50"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-27-burst64"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -2254,7 +2254,7 @@ DEFAULT_WHALE_MIN_USD = 12_500
 # the same 5x multiple over the display threshold as before, just scaled
 # down with it, so the loud alert still means "rare and big," not "every
 # whale row entry."
-WHALE_ALERT_USD = {"BTC-USD": 125_000, "ETH-USD": 60_000, "XRP-USD": 30_000,
+WHALE_ALERT_USD = {"BTC-USD": 500_000, "ETH-USD": 60_000, "XRP-USD": 150_000,
                     "NEAR-USD": 20_000, "BNB-USD": 30_000}
 DEFAULT_WHALE_ALERT_USD = 60_000
 # the two dicts above are now only a FALLBACK (see get_adaptive_whale_thresholds
@@ -2278,7 +2278,7 @@ WHALE_BASELINE_MIN_SAMPLES = 40  # below this, not enough data for a reliable pe
 WHALE_DISPLAY_PERCENTILE = 99    # "whale" = bigger than 99% of recent trades in THIS market (all exchanges pooled -
                                   # was 95 / 99 when only Coinbase + Kraken fed it; ~330 prints per 5 min on BTC at 95)
 WHALE_ALERT_PERCENTILE = 99.9    # "huge, make a sound" = top 0.1% of recent trades (~2 per 5 min on BTC)
-WHALE_ALERT_FLOOR_USD = {"BTC-USD": 100_000, "XRP-USD": 25_000}
+WHALE_ALERT_FLOOR_USD = {"BTC-USD": 500_000, "XRP-USD": 150_000}      # raised 2026-10-27 (owner: do not call out the smaller whales) - was 100k / 25k
 WHALE_FLOOR_USD = {"BTC-USD": 10_000, "ETH-USD": 2_500, "XRP-USD": 2_500,
                     "NEAR-USD": 750, "BNB-USD": 1_000}
 DEFAULT_WHALE_FLOOR_USD = 1_000  # sanity floor - even in a dead market, don't call a $20
@@ -4882,7 +4882,7 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
   body[data-view="BTC"] .card[data-asset="BTC"] > .tugrow, body[data-view="XRP"] .card[data-asset="XRP"] > .tugrow { grid-column:1; }
   body[data-view="BTC"] .card[data-asset="BTC"] > .pat-win, body[data-view="XRP"] .card[data-asset="XRP"] > .pat-win { grid-column:2; margin-top:0; }
 }
-.ct-drop { margin:10px 0; position:relative; }
+.ct-drop { margin:4px 0; position:relative; }
 .ct-body { position:absolute; left:0; top:calc(100% + 4px); width:100%; min-width:680px; max-width:min(1300px, 98vw); z-index:60; max-height:78vh; overflow:auto; background:#0d1117; border:2px solid #39d0d8; border-radius:12px; padding:12px; box-shadow:0 14px 44px rgba(0,0,0,.75); }
 .ct-cards { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:10px; }
 @media (max-width:900px) { .ct-cards { grid-template-columns:1fr; } .ct-body { min-width:0; } }
@@ -4903,10 +4903,10 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .ct-info[open] > summary { background:#0e7c86; border-color:#39d0d8; }
 .ct-info-body { border:1px solid #30363d; border-radius:0 8px 8px 8px; padding:8px 12px; }
 .ct-note { margin-top:10px; }
-.ct-drop > summary { list-style:none; cursor:pointer; font-size:20px; padding:16px 20px; border-radius:14px; display:flex; flex-wrap:wrap; align-items:center; gap:10px 16px; color:#fff; background:linear-gradient(90deg,#16171d,#1c1419); border:2px solid #5a2230; user-select:none; }
+.ct-drop > summary { list-style:none; cursor:pointer; font-size:17px; padding:7px 16px; border-radius:12px; display:flex; flex-wrap:wrap; align-items:center; gap:10px 16px; color:#fff; background:linear-gradient(90deg,#16171d,#1c1419); border:2px solid #5a2230; user-select:none; }
 .ct-drop > summary::-webkit-details-marker { display:none; }
 .ct-drop[open] > summary .dd-ic { transform:rotate(90deg); }
-.ct-drop > summary b { font-size:24px; letter-spacing:.3px; }
+.ct-drop > summary b { font-size:18px; letter-spacing:.3px; }
 .ct-drop > summary .dd-hint { font-size:15px; opacity:.85; }
 .ct-chip { display:inline-block; padding:7px 16px; border-radius:16px; font-weight:900; font-size:20px; letter-spacing:.4px; background:rgba(0,0,0,.45); border:2px solid rgba(255,255,255,.5); }
 .ct-chip.up { background:#073b22; border-color:#00e676; color:#fff; } .ct-chip.down { background:#4a0f1b; border-color:#e5384f; color:#fff; } .ct-chip.wait { background:#1b1d24; border-color:#4a4f5c; color:#9aa1ad; font-weight:700; font-size:17px; }
@@ -4914,7 +4914,7 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .pat-old-box { margin:6px 0; }
 .whale-cross, .whale-lane, .fly-alert { display:none !important; }      /* the whales and the flying alerts never show on screen (owner, 2026-10-27) - the alert window, the sound and the voice stay */
 /* ---- the locked alert window (top of each card) */
-.topbar .tb-main .alert-dock { order:2; flex:0 0 380px; width:380px; min-width:0; height:128px; min-height:128px; max-height:128px; overflow:hidden; padding:0; position:relative; display:block; }
+.topbar .tb-main .alert-dock { order:2; flex:0 0 380px; width:380px; min-width:0; height:100px; min-height:100px; max-height:100px; overflow:hidden; padding:0; position:relative; display:block; }   /* the locked notification window: holds two, scrolls when there are more (owner, 2026-10-27) */
 .dk-wrap { position:absolute; inset:0; overflow:hidden; border-radius:8px; }
 .dk-empty { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#6e7681; font-size:14px; letter-spacing:.5px; }
 .dk-lane { position:absolute; inset:0; padding:5px 6px; display:flex; flex-direction:column; gap:5px; }
@@ -4923,23 +4923,27 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .dk-lane .dock-item.dk-card { position:absolute; top:6px; bottom:6px; left:0; width:calc(100% - 34px); padding:8px 12px; display:flex; flex-direction:column; justify-content:center; }
 .dk-lane .dock-item.dk-card b { font-size:17px; } .dk-lane .dock-item.dk-card span { font-size:14px; -webkit-line-clamp:3; }
 /* side by side: the top bar becomes a grid so BTC and XRP line up exactly the same */
-body[data-view="both"] .topbar .tb-main { display:grid; grid-template-columns:minmax(0,1fr) 380px; gap:6px 16px; align-items:start; }
+body[data-view="both"] .topbar .tb-main { display:grid; grid-template-columns:minmax(0,1fr) 380px; gap:4px 16px; align-items:start; }
 body[data-view="both"] .topbar .tb-main > .asset-name { grid-column:1; grid-row:1; }
 body[data-view="both"] .topbar .tb-main > .mk-drop, body[data-view="both"] .topbar .tb-main > .mk { grid-column:1; grid-row:2; justify-self:start; }
-body[data-view="both"] .topbar .tb-main > .tb-right { grid-column:1; grid-row:3; margin-left:0; justify-self:start; min-height:172px; }
-body[data-view="both"] .topbar .tb-main > .alert-dock { grid-column:2; grid-row:1 / span 3; }
+body[data-view="both"] .topbar .tb-main > .alert-dock { grid-column:2; grid-row:1 / span 2; }
+body[data-view="both"] .topbar .tb-main > .tb-right { grid-column:1 / -1; grid-row:3; margin:0; justify-self:start; min-height:0; }
 body[data-view="both"] .topbar .tb-main > .tb-price { grid-column:1 / -1; grid-row:4; }
+body[data-view="both"] .tb-right .streak-pull-wrap { right:auto; left:0; }
+/* side by side: the buy / sell pressure bars come FIRST in the column (right under the banner), so they and the volume bar are on screen when the page loads */
+body[data-view="both"] .tugcol { display:flex; flex-direction:column; }
+body[data-view="both"] .tugcol > .press-row { order:-1; margin:0 0 8px; }          /* the streak drop-down opens to the right from its own edge, so it can never run off the left of the screen */
 
 /* ---- the Viking top banner */
-h1.dom-banner { position:relative; display:flex; align-items:center; justify-content:center; gap:22px; margin:0 0 12px; padding:14px 20px 26px; border-radius:16px; border:2px solid #3a1219; overflow:hidden; font-weight:400;
+h1.dom-banner { position:relative; display:flex; align-items:center; justify-content:center; gap:16px; margin:0 0 6px; padding:5px 18px 15px; border-radius:16px; border:2px solid #3a1219; overflow:hidden; font-weight:400;
   background: radial-gradient(120% 140% at 50% 0%, rgba(255,77,109,.16), transparent 62%), repeating-linear-gradient(0deg, rgba(255,255,255,.02) 0 1px, transparent 1px 4px), linear-gradient(90deg,#0a0b0f,#170a0f 50%,#0a0b0f);
   box-shadow:0 0 30px rgba(255,77,109,.18) inset, 0 0 22px rgba(255,77,109,.10); }
-.dom-logo svg { width:64px; height:64px; filter:drop-shadow(0 0 9px rgba(255,77,109,.8)); display:block; }
+.dom-logo svg { width:42px; height:42px; filter:drop-shadow(0 0 9px rgba(255,77,109,.8)); display:block; }
 .dom-logo-r svg { transform:scaleX(-1); }
 .dom-text { display:flex; flex-direction:column; align-items:center; gap:4px; }
-.dom-title { font:900 38px/1 Cinzel, "Trajan Pro", Georgia, "Times New Roman", serif; letter-spacing:9px; color:#fff; text-shadow:0 0 16px rgba(255,77,109,.85), 0 2px 0 #5a0f1d; animation:domglow 4s ease-in-out infinite; }
+.dom-title { font:900 28px/1 Cinzel, "Trajan Pro", Georgia, "Times New Roman", serif; letter-spacing:7px; color:#fff; text-shadow:0 0 16px rgba(255,77,109,.85), 0 2px 0 #5a0f1d; animation:domglow 4s ease-in-out infinite; }
 @keyframes domglow { 50% { text-shadow:0 0 26px rgba(255,77,109,1), 0 2px 0 #5a0f1d; } }
-.dom-sub { font-size:13px; letter-spacing:5px; font-weight:800; color:#ff4d6d; }
+.dom-sub { font-size:11px; letter-spacing:4px; font-weight:800; color:#ff4d6d; }
 .dom-note { position:absolute; right:16px; top:8px; font-size:11px; color:#8b93a1; letter-spacing:.4px; }
 .dom-shields { position:absolute; left:0; right:0; bottom:0; height:16px; border-top:1px solid rgba(255,77,109,.45); background:radial-gradient(circle at 13px 8px, #ffd24a 0 2.4px, #ff4d6d 2.4px 6.6px, #3a0f19 6.6px 7.6px, #1a0a0e 7.6px 8.2px, transparent 8.2px) 0 0/26px 16px repeat-x; animation:domdrift 9s linear infinite; }
 @keyframes domdrift { to { background-position:26px 0; } }
@@ -4947,28 +4951,28 @@ h1.dom-banner { position:relative; display:flex; align-items:center; justify-con
 
 /* ---- the call banner (digital sign). Colours are variables so the Hunter theme can tune them. */
 :root { --ctb-up:#19e68c; --ctb-up-bg:#062a1b; --ctb-down:#ff4d6d; --ctb-down-bg:#2e0c14; --ctb-warn:#ffb020; --ctb-warn-bg:#2a1d05; --ctb-gold:#ffd24a; --ctb-dim:#9aa3b2; }
-.ctb-slot { min-height:372px; margin:6px 0 8px; }
+.ctb-slot { min-height:300px; margin:4px 0 6px; }
 body.no-ctb .ctb-slot { display:none; }
 body:not(.no-ctb) .ct-drop > summary .ct-sumx { display:none; }     /* with the banner on, the drop-down under it just says 'The 3 calls' beside the arrow */
-.ctb-wrap { position:relative; height:372px; border-radius:16px; border:2px solid #3a1219; overflow:hidden;
+.ctb-wrap { position:relative; height:300px; border-radius:16px; border:2px solid #3a1219; overflow:hidden;
   background: radial-gradient(120% 90% at 50% 0%, rgba(255,77,109,.10), transparent 60%), repeating-linear-gradient(0deg, rgba(255,255,255,.025) 0 1px, transparent 1px 4px), linear-gradient(90deg,#0a0b0f,#140a0e 50%,#0a0b0f);
   box-shadow:0 0 30px rgba(255,77,109,.20) inset, 0 0 22px rgba(255,77,109,.12); }
 .ctb-rail { position:absolute; left:0; right:0; height:5px; z-index:6; opacity:.75; animation:ctbchase 1.1s linear infinite; background:repeating-linear-gradient(90deg,var(--ctb-down) 0 10px,transparent 10px 24px); }
 .ctb-rail.top { top:0; } .ctb-rail.bot { bottom:0; animation-direction:reverse; background:repeating-linear-gradient(90deg,var(--ctb-up) 0 10px,transparent 10px 24px); }
 @keyframes ctbchase { to { background-position:24px 0; } }
-.ctb-gutter { position:absolute; left:0; top:0; bottom:70px; width:74px; z-index:5; display:flex; align-items:flex-start; justify-content:center; padding-top:16px; background:linear-gradient(90deg,#16070b,#0d0608); border-right:2px solid rgba(255,77,109,.55); }
+.ctb-gutter { position:absolute; left:0; top:0; bottom:62px; width:74px; z-index:5; display:flex; align-items:flex-start; justify-content:center; padding-top:16px; background:linear-gradient(90deg,#16070b,#0d0608); border-right:2px solid rgba(255,77,109,.55); }
 .ctb-gutter svg { width:48px; height:48px; filter:drop-shadow(0 0 7px rgba(255,77,109,.75)); }
-.ctb-lane { position:absolute; left:74px; right:0; top:0; bottom:70px; overflow:hidden; }
-.ctb-fade { position:absolute; top:0; bottom:70px; width:70px; z-index:3; pointer-events:none; }
+.ctb-lane { position:absolute; left:74px; right:0; top:0; bottom:62px; overflow:hidden; }
+.ctb-fade { position:absolute; top:0; bottom:62px; width:70px; z-index:3; pointer-events:none; }
 .ctb-fade.l { left:74px; background:linear-gradient(90deg,#0b0c10,transparent); } .ctb-fade.r { right:0; background:linear-gradient(270deg,#07080b,transparent); }
 .ctb-hint { position:absolute; right:14px; top:12px; z-index:5; font-size:12px; color:var(--ctb-dim); letter-spacing:.5px; opacity:.8; }
-.ctb-calls { position:absolute; left:0; right:0; bottom:0; height:70px; z-index:5; display:flex; align-items:center; gap:12px; padding:0 16px 0 90px; background:linear-gradient(180deg,#120709,#0b0508); border-top:2px solid rgba(255,77,109,.55); }
+.ctb-calls { position:absolute; left:0; right:0; bottom:0; height:62px; z-index:5; display:flex; align-items:center; gap:12px; padding:0 16px 0 90px; background:linear-gradient(180deg,#120709,#0b0508); border-top:2px solid rgba(255,77,109,.55); }
 .ctb-calls .ctb-coin { font-size:24px; }
 .ctb-chip { display:flex; flex-direction:column; align-items:center; justify-content:center; flex:1; min-width:0; padding:4px 8px; border-radius:10px; border:1.5px solid; line-height:1.15; }
-.ctb-chip .k { font-size:12px; letter-spacing:1.4px; font-weight:800; opacity:.85; } .ctb-chip .v { font-size:19px; font-weight:900; white-space:nowrap; }
+.ctb-chip .k { font-size:12px; letter-spacing:1.4px; font-weight:800; opacity:.85; } .ctb-chip .v { font-size:17px; font-weight:900; white-space:nowrap; }
 .ctb-chip.up { color:var(--ctb-up); border-color:var(--ctb-up); background:var(--ctb-up-bg); } .ctb-chip.down { color:var(--ctb-down); border-color:var(--ctb-down); background:var(--ctb-down-bg); }
 .ctb-chip.warn { color:var(--ctb-warn); border-color:var(--ctb-warn); background:var(--ctb-warn-bg); } .ctb-chip.gold { border-color:var(--ctb-gold); box-shadow:0 0 12px rgba(255,210,74,.5); }
-.ctb-card { position:absolute; top:14px; width:430px; height:276px; padding:12px 16px; border-radius:14px; border:2px solid; background:#0d0f14; overflow:hidden; will-change:transform,opacity; }
+.ctb-card { position:absolute; top:10px; width:430px; height:228px; padding:12px 16px; border-radius:14px; border:2px solid; background:#0d0f14; overflow:hidden; will-change:transform,opacity; }
 .ctb-card.up { color:var(--ctb-up); border-color:var(--ctb-up); background:linear-gradient(180deg,var(--ctb-up-bg),#0b0d12); }
 .ctb-card.down { color:var(--ctb-down); border-color:var(--ctb-down); background:linear-gradient(180deg,var(--ctb-down-bg),#0b0d12); }
 .ctb-card.warn { color:var(--ctb-warn); border-color:var(--ctb-warn); background:linear-gradient(180deg,var(--ctb-warn-bg),#0b0d12); }
@@ -4978,10 +4982,10 @@ body:not(.no-ctb) .ct-drop > summary .ct-sumx { display:none; }     /* with the 
 .ctb-coin { font-weight:900; font-size:24px; color:#ff9f1c; }
 .ctb-which { font-size:14px; letter-spacing:1.3px; font-weight:800; color:var(--ctb-dim); text-transform:uppercase; }
 .ctb-real { color:var(--ctb-gold); border:1px solid var(--ctb-gold); border-radius:999px; padding:1px 9px; font-size:11px; letter-spacing:1px; white-space:nowrap; }
-.ctb-call { margin:4px 0 4px; font-size:38px; font-weight:900; letter-spacing:.4px; white-space:nowrap; }
+.ctb-call { margin:2px 0 3px; font-size:34px; font-weight:900; letter-spacing:.4px; white-space:nowrap; }
 .ctb-call small { font-size:17px; font-weight:700; margin-left:8px; opacity:.9; }
 .ctb-bar { height:10px; border-radius:5px; background:#1b1d24; margin:2px 0 6px; overflow:hidden; } .ctb-bar i { display:block; height:100%; border-radius:5px; box-shadow:0 0 10px currentColor; }
-.ctb-row { display:flex; justify-content:space-between; gap:10px; font-size:16px; padding:4px 0; border-top:1px solid rgba(255,255,255,.07); color:#e8eaf0; }
+.ctb-row { display:flex; justify-content:space-between; gap:10px; font-size:15px; padding:3px 0; border-top:1px solid rgba(255,255,255,.07); color:#e8eaf0; }
 .ctb-row span:first-child { color:var(--ctb-dim); flex:0 0 auto; max-width:46%; } .ctb-row b { font-weight:700; text-align:right; min-width:0; }
 .ctb-row b.up { color:var(--ctb-up); } .ctb-row b.down { color:var(--ctb-down); } .ctb-row b.warn { color:var(--ctb-warn); } .ctb-row b.t { color:#e8eaf0; }
 @media (max-width:760px) { .ctb-card { width:320px; } .ctb-chip .v { font-size:13px; } .ctb-calls { gap:6px; padding-left:80px; } .ctb-calls .ctb-coin { font-size:16px; } }
@@ -5983,7 +5987,7 @@ function checkReversalAlerts() {
 const dockItems = {};
 function dockPush(name, cls, head, detail, ttlMs, key, onDismiss) {
   const list = dockItems[name] = dockItems[name] || [];
-  const until = ttlMs ? Date.now() + ttlMs : 0;                 // 0 = stays until it is cleared
+  const until = ttlMs ? Date.now() + Math.max(ttlMs, 300000) : 0;                 // 0 = stays until it is cleared; everything else stays at least 5 minutes (owner, 2026-10-27)
   const ex = key ? list.find(x => x.key === key) : null;
   if (ex) { ex.cls = cls; ex.head = head; ex.detail = detail; ex.until = until; ex.onDismiss = onDismiss; }
   else list.unshift({key: key || ('k' + Math.random().toString(36).slice(2)), cls: cls, head: head, detail: detail, until: until, onDismiss: onDismiss});
@@ -6026,10 +6030,10 @@ function renderDock() {
     const list = (dockItems[name] || []).filter(x => !x.until || x.until > now);
     dockItems[name] = list;
     const o = DK[name] || (DK[name] = dkBuild(name));
-    if (o.el.parentNode !== el) { el.textContent = ''; el.appendChild(o.el); o.sig = ''; }       // the page was redrawn: put the running window back
+    if (o.el.parentNode !== el) { el.textContent = ''; el.appendChild(o.el); }                    // the page was redrawn: put the running window back (its scrolling carries on)
     o.items = list;
     o.empty.style.display = list.length ? 'none' : 'flex';
-    const mode = list.length > 2 ? 'scroll' : 'static';
+    const mode = list.length ? 'scroll' : 'static';
     const sig = mode + '|' + (mode === 'static' ? list.map(x => x.key + '|' + x.cls + '|' + x.head + '|' + x.detail).join('~') : '');
     if (mode === 'scroll') {                                                                        // drop the cards whose alert has been dismissed or has expired
       o.live = o.live.filter(c => { if (list.some(x => x.key === c.key)) return true; c.el.remove(); return false; });
@@ -6049,10 +6053,10 @@ function dkTick(now, fromTimer) {
     if (o.mode !== 'scroll' || !o.el.isConnected || !o.el.offsetWidth || !o.items.length) return;
     const W = o.lane.clientWidth;
     if (!o.hover) {
-      o.live.forEach(c => { c.x -= 52 * dt; });
+      o.live.forEach(c => { c.x -= 42 * dt; });
       while (o.live.length && o.live[0].x + o.live[0].w < -8) { o.live[0].el.remove(); o.live.shift(); }
       const tail = o.live[o.live.length - 1];
-      if (!tail || tail.x + tail.w + 22 < W) {
+      if (!tail || tail.x + tail.w + (o.items.length > 1 ? 22 : Math.round(W * 1.1)) < W) {          // with a single alert it scrolls by, then a gap, then again (never right behind itself)
         let x = o.items.find(it => !o.seen[it.key]);                                                // a new alert goes next
         if (x) o.seen[x.key] = 1; else { x = o.items[o.idx % o.items.length]; o.idx++; }
         const el = dkItemEl(a, x, ' dk-card'); o.lane.appendChild(el);
@@ -6099,7 +6103,8 @@ function checkSweepStars() {
     const name = el.getAttribute('data-name'), dir = el.getAttribute('data-dir'), tf = el.getAttribute('data-tf') || '';
     if (!coinShown(name)) return;
     const head = 'POSSIBLE LIQUIDITY SWEEP FROM THE ' + (dir === 'highs' ? 'HIGHS' : 'LOWS');
-    const detail = tf + ' chart: price poked ' + (dir === 'highs' ? 'above a prior high and closed back below it' : 'below a prior low and closed back above it') + ' - a stop run (information only)';
+    const rt = el.getAttribute('data-rate'), rn = el.getAttribute('data-n');
+    const detail = tf + ' chart: price poked ' + (dir === 'highs' ? 'above a prior high and closed back below it' : 'below a prior low and closed back above it') + ' - a stop run' + (rt ? '. This kind of sweep has worked ' + rt + '% of the time (' + rn + ' scored calls)' : '') + ' (information only)';
     flyStar(dir);
     flyAcross(name, 'fly-sweep', '\u2605 ' + head, detail);
     dockPush(name, 'dock-sweep', '\u2605 ' + head, detail, 60000, key);
@@ -6422,11 +6427,11 @@ function syncSweepButtons() {
 function toggleSweepAlerts() { sweepAlertsOn = !sweepAlertsOn; try { localStorage.setItem('sweepAlertsOn', String(sweepAlertsOn)); } catch (e) {} syncSweepButtons(); }
 function toggleSweepTf(tf) { sweepTfOn[tf] = !sweepTfOn[tf]; try { localStorage.setItem('sweepTfOn', JSON.stringify(sweepTfOn)); } catch (e) {} syncSweepButtons(); }
 const SWEEP_TF_SPOKEN = { '1m': '1 minute', '5m': '5 minute', '15m': '15 minute', '1h': '1 hour' };
-function fireSweepWarning(name, tf, side, bias, key) {
+function fireSweepWarning(name, tf, side, bias, key, rate, rn) {
   const up = bias === 'bullish';
   showIncomingBanner(name, up ? 'buy' : 'sell', 0, '\u2605 LIQUIDITY SWEEP FORMING (' + tf + ') \u2605',
     'Price ran ' + (side === 'highs' ? 'above the equal highs and is back below them' : 'below the equal lows and is back above them') +
-    ' - a stop run. Leans ' + (up ? 'UP' : 'DOWN') + '. Still forming: it is only confirmed when the ' + tf + ' candle closes. Information only.', key);
+    ' - a stop run. Leans ' + (up ? 'UP' : 'DOWN') + (rate ? ' (this kind of sweep has worked ' + rate + '% of the time, ' + rn + ' scored calls)' : '') + '. Still forming: it is only confirmed when the ' + tf + ' candle closes. Information only.', key);
   if (soundEnabled && soundOn(name)) {
     playWallAlert(up ? 'buy' : 'sell');
     speakUrgent(name + '. Liquidity sweep forming on the ' + (SWEEP_TF_SPOKEN[tf] || tf) + '. Leans ' + (up ? 'up' : 'down') + '.');
@@ -6434,6 +6439,28 @@ function fireSweepWarning(name, tf, side, bias, key) {
 }
 const alertedSweeps = new Set();
 let sweepPrimed = false;
+const alertedPats = new Set();
+let patPrimed = false;
+function checkPatternAlerts() {                                         // head and shoulders (and inverse), shooting star, wedges, ledges: a NEW one goes into the notification window with its percentage and direction
+  document.querySelectorAll('.pat-alert').forEach(el => {
+    const key = el.getAttribute('data-key');
+    if (!key || alertedPats.has(key)) return;
+    alertedPats.add(key);
+    if (!patPrimed) return;                                              // patterns that were already there when the page opened are not announced
+    const name = el.getAttribute('data-name'), tf = el.getAttribute('data-tf'), pat = el.getAttribute('data-pat') || '', bias = el.getAttribute('data-bias'), st = el.getAttribute('data-status');
+    const rt = el.getAttribute('data-rate'), rn = el.getAttribute('data-n');
+    if (!coinShown(name)) return;
+    let dir = 'No clear direction yet.';
+    if (bias === 'bullish') dir = 'If it plays out, price should go UP.';
+    else if (bias === 'bearish') dir = 'If it plays out, price should go DOWN.';
+    else if (/support ledge/i.test(pat)) dir = 'If the floor holds, price bounces UP; if it breaks, price leans DOWN.';
+    else if (/resistance ledge/i.test(pat)) dir = 'If the ceiling holds, price turns DOWN; if it breaks, price leans UP.';
+    const head = (st === 'forming' ? 'FORMING' : 'FORMED') + ' (' + tf + '): ' + pat.toUpperCase();
+    const detail = dir + (rt ? ' It has worked ' + rt + '% of the time (' + rn + ' scored calls).' : ' No track record yet.') + ' Information only.';
+    dockPush(name, bias === 'bullish' ? 'dock-buy' : (bias === 'bearish' ? 'dock-sell' : 'dock-lock'), head, detail, 600000, key);
+  });
+  if (document.querySelector('.card[data-asset]')) patPrimed = true;
+}
 function checkSweepAlerts() {
   document.querySelectorAll('.sweep-alert').forEach(el => {
     const key = el.getAttribute('data-key');
@@ -6442,7 +6469,7 @@ function checkSweepAlerts() {
     if (!sweepPrimed) return;                       // sweeps that were already forming when the page opened are not announced
     const tf = el.getAttribute('data-tf');
     if (!sweepAlertsOn || !sweepTfOn[tf]) return;
-    fireSweepWarning(el.getAttribute('data-name'), tf, el.getAttribute('data-side'), el.getAttribute('data-bias'), key);
+    fireSweepWarning(el.getAttribute('data-name'), tf, el.getAttribute('data-side'), el.getAttribute('data-bias'), key, el.getAttribute('data-rate'), el.getAttribute('data-n'));
   });
   if (document.querySelector('.card[data-asset]')) sweepPrimed = true;
 }
@@ -6891,6 +6918,40 @@ function flipLadder(name, key, r, call, sd) {
     }
 }
 const hourTier = {};
+const mktSeen = {};
+function ctbNews(coin, cls, html, key) {                                  // a card that goes to the front of the line on the call banner (shown once)
+  const o = CTB[coin];
+  if (!o) return;
+  o.news = o.news || [];
+  o.news.push({key: key, cls: cls, html: html});
+}
+function checkMarketChanges() {                                           // the type of market changed on some period: put it on the scroll-by
+  const now = Date.now();
+  document.querySelectorAll('.mk-row').forEach(tr => {
+    const dd = tr.closest('details.mk-drop'), coin = dd && dd.getAttribute('data-coin'), per = tr.getAttribute('data-period'), st = tr.getAttribute('data-state');
+    if (!coin || !per || !st) return;
+    const k = coin + '|' + per;
+    const m = mktSeen[k] || (mktSeen[k] = {said: null, pend: null, since: 0});
+    if (m.said === null) { m.said = st; return; }                          // first look after a page load: say nothing
+    if (st === m.said) { m.pend = null; return; }
+    if (st !== m.pend) { m.pend = st; m.since = now; return; }
+    if (now - m.since < 20000) return;                                     // a change has to hold 20 seconds
+    const old = m.said; m.said = st; m.pend = null;
+    const chg = parseFloat(tr.getAttribute('data-chg'));
+    const chgTxt = isNaN(chg) ? '-' : (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
+    const need = ((tr.querySelector('td.hint') || {}).textContent || '').trim();
+    const col = st === 'BULL' ? 'up' : (st === 'BEAR' ? 'down' : 'warn');
+    const html = '<div class="ctb-hd"><span><span class="ctb-coin">' + coin + '</span> <span class="ctb-which">MARKET CHANGE &middot; ' + per + '</span></span></div>'
+      + '<div class="ctb-call" style="font-size:30px;white-space:normal;line-height:1.1">' + old + ' &rarr; ' + st + '<small>' + chgTxt + '</small></div>'
+      + '<div class="ctb-bar"><i style="width:100%;background:currentColor"></i></div>'
+      + '<div class="ctb-row"><span>The ' + per + ' market is now</span><b class="' + col + '">' + st + '</b></div>'
+      + '<div class="ctb-row"><span>It was</span><b class="t">' + old + '</b></div>'
+      + '<div class="ctb-row"><span>Price change</span><b class="t">' + chgTxt + '</b></div>'
+      + '<div class="ctb-row"><span>Rule</span><b class="t">' + need + '</b></div>';
+    ctbNews(coin, col, html, 'mk|' + k + '|' + now);
+    setTimeout(() => ctbNews(coin, col, html, 'mk2|' + k + '|' + now), 180000);
+  });
+}
 const mktState = {};
 function checkMarketWarn() {                                            // the 5-minute market changing between BULL / NEUTRAL / BEAR is announced in the narrator voice (a change must hold 90 s, and one announcement per coin every 3 min)
   const now = Date.now(), view = document.body.getAttribute('data-view');
@@ -7368,15 +7429,23 @@ function ctbSync() {
     if (o.el.parentNode !== slot) slot.appendChild(o.el);
     let j = null;
     try { j = JSON.parse(slot.querySelector('.ctb-json').textContent); } catch (e) { return; }
-    o.data = j.cards; o.info = j.info || []; o.smoked = !!j.smoked;
+    o.data = j.cards; o.info = j.info || []; o.smoked = !!j.smoked; o.quiet = !!j.quiet;
     const nowMs = Date.now();
-    o.alerts = (typeof dockItems !== 'undefined' ? (dockItems[a] || []) : []).filter(x => !x.until || x.until > nowMs)
+    o.alerts = [] /* notifications scroll in the top window, not in the banner */.filter(x => !x.until || x.until > nowMs)
       .map(x => ({key: 'al|' + x.key + '|' + (x.until || 0), cls: ({'dock-buy': 'up', 'dock-sell': 'down'})[x.cls] || 'warn', html: ctbAlertHtml(a, x)}));
     const cs = o.el.querySelector('.ctb-calls');
     if (cs.innerHTML !== j.calls) cs.innerHTML = j.calls;
     o.live.forEach(c => { const d = j.cards.concat(o.info || [], o.alerts).find(x => x.key === c.key); if (d && c.html !== d.html) { c.el.innerHTML = d.html; c.html = d.html; c.el.className = 'ctb-card ' + d.cls; } });
   });
 }
+const PAGE_VER = '__PAGE_VER__';
+let lastAutoReload = 0;
+setInterval(() => {                                                                                      // an open page reloads itself when a newer version goes live, so nobody keeps running old code
+  fetch('/healthz', {cache: 'no-store'}).then(r => r.text()).then(t => {
+    const m = /^ok (\S+)/.exec(t);
+    if (m && PAGE_VER && m[1] !== PAGE_VER && Date.now() - lastAutoReload > 300000) { lastAutoReload = Date.now(); location.reload(); }
+  }).catch(() => {});
+}, 90000);
 function ctbTick(now, fromTimer) {
   Object.keys(CTB).forEach(a => {
     const o = CTB[a];
@@ -7384,16 +7453,25 @@ function ctbTick(now, fromTimer) {
     if (!ctbOn || !o.el.isConnected || !o.el.offsetWidth || !o.data.length) return;
     const W = o.lane.clientWidth;
     if (!o.hover) {
-      o.live.forEach(c => { c.x -= 48 * dt; });
+      o.live.forEach(c => { c.x -= 38 * dt; });
       while (o.live.length && o.live[0].x + o.live[0].w < -12) { o.live[0].el.remove(); o.live.shift(); }
       const tail = o.live[o.live.length - 1];
       if (!tail || tail.x + tail.w + 110 < W) {
-        let d = o.alerts.find(x => !o.seen[x.key]);                                   // a new alert jumps the queue
+        if (!o.lastEv) o.lastEv = Date.now() - 20 * 60000;
+        const order = {early: 0, mid: 1, late: 2};
+        const calls = o.data.filter(x => x.locked).sort((a, b) => order[a.key] - order[b.key]);                         // the calls that have locked
+        if (calls.length && !(o.burst && o.burst.length) && (calls.length > (o.lockedN || 0) || Date.now() - (o.lastBurst || 0) > 90000)) { o.burst = calls.map(x => x.key); o.lastBurst = Date.now(); }       // a new lock, or 90 seconds: roll the locked calls by
+        o.lockedN = calls.length;
+        let d = (o.news && o.news.length) ? o.news.shift() : null; const evc = o.data.find(x => x.key === 'events');          // market-change cards go first
+        if (!d && o.burst && o.burst.length) { const k = o.burst.shift(); d = o.data.find(x => x.key === k) || null; }
+        if (!d && evc && Date.now() - o.lastEv > 25 * 60000) { d = evc; o.lastEv = Date.now(); }                          // the COMING UP card every ~25 minutes
         if (d) o.seen[d.key] = 1;
-        else if (o.smoked && o.info && o.info.length) {                                  // the market is decided: random cool information instead of the calls
-          let k = Math.floor(Math.random() * o.info.length); if (o.info.length > 1 && o.info[k].key === o.lastInfo) k = (k + 1) % o.info.length;
-          d = o.info[k]; o.lastInfo = d.key;
-        } else { const all = o.data.concat(o.alerts); d = all[o.idx % all.length]; o.idx++; }
+        else if (o.info && o.info.length) {                                                                              // otherwise: a random fact (never one that has been shown, until all have)          // facts when decided / no calls yet / every third card                                  // the market is decided: random cool information instead of the calls
+          o.shown = o.shown || {};
+          let pool = o.info.filter(it => !o.shown[it.key]);
+          if (!pool.length || Object.keys(o.shown).length > 4000) { o.shown = {}; pool = o.info; }                 // every fact shown at least once: start over
+          d = pool[Math.floor(Math.random() * pool.length)]; o.shown[d.key] = 1; o.lastInfo = d.key;
+        } else { const all = o.data; d = all[o.idx % all.length]; o.idx++; }
         const el = document.createElement('div'); el.className = 'ctb-card ' + d.cls; el.innerHTML = d.html; o.lane.appendChild(el);
         const c = {el: el, x: o.started ? W + 6 : 30, w: el.offsetWidth, key: d.key, html: d.html}; o.started = true;
         el.style.transform = 'translateX(' + c.x + 'px)'; o.live.push(c);          // (the very first card starts already on screen)
@@ -7782,6 +7860,7 @@ async function refreshInner() {
   checkFlipRiskAlerts();
   checkHourWarn();
   checkMarketWarn();
+  checkMarketChanges();
   checkNarrator();
   narPaint();
   checkWallAlerts();
@@ -7792,6 +7871,7 @@ async function refreshInner() {
   checkIncomingAlerts();
   checkSweepStars();
   checkSweepAlerts();
+  checkPatternAlerts();
 }
 setInterval(refresh, 1000);
 window.onload = function() {
@@ -8956,6 +9036,23 @@ def _ct_agree_html(name, marks):
             f'<p class="hint">About 11 days of rounds so far, so a good read, not a promise. Information only.</p></div></details>')
 
 
+_FACTS = {"mtime": 0.0, "facts": []}
+
+
+def _facts_bank():
+    """The fact bank (hundreds of statements of things we measured), reloaded when the file changes."""
+    try:
+        fn = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data_cache", "facts_bank.json")
+        mt = os.path.getmtime(fn)
+        if mt != _FACTS["mtime"]:
+            with open(fn, "r", encoding="utf-8") as f:
+                _FACTS["facts"] = json.load(f).get("facts", [])
+            _FACTS["mtime"] = mt
+    except Exception:
+        pass
+    return _FACTS["facts"]
+
+
 def _ctb_payload(name, d, tn, marks, res):
     """The numbers for the scrolling call banner: the three calls as small chips (pinned along the bottom) and a list of full cards that roll across. Returns JSON text. Information only."""
     dec = 4 if name == "XRP" else 2
@@ -9010,7 +9107,7 @@ def _ctb_payload(name, d, tn, marks, res):
             holding = (tn["spot"] >= tn["line"]) == (side == "YES")
             rs.append(("Right now", "holding the call side" if holding else "on the OTHER side", "up" if holding else "warn"))
         bar_col = {"up": "var(--ctb-up)", "down": "var(--ctb-down)", "warn": "var(--ctb-warn)"}[cls]
-        cards.append({"key": lab.lower(), "cls": cls + (" gold" if real else ""), "html": head + f'<div class="ctb-call">{callh}<small>{lean:.0f}%</small></div>'
+        cards.append({"key": lab.lower(), "locked": True, "cls": cls + (" gold" if real else ""), "html": head + f'<div class="ctb-call">{callh}<small>{lean:.0f}%</small></div>'
                       f'<div class="ctb-bar"><i style="width:{min(100, lean):.0f}%;background:{bar_col}"></i></div>' + rows(rs)})
     # the hunter card: where the END CALL stands
     if mid_side in ("YES", "NO"):
@@ -9078,13 +9175,41 @@ def _ctb_payload(name, d, tn, marks, res):
             _ic("agree", "THE CALLS", f'{ad["table"][1]["all"]:.0f}%', "when all three agree", [("Ended as called", f'{ad["n"]} rounds since Oct 15', "up"), ("Not all agree", f'{ad["table"][2]["all"]:.0f}% as called', "t")])
     except Exception:
         pass
+    try:                                                              # 14 facts from the bank, a different handful every minute (and different for each coin)
+        import random as _rnd
+        pool = sorted([f for f in _facts_bank() if f.get("c") in (None, name)], key=lambda f: f["k"])
+        _rnd.Random(f"{name}{dt.date.today().isoformat()}").shuffle(pool)            # a different order every day
+        mi_ = int(time.time() // 60)
+        st_ = (mi_ * 36) % max(1, len(pool))                                          # each minute gets the NEXT 36 facts - no overlap between minutes until the whole bank has gone round
+        n_hand_ = len(info)
+        for f in (pool + pool)[st_:st_ + 36]:
+            _ic(f["k"], escape(f["t"]), escape(str(f["b"])), escape(str(f["s"])), [(escape(str(a)), escape(str(b)), (c if c in ("up", "down", "warn") else "t")) for a, b, *cc in f["r"] for c in [cc[0] if cc else "t"]][:4])
+        if n_hand_ >= 4:                                                              # only two of the hand-written facts per minute, so they do not keep coming back
+            hand_ = info[:n_hand_]
+            info[:] = info[n_hand_:] + [hand_[mi_ % n_hand_], hand_[(mi_ + 3) % n_hand_]]
+    except Exception:
+        pass
+    try:                                                              # COMING UP: the next scheduled events that can move crypto
+        from src import events_info as _evi
+        evs = _evi.upcoming(3)
+        if evs:
+            e0 = evs[0]
+            cl = "down" if e0["hours"] <= 3 else "warn"
+            ev_card = {"key": "events", "cls": cl, "html": f'<div class="ctb-hd"><span class="ctb-which">COMING UP &middot; {"HEADS UP" if e0["hours"] <= 3 else "ON THE CALENDAR"}</span></div>'
+                       f'<div class="ctb-call" style="font-size:30px;white-space:normal;line-height:1.1">{escape(e0["name"])}<small>{escape(e0["left"])}</small></div>'
+                       f'<div class="ctb-bar"><i style="width:{max(8, min(100, 100 - e0["hours"] / 1.68)):.0f}%;background:var(--ctb-{cl})"></i></div>'
+                       + rows([(escape(e["name"]), escape(e["left"]), "t") for e in evs] + [("Why it matters", escape(e0["why"]), "warn")])}
+            info.append(ev_card)
+            cards.append(ev_card)
+    except Exception:
+        pass
     smoked = False
     try:
         smoked = d.get("confidence") is not None and d.get("leaning") in ("YES", "NO") and float(d["confidence"]) >= 0.90
     except Exception:
         smoked = False
     strip = f'<span class="ctb-coin">{name}</span>' + "".join(f'<div class="ctb-chip {c}{" gold" if rl else ""}"><span class="k">{k}</span><span class="v">{v}</span></div>' for k, v, c, rl in chips)
-    return json.dumps({"cards": cards, "calls": strip, "info": info, "smoked": smoked}).replace("</", "<\\/")
+    return json.dumps({"cards": cards, "calls": strip, "info": info, "smoked": smoked, "quiet": not any((marks.get(str(M)) or ["NONE"])[0] in ("YES", "NO") for M in (11, 7, 3))}).replace("</", "<\\/")
 
 
 def build_call_timing_panel(name):
@@ -10727,6 +10852,50 @@ def build_cpi_strip(asset_name):
 SWEEP_ALERT_TFS = ("1m", "5m", "15m", "1h")
 
 
+def _sweep_rate_attrs(asset_name, tf, name):
+    """' data-rate="62" data-n="1,234"' - how often this kind of liquidity sweep has worked (the pattern track record), or ''."""
+    try:
+        st = _mtf.stats.summary(asset_name, tf, name)
+        if st and st.get("decisive"):
+            return f' data-rate="{st["rate"] * 100:.0f}" data-n="{st["decisive"]:,}"'
+    except Exception:
+        pass
+    return ""
+
+
+PATTERN_ALERT_TFS = ("5m", "15m", "1h")
+PATTERN_ALERT_WORDS = ("head and shoulders", "shooting star", "wedge", "ledge")
+
+
+def pattern_alert_markers(asset_name):
+    """Hidden page markers for the chart patterns the owner wants called out (head and shoulders and its inverse, shooting star, wedges, ledges) while they are forming or just formed.
+    Carries the pattern's track record (how often it worked) and its bias (which way it should go if it plays out). The browser turns a NEW one into an entry in the notification window. Information only."""
+    if _mtf is None:
+        return ""
+    sym = {a["name"]: a["symbol"] for a in DASHBOARD_ASSETS}.get(asset_name)
+    snap = _mtf.snapshot(sym) if sym else None
+    if not snap:
+        return ""
+    out, seen = [], set()
+    bucket = int(time.time() // 1800)
+    for tf in PATTERN_ALERT_TFS:
+        a = snap.get(tf)
+        if not a:
+            continue
+        for l in a.get("all_labels", a.get("labels", [])):
+            nm = l["name"]
+            low = nm.lower()
+            if not any(w in low for w in PATTERN_ALERT_WORDS) or l.get("status") not in ("forming", "formed", "confirmed") or (l.get("age", 0) or 0) > 1:
+                continue
+            base = re.sub(r"[0-9.,()]+", "#", low)
+            key = f"{asset_name}|{tf}|{base}|{bucket}"
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(f'<span class="pat-alert" data-name="{asset_name}" data-tf="{tf}" data-pat="{escape(nm[:1].upper() + nm[1:])}" data-bias="{l["bias"]}" data-status="{l["status"]}" data-key="{escape(key)}"{_sweep_rate_attrs(asset_name, tf, nm)} style="display:none;"></span>')
+    return "".join(out)
+
+
 def sweep_forming_markers(asset_name):
     """Hidden page markers for every LIQUIDITY SWEEP that is forming right now (the open candle poked past equal highs / lows and price is back
     inside). The browser turns a NEW one into a banner + sound + voice. Information only - never used for buying."""
@@ -10747,7 +10916,7 @@ def sweep_forming_markers(asset_name):
             if l["name"].startswith("LIQUIDITY SWEEP") and l.get("status") == "forming":
                 side = "highs" if "highs" in l["name"] else "lows"
                 out.append(f'<span class="sweep-alert" data-name="{asset_name}" data-tf="{tf}" data-side="{side}" data-bias="{l["bias"]}" '
-                           f'data-key="{asset_name}|{tf}|{side}|{cts}" style="display:none;"></span>')
+                           f'data-key="{asset_name}|{tf}|{side}|{cts}"{_sweep_rate_attrs(asset_name, tf, l["name"])} style="display:none;"></span>')
     return "".join(out)
 
 
@@ -11332,6 +11501,27 @@ def build_fvg_panel(asset_name, spot=None):
     return html
 
 
+def build_events_panel():
+    """Optional drop-down: the next scheduled events that can move crypto (Fed decisions, inflation, jobs, elections) with a countdown. Information only - it never says which way."""
+    try:
+        from src import events_info as _evi
+        evs = _evi.upcoming(8)
+    except Exception:
+        return ""
+    if not evs:
+        return ""
+    tz = _viewtz.get()
+    rows = []
+    for e in evs:
+        w = e["when"].astimezone(tz)
+        when = f"{w:%a %b} {w.day}" + ("" if (e["when"].hour == 0 and e["when"].minute == 0) else ", " + _viewtz.t12(w))
+        rows.append(f'<tr><td><b>{escape(e["name"])}</b></td><td>{when}</td><td class="{"down" if e["hours"] <= 3 else ("warn" if e["hours"] <= 24 else "flat")}"><b>{escape(e["left"])}</b></td><td class="hint">{escape(e["why"])}</td></tr>')
+    e0 = evs[0]
+    return (f'<details class="lc-drop ev-drop" data-pat="EVENTS"><summary><span class="dd-ic">&#9654;</span><b>Upcoming news</b> <span class="hint">- next: {escape(e0["name"])} {escape(e0["left"])}</span></summary>'
+            f'<table class="lc-table"><tr><th>Event</th><th>When</th><th>Countdown</th><th>Why it can move crypto</th></tr>{"".join(rows)}</table>'
+            '<div class="hint">Scheduled events only. They tell you WHEN something may move the market, never which way. Times are shown in your own time zone. Information only.</div></details>')
+
+
 def build_line_cross_panel(asset_name):
     """Pull-down: how many times the price crossed the target line this round and in each of the last 4 hours, with a picture of every hour."""
     with _lc_mu:
@@ -11515,7 +11705,8 @@ def build_pattern_window(asset_name):
         for s_ in _sweep_stars(asset_name, tf, labels, cs):
             if s_.get("fresh"):
                 flags += (f'<span class="sweep-star-flag" style="display:none" data-name="{asset_name}" data-tf="{_MTF_NAMES[tf]}" data-fresh="1" '
-                          f'data-dir="{"highs" if s_["up"] else "lows"}" data-key="{asset_name}|{tf}|{int(s_["ts"])}|{"h" if s_["up"] else "l"}"></span>')
+                          f'data-dir="{"highs" if s_["up"] else "lows"}" data-key="{asset_name}|{tf}|{int(s_["ts"])}|{"h" if s_["up"] else "l"}"'
+                          + _sweep_rate_attrs(asset_name, tf, "LIQUIDITY SWEEP of the highs, closed back below (upthrust / stop run)" if s_["up"] else "LIQUIDITY SWEEP of the lows, closed back above (spring / stop run)") + '></span>')
     except Exception as _sfe:
         print(f"[sweep star] marker failed: {_sfe!r}")
     mtf_part, old_open, old_close = "", "", ""
@@ -13249,6 +13440,11 @@ def render_html():
         except Exception as _fve:
             print(f"[fair value gaps] panel failed: {_fve!r}")
         try:
+            events_html = build_events_panel() if name in ("BTC", "XRP") else ""
+        except Exception as _eve:
+            events_html = ""
+            print(f"[events] panel failed: {_eve!r}")
+        try:
             call_timing_html = build_call_timing_panel(name) if name in ("BTC", "XRP") else ""            # the call banner + the three call windows now sit at the TOP of the card (owner, 2026-10-27)
         except Exception as _cte:
             call_timing_html = ""
@@ -13282,7 +13478,7 @@ def render_html():
             _cw(_cside(_mine), "My call", _mine_html, (f'close {pred_html}' if _mine else 'no confident call'), "the live call right now"),
             _cw("", "Kalshi says", _kal_html, "", "which way Kalshi's own price is leaning")])
         try:
-            sweep_marker_html = sweep_forming_markers(name)
+            sweep_marker_html = sweep_forming_markers(name) + pattern_alert_markers(name)
         except Exception as _swe:
             sweep_marker_html = ""
             print(f"[sweep alert] markers failed: {_swe!r}")
@@ -13303,13 +13499,9 @@ def render_html():
               </div>
             </div>
           </div>
-          {call_timing_html}
+          {call_timing_html}{events_html}
           <div class="cwrow">{call_windows_html}</div>
-          <details class="info-drop" data-pat="INFO|{name}"><summary>Whale trades, order-book walls and {name} 24h high / low</summary>
-          {whale_row_html}
-          {book_walls_row_html}
           {daily_range_row_html}
-          </details>
           <div class="tugrow">
             <div class="tugcol">
               {tug_html}
@@ -14312,7 +14504,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
         else:
-            body = PAGE_TEMPLATE.replace('__PATTERN_LIB_JSON__', pattern_lib_json()).replace('__VERSION_TAG__', _version_tag()).replace('__LEGAL__', _accp.legal_footer()).replace('__USERBAR__', _accp.userbar(*self._who) if (HOSTED_PASSWORD and self._who) else '').replace('__CTB_DEF__', 'false' if HOSTED_PASSWORD else 'true').replace('</head>', _theme.page_css() + '</head>', 1)
+            body = PAGE_TEMPLATE.replace('__PATTERN_LIB_JSON__', pattern_lib_json()).replace('__VERSION_TAG__', _version_tag()).replace('__LEGAL__', _accp.legal_footer()).replace('__USERBAR__', _accp.userbar(*self._who) if (HOSTED_PASSWORD and self._who) else '').replace('__CTB_DEF__', 'false' if HOSTED_PASSWORD else 'true').replace('__PAGE_VER__', SITE_VERSION).replace('</head>', _theme.page_css() + '</head>', 1)
             body = _theme.apply(body).encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html")
