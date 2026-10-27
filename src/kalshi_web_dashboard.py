@@ -806,7 +806,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-27-sound101"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-28-voicesync102"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -5676,8 +5676,9 @@ function speakBrowser(text) {
   } catch (e) { /* speech synthesis unavailable/blocked - the sound alert already played, fine */ }
 }
 
-function speak(text) {
+function speak(text, urgent) {
   if (!voiceAlertsEnabled || !soundEnabled) return;
+  if (typeof narFeedOn !== 'undefined' && narFeedOn) { narPost({text: text, key: 'old:' + text, ttl: 30000, urgent: !!urgent, old: true}); return; }      // shared voice feed: every screen says it together
   speakRaw(text);
 }
 
@@ -5687,6 +5688,7 @@ function speak(text) {
 // the flip itself outranks everything: drop any queued "building" speech and say it right away
 function speakUrgent(text, delayMs) {
   setTimeout(() => {
+    if (typeof narFeedOn !== 'undefined' && narFeedOn) { speak(text, true); return; }
     try { if ('speechSynthesis' in window) window.speechSynthesis.cancel(); } catch (e) {}
     setTimeout(() => speak(text), 80);
   }, delayMs === undefined ? 300 : delayMs);
@@ -6859,7 +6861,55 @@ function filePlay(f, then, voice) {
     return true;
   } catch (e) { return false; }
 }
+// ---- Shared voice feed (owner, 2026-10-28): a screen that spots something posts it; EVERY screen (PC, laptop, phone, website) plays the same feed at the same moment ----
+let narFeedOn = false, narFeedLast = -1, narFeedSrc = null, narFeedFails = 0, narClockOff = null, narRtt = 1e9;
+const narPosted = {};
+const NAR_SYNC_MS = 1500;                                            // every screen speaks a line 1.5 s after the server got it, so a fast screen waits for a slow one
+function narPost(o) {
+  const now = Date.now();
+  if (o.key && narPosted[o.key] && now - narPosted[o.key] < Math.min(o.ttl || 20000, 60000)) return;     // this screen already sent it
+  if (o.key) narPosted[o.key] = now;
+  try { fetch('/nar_say', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(o)}).catch(() => {}); } catch (e) {}
+}
 function narSay(text, key, ttl, clip, file, urgent) {
+  if (!narratorOn || !text) return;
+  if (narFeedOn) { narPost({text: text, key: key || null, ttl: ttl || 20000, clip: clip || null, file: file || null, urgent: !!urgent}); return; }
+  narPlayLocal(text, key, ttl, clip, file, urgent, null);
+}
+function narFeedPoll() {
+  const t0 = Date.now();
+  fetch('/nar_feed?since=' + narFeedLast, {cache: 'no-store'}).then(r => { if (!r.ok) throw new Error('feed ' + r.status); return r.json(); }).then(j => {
+    const t1 = Date.now();
+    narRtt += 2;                                                     // the best (fastest) round trip sets the clock; it slowly ages so a changed network is picked up
+    if (narClockOff === null || t1 - t0 <= narRtt) { narClockOff = j.now * 1000 - (t0 + t1) / 2; narRtt = t1 - t0; }
+    narFeedFails = 0;
+    if (!narFeedOn) { narFeedOn = true; sigLast = -1; }
+    if (j.src !== narFeedSrc || narFeedLast < 0) { narFeedSrc = j.src; narFeedLast = j.last; return; }      // first look (or the feed restarted): start from now, do not replay the past
+    (j.items || []).forEach(it => { narFeedLast = Math.max(narFeedLast, it.id); narFeedPlay(it); });
+  }).catch(() => { if (++narFeedFails >= 3 && narFeedOn) { narFeedOn = false; sigLast = -1; } });      // an older server without the feed: each screen speaks on its own like before
+}
+setInterval(narFeedPoll, 1000);
+setTimeout(narFeedPoll, 300);
+function narFeedPlay(it) {
+  if (it.toast && typeof coinShown === 'function' && coinShown(it.toast.coin) && !(it.toast.clip && sigOff.indexOf(it.toast.clip) >= 0)) sigToast(it.toast);
+  const wait = it.t * 1000 - (narClockOff || 0) + NAR_SYNC_MS - Date.now();
+  if (wait < -20000) return;                                         // too late to be useful
+  const go = () => {
+    if (it.old) {                                                    // the older voice alerts (SOUND button + Voice alerts)
+      if (!voiceAlertsEnabled || !soundEnabled) return;
+      if (it.urgent) { try { window.speechSynthesis.cancel(); } catch (e) {} }
+      if (it.rec && it.rec[voiceOf(it.text)]) speakRaw(it.text); else speakBrowser(it.text);
+      return;
+    }
+    if (!narratorOn) return;
+    narPlayLocal(it.text, null, 0, it.clip, it.file, it.urgent, it.rec || null);
+  };
+  if (wait > 0) setTimeout(go, Math.min(wait, 5000)); else go();
+}
+function narText(spoken, vc, rec) {                                    // a line with no clip: the recorded sentence when every screen has it; otherwise the computer voice (only where it is ticked) so no screen says something the others cannot
+  if (!rec || rec[vc]) narVoice(spoken, vc); else speakBrowser(spoken);
+}
+function narPlayLocal(text, key, ttl, clip, file, urgent, rec) {
   if (!narratorOn || !text) return;
   const nm0 = /^(BTC|XRP)\b/.exec(text);
   if (nm0 && !narCoin[nm0[1]]) return;                              // that coin's narrator is off
@@ -6873,7 +6923,7 @@ function narSay(text, key, ttl, clip, file, urgent) {
     try { if (ttsAudio) { ttsAudio.onended = null; ttsAudio.onerror = null; ttsAudio.pause(); } } catch (e) {}
     narBusyUntil = 0;
   }
-  narQueue.push({text: text, at: now, clip: clip || null, file: file || null});
+  narQueue.push({text: text, at: now, clip: clip || null, file: file || null, rec: rec || null});
   narFlush();
 }
 function narFlush() {
@@ -6888,13 +6938,14 @@ function narFlush() {
   const cm = /^(BTC|XRP)\b/.exec(it.text || '');
   const spoken = (it.text || '').replace(/^BTC\b/, 'Bitcoin').replace(/^XRP\b/, 'X R P');
   const vc = cm ? voiceBy[cm[1]] : voiceSet;                         // this coin's own narrator voice
+  if (it.rec && !it.file && !(it.clip && mapOf(vc)[it.clip]) && !it.rec[vc] && !compVoiceOn) { if (narQueue.length) setTimeout(narFlush, 100); return; }     // no screen has a recording of this line: skip it everywhere (no lone coin name)
   if (it.file) {                                                      // a recorded callout with the call in it (locked call: up / down and the percent)
-    const go = () => { if (!filePlay(it.file, null, vc)) narVoice(spoken, vc); };
+    const go = () => { if (!filePlay(it.file, null, vc)) narText(spoken, vc, it.rec); };
     if (!(cm && coinTag(cm[1], go))) go();
   } else if (it.clip && mapOf(vc)[it.clip]) {
-    const go = () => { if (!clipPlay(it.clip, null, vc)) narVoice(spoken, vc); };
+    const go = () => { if (!clipPlay(it.clip, null, vc)) narText(spoken, vc, it.rec); };
     if (!(cm && coinTag(cm[1], go))) go();
-  } else narVoice(spoken, vc);
+  } else narText(spoken, vc, it.rec);
   narBusyUntil = Math.max(narBusyUntil, now + 1200);
   if (narQueue.length) setTimeout(narFlush, 900);
 }
@@ -6915,6 +6966,7 @@ function sigToast(e) {
   setTimeout(() => { try { d.remove(); } catch (x) {} }, 5000);                 // each pop-up goes away after about 5 seconds (click it to close it sooner)
 }
 function checkSignals() {
+  if (narFeedOn) return;                                              // the shared voice feed carries the signals (toast + voice) to every screen at once
   fetch('/signals?since=' + sigLast, {cache: 'no-store'}).then(r => r.json()).then(j => {
     if (sigLast < 0) { sigLast = j.now; return; }
     (j.events || []).forEach(e => {
@@ -10083,6 +10135,11 @@ def _sig_emit(coin, kind, text, price, key, cooldown, clip=None, file=None):
         _sig_id[0] += 1
         _sig_events.append({"id": _sig_id[0], "t": now, "coin": coin, "kind": kind, "text": text, "clip": clip or _SIG_CLIP_ALIAS.get(kind, kind if kind in _clip_map() else None), "file": file})
         del _sig_events[:-200]
+        _ev = dict(_sig_events[-1])
+    if _nar_follow_cfg() is None:                                  # the shared voice feed: every screen speaks this signal at the same moment (a PC that follows the website gets the website's signals instead)
+        _sw = re.match(r"liquidity_sweep_(low|high)$", kind or "")
+        _nar_add({"text": text, "key": ("sweep:" + coin + ":" + ("highs" if _sw.group(1) == "high" else "lows")) if _sw else ("sig:" + key), "ttl": 900000 if _sw else 1000,
+                  "clip": _ev["clip"], "file": file, "toast": {"coin": coin, "kind": kind, "text": text, "clip": _ev["clip"]}})
     try:
         new = not os.path.exists(_SIG_LOG)
         with open(_SIG_LOG, "a", newline="", encoding="utf-8") as f:
@@ -10542,6 +10599,118 @@ def _sig_payload(since):
         ev = [e for e in _sig_events if e["id"] > since]
         now = _sig_id[0]
     return {"now": now, "events": ev}
+
+
+# ---- Shared voice feed (owner, 2026-10-28: "everybody should be getting the same thing at the same exact time") ---------------------------------------------------
+# Every screen used to decide on its own what to say, so a PC and a laptop said different things. Now a screen that spots something posts the line here
+# (/nar_say), the line is kept once (same key = said once), and every screen plays everything in this feed (/nar_feed) at the same moment.
+# A PC that follows the website (data_cache/follow_config.json) passes both routes through to the website, so the PC and the website share ONE feed.
+_nar_feed, _nar_seen = [], {}
+_nar_lock = threading.Lock()
+_nar_id = [0]
+_nar_proxy = {}
+_BOOT_TOKEN = int(time.time())                                     # tells the page when the feed it plays was restarted (its numbering starts again)
+
+
+def _nar_follow_cfg():
+    """The website's address + login when this copy follows the website (the owner's PC), else None. The website copy itself never follows."""
+    if HOSTED_PASSWORD or ACCEPT_SYNC:
+        return None
+    try:
+        with open(_FOLLOW_CONFIG, "r", encoding="utf-8") as f:
+            cfg = json.load(f)
+        return cfg if cfg.get("url") and cfg.get("password") else None
+    except Exception:
+        return None
+
+
+def _nar_site_req(cfg, path, data=None):
+    import base64 as _b64
+    auth = "Basic " + _b64.b64encode(((cfg.get("user") or "sync") + ":" + cfg["password"]).encode("utf-8")).decode()
+    hdr = {"Authorization": auth, "User-Agent": "kalshi-follow", "Accept": "application/json"}
+    if data is not None:
+        hdr["Content-Type"] = "application/json"
+    return urllib.request.Request(cfg["url"].rstrip("/") + path, data=data, headers=hdr)
+
+
+def _nar_has_rec(text, voice):
+    """True when this exact sentence is in the pre-recorded voice pack, so every screen can say it in the chosen voice (lines without one are said on no screen, or in the computer voice where that is ticked)."""
+    try:
+        import hashlib
+        spoken = re.sub(r"^XRP\b", "X R P", re.sub(r"^BTC\b", "Bitcoin", str(text)))
+        t = " ".join(spoken.split())[:240]
+        return _cp_has("tts_" + hashlib.sha1((("girl|" if voice == "girl" else "") + t).encode("utf-8")).hexdigest() + ".mp3")
+    except Exception:
+        return False
+
+
+def _nar_add(item):
+    """Add one line to the shared feed unless the same key was said within its ttl (milliseconds, as the page uses). Returns the entry or None."""
+    text = " ".join(str(item.get("text") or "").split())[:240]
+    if not text:
+        return None
+    key = str(item.get("key") or text)[:200]
+    try:
+        ttl = min(max(float(item.get("ttl") or 20000), 1000.0), 3600000.0) / 1000.0
+    except (TypeError, ValueError):
+        ttl = 20.0
+    ent = {"text": text, "key": key, "clip": item.get("clip") or None, "file": item.get("file") or None, "urgent": bool(item.get("urgent")), "old": bool(item.get("old")),
+           "toast": item.get("toast") if isinstance(item.get("toast"), dict) else None,
+           "rec": {"dominator": _nar_has_rec(text, "dominator"), "girl": _nar_has_rec(text, "girl")}}
+    now = time.time()
+    with _nar_lock:
+        if now - _nar_seen.get(key, 0) < ttl:
+            return None
+        _nar_seen[key] = now
+        if len(_nar_seen) > 3000:
+            for k in [k for k, v in _nar_seen.items() if now - v > 3600]:
+                _nar_seen.pop(k, None)
+        _nar_id[0] += 1
+        ent["id"], ent["t"] = _nar_id[0], now
+        _nar_feed.append(ent)
+        del _nar_feed[:-300]
+    return ent
+
+
+def _nar_payload(since):
+    with _nar_lock:
+        items = [e for e in _nar_feed if e["id"] > since] if since >= 0 else []
+        last = _nar_id[0]
+    return {"now": time.time(), "src": "here:" + str(_BOOT_TOKEN), "last": last, "items": items}
+
+
+def _nar_feed_for(since):
+    """The feed this page should play: the website's when this PC follows it (cached for under a second so many tabs cost one fetch), this copy's own otherwise
+    (and as a fallback while the website cannot be reached)."""
+    cfg = _nar_follow_cfg()
+    if cfg is None:
+        return _nar_payload(since)
+    hit = _nar_proxy.get(since)
+    if hit and time.time() - hit[0] < 0.8:
+        return hit[1]
+    try:
+        with urllib.request.urlopen(_nar_site_req(cfg, "/nar_feed?since=" + str(since)), timeout=4) as r:
+            j = json.loads(r.read().decode("utf-8"))
+        j["src"] = "site:" + str(j.get("src"))
+        if len(_nar_proxy) > 50:
+            _nar_proxy.clear()
+        _nar_proxy[since] = (time.time(), j)
+        return j
+    except Exception:
+        return _nar_payload(since)
+
+
+def _nar_say_from_page(item):
+    cfg = _nar_follow_cfg()
+    if cfg is None:
+        _nar_add(item)
+        return
+    def _fwd():
+        try:
+            urllib.request.urlopen(_nar_site_req(cfg, "/nar_say", json.dumps(item).encode("utf-8")), timeout=6).read()
+        except Exception:
+            _nar_add(item)                                         # the website is unreachable: this PC's own feed carries it meanwhile
+    threading.Thread(target=_fwd, daemon=True).start()
 
 
 def _flip_risk_table():
@@ -14428,6 +14597,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     return
                 self._send(200, json.dumps({"ok": note}).encode(), "application/json")
             return
+        if _ppath == "/nar_say" and _voice_client(self.client_address[0]):      # a screen spotted something to say: it goes in the shared voice feed once, every screen plays it
+            try:
+                n = int(self.headers.get("Content-Length", 0))
+                item = json.loads(self.rfile.read(n).decode("utf-8")) if 0 < n <= 8192 else {}
+            except Exception:
+                item = {}
+            if isinstance(item, dict) and item.get("text"):
+                _nar_say_from_page(item)
+            self._send(200, b'{"ok": true}', "application/json")
+            return
         if HOSTED_PASSWORD and _mem.MEMBERSHIP_ON and _ppath == "/trial":
             who = self._who[0] if self._who else None
             if not who or who == "admin":
@@ -14704,6 +14883,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
             except ValueError:
                 since = -1
             body = json.dumps(_sig_payload(since)).encode()
+            self.send_response(200); self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body))); self.send_header("Cache-Control", "no-store"); self.end_headers()
+            self.wfile.write(body)
+            return
+        if parsed.path == "/nar_feed" and _voice_client(self.client_address[0]):
+            try:
+                since = int((urllib.parse.parse_qs(parsed.query).get("since") or ["-1"])[0])
+            except ValueError:
+                since = -1
+            body = json.dumps(_nar_feed_for(since)).encode()
             self.send_response(200); self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body))); self.send_header("Cache-Control", "no-store"); self.end_headers()
             self.wfile.write(body)
