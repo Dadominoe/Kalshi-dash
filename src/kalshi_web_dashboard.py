@@ -805,7 +805,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-27-dock49"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-27-info50"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -4973,6 +4973,7 @@ body:not(.no-ctb) .ct-drop > summary .ct-sumx { display:none; }     /* with the 
 .ctb-card.down { color:var(--ctb-down); border-color:var(--ctb-down); background:linear-gradient(180deg,var(--ctb-down-bg),#0b0d12); }
 .ctb-card.warn { color:var(--ctb-warn); border-color:var(--ctb-warn); background:linear-gradient(180deg,var(--ctb-warn-bg),#0b0d12); }
 .ctb-card.gold { border-color:var(--ctb-gold); }
+.ctb-card.info { color:#7aa2ff; border-color:#7aa2ff; background:linear-gradient(180deg,#0b1630,#0b0d12); }
 .ctb-hd { display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
 .ctb-coin { font-weight:900; font-size:24px; color:#ff9f1c; }
 .ctb-which { font-size:14px; letter-spacing:1.3px; font-weight:800; color:var(--ctb-dim); text-transform:uppercase; }
@@ -7367,13 +7368,13 @@ function ctbSync() {
     if (o.el.parentNode !== slot) slot.appendChild(o.el);
     let j = null;
     try { j = JSON.parse(slot.querySelector('.ctb-json').textContent); } catch (e) { return; }
-    o.data = j.cards;
+    o.data = j.cards; o.info = j.info || []; o.smoked = !!j.smoked;
     const nowMs = Date.now();
     o.alerts = (typeof dockItems !== 'undefined' ? (dockItems[a] || []) : []).filter(x => !x.until || x.until > nowMs)
       .map(x => ({key: 'al|' + x.key + '|' + (x.until || 0), cls: ({'dock-buy': 'up', 'dock-sell': 'down'})[x.cls] || 'warn', html: ctbAlertHtml(a, x)}));
     const cs = o.el.querySelector('.ctb-calls');
     if (cs.innerHTML !== j.calls) cs.innerHTML = j.calls;
-    o.live.forEach(c => { const d = j.cards.concat(o.alerts).find(x => x.key === c.key); if (d && c.html !== d.html) { c.el.innerHTML = d.html; c.html = d.html; c.el.className = 'ctb-card ' + d.cls; } });
+    o.live.forEach(c => { const d = j.cards.concat(o.info || [], o.alerts).find(x => x.key === c.key); if (d && c.html !== d.html) { c.el.innerHTML = d.html; c.html = d.html; c.el.className = 'ctb-card ' + d.cls; } });
   });
 }
 function ctbTick(now, fromTimer) {
@@ -7388,7 +7389,11 @@ function ctbTick(now, fromTimer) {
       const tail = o.live[o.live.length - 1];
       if (!tail || tail.x + tail.w + 110 < W) {
         let d = o.alerts.find(x => !o.seen[x.key]);                                   // a new alert jumps the queue
-        if (d) o.seen[d.key] = 1; else { const all = o.data.concat(o.alerts); d = all[o.idx % all.length]; o.idx++; }
+        if (d) o.seen[d.key] = 1;
+        else if (o.smoked && o.info && o.info.length) {                                  // the market is decided: random cool information instead of the calls
+          let k = Math.floor(Math.random() * o.info.length); if (o.info.length > 1 && o.info[k].key === o.lastInfo) k = (k + 1) % o.info.length;
+          d = o.info[k]; o.lastInfo = d.key;
+        } else { const all = o.data.concat(o.alerts); d = all[o.idx % all.length]; o.idx++; }
         const el = document.createElement('div'); el.className = 'ctb-card ' + d.cls; el.innerHTML = d.html; o.lane.appendChild(el);
         const c = {el: el, x: o.started ? W + 6 : 30, w: el.offsetWidth, key: d.key, html: d.html}; o.started = true;
         el.style.transform = 'translateX(' + c.x + 'px)'; o.live.push(c);          // (the very first card starts already on screen)
@@ -9040,6 +9045,7 @@ def _ctb_payload(name, d, tn, marks, res):
     except Exception:
         pass
     # when the calls agree
+    ad = None
     try:
         ad = _ct_agreement()
         if ad and ad.get("n"):
@@ -9056,8 +9062,29 @@ def _ctb_payload(name, d, tn, marks, res):
                           f'<div class="ctb-bar"><i style="width:{min(100, head_pct):.0f}%;background:var(--ctb-up)"></i></div>' + rows([(a_, b_, c_) for a_, b_, c_ in wl])})
     except Exception:
         pass
+    # cool information for when the market is decided (Kalshi leaning 90% or more): facts from our own tests, plus a few live numbers
+    info = []
+    def _ic(key, tag, big, small, rs):
+        info.append({"key": "i-" + key, "cls": "info", "html": f'<div class="ctb-hd"><span class="ctb-which">DID YOU KNOW &middot; {tag}</span></div><div class="ctb-call" style="font-size:34px;white-space:normal;line-height:1.1">{big}<small>{small}</small></div>'
+                     f'<div class="ctb-bar"><i style="width:100%;background:#7aa2ff"></i></div>' + rows(rs)})
+    _ic("flip", "FLIPS", "About 5%", "of 90c+ markets flip", [("At the 8th minute", "a 90c+ lean ends the other way ~5% of rounds", "t"), ("Tested on", "BTC and XRP, 68 days of rounds", "t")])
+    _ic("same", "OTHER MARKETS", "Same as Bitcoin", "", [("Gold, oil, silver, gas", "flip at about the same rate", "t"), ("At the 8th minute", "about 25% end the other way", "t"), ("Tested on", "8 commodity markets, 68 days", "t")])
+    _ic("line", "THE LINE", "Distance + time", "decide most of it", [("Levels and momentum", "add almost nothing to flip odds", "t"), ("What matters", "how far price is from the line, and the clock", "up"), ("Tested on", "60 days of 1-minute candles", "t")])
+    _ic("fvg", "FAIR VALUE GAPS", "82% come back", "within 15 minutes", [("But so does", "any ordinary level (81%)", "t"), ("Best case", "XRP bigger gaps held 61% vs 57%", "t"), ("So", "places to watch, not signals", "warn")])
+    _ic("press", "PRESSURE", "Spikes fade fast", "about 2 minutes", [("Hot buying or selling", "cools to neutral in ~2 minutes", "t"), ("The pullback after", "is no bigger than after a random minute", "t")])
+    _ic("bar", "THE FLIP BAR", "It is honest", "", [("Bar says 20-30%", "27% really flipped", "t"), ("Bar says 40-50%", "45% really flipped", "t"), ("Checked on", "55,000 readings of real rounds", "t")])
+    try:
+        if ad and ad.get("n"):
+            _ic("agree", "THE CALLS", f'{ad["table"][1]["all"]:.0f}%', "when all three agree", [("Ended as called", f'{ad["n"]} rounds since Oct 15', "up"), ("Not all agree", f'{ad["table"][2]["all"]:.0f}% as called', "t")])
+    except Exception:
+        pass
+    smoked = False
+    try:
+        smoked = d.get("confidence") is not None and d.get("leaning") in ("YES", "NO") and float(d["confidence"]) >= 0.90
+    except Exception:
+        smoked = False
     strip = f'<span class="ctb-coin">{name}</span>' + "".join(f'<div class="ctb-chip {c}{" gold" if rl else ""}"><span class="k">{k}</span><span class="v">{v}</span></div>' for k, v, c, rl in chips)
-    return json.dumps({"cards": cards, "calls": strip}).replace("</", "<\\/")
+    return json.dumps({"cards": cards, "calls": strip, "info": info, "smoked": smoked}).replace("</", "<\\/")
 
 
 def build_call_timing_panel(name):
