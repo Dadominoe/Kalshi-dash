@@ -806,7 +806,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-27-flip82"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-27-ind84"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -4994,7 +4994,7 @@ body:not(.no-ctb) .ct-drop > summary .ct-sumx { display:none; }     /* with the 
 .ctb-call { margin:2px 0 3px; font-size:34px; font-weight:900; letter-spacing:.4px; white-space:nowrap; }
 .ctb-call small { font-size:17px; font-weight:700; margin-left:8px; opacity:.9; }
 .ctb-bar { height:10px; border-radius:5px; background:#1b1d24; margin:2px 0 6px; overflow:hidden; } .ctb-bar i { display:block; height:100%; border-radius:5px; box-shadow:0 0 10px currentColor; }
-.ctb-row { display:flex; justify-content:space-between; gap:10px; font-size:15px; padding:3px 0; border-top:1px solid rgba(255,255,255,.07); color:#e8eaf0; }
+.ctb-row { display:flex; justify-content:space-between; gap:10px; font-size:14px; padding:2px 0; border-top:1px solid rgba(255,255,255,.07); color:#e8eaf0; }
 .ctb-row span:first-child { color:var(--ctb-dim); flex:0 0 auto; max-width:46%; } .ctb-row b { font-weight:700; text-align:right; min-width:0; }
 .ctb-row b.up { color:var(--ctb-up); } .ctb-row b.down { color:var(--ctb-down); } .ctb-row b.warn { color:var(--ctb-warn); } .ctb-row b.t { color:#e8eaf0; }
 @media (max-width:760px) { .ctb-card { width:320px; } .ctb-chip .v { font-size:13px; } .ctb-calls { gap:6px; padding-left:80px; } .ctb-calls .ctb-coin { font-size:16px; } }
@@ -9103,7 +9103,92 @@ def _facts_bank():
     return _FACTS["facts"]
 
 
-def _ctb_payload(name, d, tn, marks, res):
+def _ct_hour_row(recs):
+    """('6 of 8 right - 75% - 3 in a row', css) for the calls made in the last hour, with the current streak (or a streak that just ended). None if there is nothing to say."""
+    try:
+        now = dt.datetime.now(dt.timezone.utc)
+        hr = []
+        for h in recs or []:
+            if h.get("correct") is None:
+                continue
+            t = _window_close_utc(h.get("ticker"))
+            if t is not None and (now - t) <= dt.timedelta(hours=1):
+                hr.append(bool(h["correct"]))
+        graded = [bool(h["correct"]) for h in (recs or []) if h.get("correct") is not None]
+        runs = []
+        for ok in reversed(graded):
+            if runs and runs[-1][0] == ok:
+                runs[-1][1] += 1
+            else:
+                runs.append([ok, 1])
+            if len(runs) >= 3:
+                break
+        st = ""
+        if runs and runs[0][1] >= 2:
+            st = f' - {runs[0][1]} {"wins" if runs[0][0] else "losses"} in a row'
+        elif len(runs) >= 2 and runs[0][1] == 1 and runs[1][1] >= 2:
+            st = f' - streak ended ({runs[1][1]} {"wins" if runs[1][0] else "losses"} before)'
+        if not hr:
+            return (("no graded calls this hour" + st), "t")
+        w = sum(hr)
+        pct = w / len(hr) * 100
+        return (f"{w} of {len(hr)} right - {pct:.0f}%{st}", "up" if pct >= 70 else ("down" if pct < 50 else "t"))
+    except Exception:
+        return None
+
+
+def _ctb_indicator_cards(name):
+    """Banner cards for the chart patterns showing now: a small picture, which way each is projected to go, and how often it has worked (the pattern track record). Information only."""
+    out = []
+    if _mtf is None:
+        return out
+    sym = {a["name"]: a["symbol"] for a in DASHBOARD_ASSETS}.get(name)
+    snap = _mtf.snapshot(sym) if sym else None
+    if not snap:
+        return out
+    found, seen = [], set()
+    for tf in ("5m", "15m", "1h"):
+        a = snap.get(tf)
+        if not a:
+            continue
+        for l in a.get("all_labels", a.get("labels", [])):
+            if l.get("status") not in ("forming", "formed", "confirmed") or l.get("bias") not in ("bullish", "bearish") or (l.get("age", 0) or 0) > 3:
+                continue
+            ex = _pat_explain(l["name"])
+            if not ex or (tf, ex["key"]) in seen:
+                continue
+            seen.add((tf, ex["key"]))
+            try:
+                stt = _mtf.stats.summary(name, tf, l["name"])
+            except Exception:
+                stt = None
+            found.append((stt["decisive"] if stt else 0, tf, l, ex, stt))
+    found.sort(key=lambda x: -x[0])
+    bucket = int(time.time() // 1800)
+    for _n, tf, l, ex, stt in found[:5]:
+        up = l["bias"] == "bullish"
+        col = "var(--ctb-up)" if up else "var(--ctb-down)"
+        svg = (_pat_svg(ex["key"]) or "").replace('width="240" height="120"', 'width="170" height="85"')
+        if stt and stt.get("decisive"):
+            r_ = stt["rate"]
+            rate_txt, bar = f'worked <b>{r_ * 100:.0f}%</b> of the time ({stt["decisive"]:,} scored)', r_ * 100
+        else:
+            rate_txt, bar = "no track record yet", 0
+        means = ex["means"].split(";")[0].split(". ")[0].rstrip(".")
+        if len(means) > 62:
+            means = means[:59].rsplit(" ", 1)[0] + "..."
+        out.append({"key": f"ind-{tf}-{ex['key']}-{bucket}", "cls": "info", "html":
+                    f'<div class="ctb-hd"><span><span class="ctb-coin">{name}</span> <span class="ctb-which">INDICATOR &middot; {tf} &middot; {escape(l["status"])}</span></span></div>'
+                    f'<div style="display:flex;gap:12px;align-items:center;margin:4px 0"><div style="flex:0 0 170px;line-height:0">{svg}</div>'
+                    f'<div><div class="ctb-call" style="font-size:27px;color:{col}">{"&#9650; UP" if up else "&#9660; DOWN"}<small>projected</small></div>'
+                    f'<div style="font-size:14px;color:#e8eaf0;line-height:1.25">{rate_txt}</div></div></div>'
+                    f'<div class="ctb-bar"><i style="width:{bar:.0f}%;background:{col}"></i></div>'
+                    + f'<div class="ctb-row"><span>Pattern</span><b class="t">{escape(ex["key"][:1].upper() + ex["key"][1:])}</b></div>'
+                    + f'<div class="ctb-row"><span>Means</span><b class="t">{escape(means)}</b></div>'})
+    return out
+
+
+def _ctb_payload(name, d, tn, marks, res, allrecs=None):
     """The numbers for the scrolling call banner: the three calls as small chips (pinned along the bottom) and a list of full cards that roll across. Returns JSON text. Information only."""
     dec = 4 if name == "XRP" else 2
     fp = lambda x: fmt_price(x, dec)
@@ -9148,6 +9233,10 @@ def _ctb_payload(name, d, tn, marks, res):
         if s_.get("flip") is not None:
             fr = s_["flip"]
             rs.append(("Flip risk", f"{fr * 100:.0f}%", "down" if fr >= 0.55 else ("warn" if fr >= 0.30 else "up")))
+        if allrecs and allrecs.get(M) is not None:
+            hrow = _ct_hour_row(allrecs[M])
+            if hrow:
+                rs.append(("Last hour", hrow[0], hrow[1]))
         if res in ("YES", "NO"):
             if side == "NONE":
                 rs.append(("Result", f'no call - finished {"UP" if res == "YES" else "DOWN"}', "t"))
@@ -9241,6 +9330,11 @@ def _ctb_payload(name, d, tn, marks, res):
             info[:] = info[n_hand_:] + [hand_[(mi_ + off_) % n_hand_], hand_[(mi_ + off_ + 3) % n_hand_]]
     except Exception:
         pass
+    try:                                                              # indicator cards (picture, projected direction, track record), one in every few facts
+        for i_, c_ in enumerate(_ctb_indicator_cards(name)):
+            info.insert(min(len(info), 2 + i_ * 6), c_)
+    except Exception as _ie:
+        print(f"[call banner] indicator cards failed: {_ie!r}")
     try:                                                              # COMING UP: the next scheduled events that can move crypto
         from src import events_info as _evi
         evs = _evi.upcoming(3)
@@ -9300,7 +9394,7 @@ def build_call_timing_panel(name):
     tables = "".join(f'<details class="ct-recdet" data-pat="CTREC|{name}|{M}"><summary><b>{lab}</b> <span class="hint">{mins}{" - the real END CALL" if M == 7 else ""}</span> &nbsp;{_ct_rec_line(allrecs[M], 24)} <span class="hint">last 24 hours</span></summary>{streak_windows_html(allrecs[M], name, show_pnl=False, plain=True)}</details>'
                      for M, lab, mins in ((11, "EARLY CALL", "4 minutes in (11:00 left)"), (7, "MID CALL", "8 minutes in (7:00 left)"), (3, "LATE CALL", "12 minutes in (3:00 left)")))
     try:
-        banner = f'<div class="ctb-slot" data-asset="{name}"><script type="application/json" class="ctb-json">{_ctb_payload(name, d, tn, marks, res)}</script></div>'
+        banner = f'<div class="ctb-slot" data-asset="{name}"><script type="application/json" class="ctb-json">{_ctb_payload(name, d, tn, marks, res, allrecs)}</script></div>'
     except Exception as _cbe:
         banner = ""
         print(f"[call banner] failed: {_cbe!r}")
