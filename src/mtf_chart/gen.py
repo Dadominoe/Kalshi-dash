@@ -514,7 +514,13 @@ def _fit_channel(w, dt_, a):
     return (w[0][0], b + top_off, s / dt_, b + bot_off, s / dt_, "up" if s >= 0 else "down", top_off - bot_off, apart(tt), apart(bt))
 
 
-def find_narrow(cs, minN=14, maxN=90, relax=False):
+def narrow_params(dt_):
+    """(shortest stretch in candles, widest channel in average candle ranges). The approved 1-minute tunnel keeps 14 / 4.0; the 5-minute and bigger charts get a TIGHTER one (8 / 2.5): at 4.0 their tunnel was as tall as the whole 1-minute view
+    (owner 2026-10-27: 'it highlights a big area, that is not correct') instead of the tight pair of lines price is riding."""
+    return (14, 4.0) if dt_ <= 60 else (8, 2.5)
+
+
+def find_narrow(cs, minN=14, maxN=90, relax=False, wmax=4.0):
     """Look back over 14 to 90 candles for the LONGEST stretch that fits inside one narrow channel (not wider than about 4 average candle ranges), whose top and bottom edges are each touched at least twice
     and that price is still inside right now. If nothing is that neat, take the narrowest one found."""
     dt_ = (cs[1][0] - cs[0][0]) or 60
@@ -533,7 +539,7 @@ def find_narrow(cs, minN=14, maxN=90, relax=False):
             continue
         if fallback is None or f[6] / a < fallback[1]:
             fallback = (f, f[6] / a)
-        if f[6] <= 4.0 * a and f[7] >= 2 and f[8] >= 2:
+        if f[6] <= wmax * a and f[7] >= 2 and f[8] >= 2:
             best = f                                                  # keep going: the longest neat one wins
     pick = best or (fallback[0] if fallback else None)
     return None if pick is None else pick[:6]
@@ -573,6 +579,7 @@ def narrow_tunnel(cs, key=None):
         return None
     dt_ = (cs[1][0] - cs[0][0]) or 60
     hold_n = max(1, int(HOLD_SECONDS // dt_))
+    minN_, wmax_ = narrow_params(dt_)
     a = atr(cs[-60:]) or 1e-9
     closes = [x[4] for x in cs]
     rs = rsi_list(closes)
@@ -584,7 +591,7 @@ def narrow_tunnel(cs, key=None):
         cur = tuple(st["cur"]) if st.get("cur") else None
         born = by_t[st["born_t"]]
         start = by_t[st["last_t"]] + 1                                    # continue from where the last build stopped
-    for e in range(start, n):
+    for e in range(start, n - 1):                                         # CLOSED candles only: the newest one is still forming (its close keeps moving), so it can neither start nor break a tunnel - judging it made the tunnel flicker between builds
         sub = cs[:e + 1]
         brk = None
         if cur is not None:
@@ -606,14 +613,18 @@ def narrow_tunnel(cs, key=None):
             seg = sub[-45:]
             k = min(range(len(seg)), key=lambda i: seg[i][3]) if brk == "up" else max(range(len(seg)), key=lambda i: seg[i][2])
             since = len(seg) - k                                          # candles since that turning point
-            nxt = find_narrow(sub, minN=6, maxN=max(8, since + 1))
+            nxt = find_narrow(sub, minN=6, maxN=max(8, since + 1), wmax=wmax_)
             if not nxt:
-                nxt = find_narrow(sub, minN=4, maxN=max(8, since + 1), relax=True)
+                nxt = find_narrow(sub, minN=4, maxN=max(8, since + 1), relax=True, wmax=wmax_)
             cur, born = nxt, e                                           # no new tunnel found at all = no tunnel (the broken one is not kept on screen)
         elif cur is None:
-            cur, born = find_narrow(sub), e
+            cur, born = find_narrow(sub, minN=minN_, wmax=wmax_), e
+        elif dt_ > 60 and cur[1] - cur[3] > 1.05 * wmax_ * a:               # on the bigger charts a locked tunnel that is wider than the limit was only a 'narrowest there is' fallback: swap it for a properly narrow one as soon as one fits
+            nxt = find_narrow(sub, minN=minN_, wmax=wmax_)
+            if nxt and nxt[1] - nxt[3] <= 1.05 * wmax_ * a:
+                cur, born = nxt, e
     if key:
-        TSTATE[key] = {"cur": list(cur) if cur else None, "last_t": cs[-1][0], "born_t": cs[born if born is not None else n - 1][0]}
+        TSTATE[key] = {"cur": list(cur) if cur else None, "last_t": cs[n - 2][0], "born_t": cs[born if born is not None else n - 2][0]}
     return cur
 
 

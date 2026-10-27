@@ -806,7 +806,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-27-names98"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-27-fit100"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -4911,7 +4911,10 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .ct-drop { margin:4px 0; position:relative; }
 .pyp-t { width:100%; border-collapse:collapse; font-size:14px; } .pyp-t th { text-align:left; font-size:12px; letter-spacing:.8px; text-transform:uppercase; color:#8b949e; padding:4px 8px; border-bottom:2px solid #30363d; }
 .pyp-t td { padding:4px 8px; border-top:1px solid rgba(255,255,255,.07); white-space:nowrap; } .pyp-t td.pyp-best { box-shadow:inset 0 0 0 2px #ffd24a; background:rgba(255,210,74,.10); border-radius:6px; }
-.pyp-rowbest td { background:rgba(255,210,74,.16); } .pyp-now { background:#ffd24a; color:#0d1117; }
+.pyp-rowbest td { background:rgba(255,210,74,.16); } .pyp-tag.pyp-now { background:#ffd24a; color:#0d1117; border-color:#ffd24a; font-weight:800; }
+.pyp-why-d { display:inline-block; vertical-align:middle; margin-left:6px; } .pyp-why-d summary { list-style:none; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:50%; border:1.5px solid #ffd24a; color:#ffd24a; font-size:12px; font-weight:800; font-style:italic; font-family:Georgia,serif; user-select:none; }
+.pyp-why-d summary::-webkit-details-marker { display:none; } .pyp-why-d[open] summary { background:#ffd24a; color:#0d1117; }
+.pyp-why { width:330px; max-width:100%; white-space:normal; margin-top:6px; padding:8px 10px; border:1px solid #ffd24a; border-radius:8px; background:#161b22; color:#e6edf3; font-size:13px; line-height:1.4; font-style:normal; font-weight:400; } .pyp-why b { color:#ffd24a; }
 .pyp-min { font-size:14px; } .pyp-tag { font-size:11px; letter-spacing:.8px; color:#ffd24a; border:1px solid #ffd24a; border-radius:999px; padding:0 7px; margin-left:6px; } .pyp-foot td { border-top:2px solid #30363d; } .pyp-note { margin-top:8px; }
 .pyp-body { overflow-x:auto; }
 .ct-body { position:absolute; left:0; top:calc(100% + 4px); width:100%; min-width:680px; max-width:min(1300px, 98vw); z-index:60; max-height:78vh; overflow:auto; background:#0d1117; border:2px solid #39d0d8; border-radius:12px; padding:12px; box-shadow:0 14px 44px rgba(0,0,0,.75); }
@@ -7208,7 +7211,13 @@ function applyMtf() {
     }
     fr.style.visibility = mtfReady[a] ? 'visible' : 'hidden';
     const _single = document.body.getAttribute('data-view') === 'BTC' || document.body.getAttribute('data-view') === 'XRP';
-    const _fit = (_single && window.innerWidth >= 1300) ? Math.max(380, Math.round(window.innerHeight / (parseFloat(document.body.style.zoom) || 1) - (fr.getBoundingClientRect().top + window.scrollY) / (parseFloat(document.body.style.zoom) || 1) - 90)) : 0;
+    let _fit = 0;
+    if (_single && window.innerWidth >= 1300) {
+      const _zm = parseFloat(document.body.style.zoom) || 1, _vh = window.innerHeight / _zm, _tp = (fr.getBoundingClientRect().top + window.scrollY) / _zm;
+      let _f = _vh - _tp - 90;                                         // the room left on screen below the chart's top edge ...
+      if (_f < _vh * 0.55) _f = _vh - 110;                              // ... but on a laptop the chart sits below the fold (that left only the 380 px minimum, a small chart): give it the whole window height instead
+      _fit = Math.max(380, Math.round(_f));
+    }
     if (fr.dataset.fit !== String(_fit)) {
       try { fr.contentWindow.postMessage({mtfFit: _fit}, '*'); fr.dataset.fit = String(_fit); } catch (e) {}
     }
@@ -9676,6 +9685,25 @@ def build_pick_poison(name, d, tn):
                 k_ = (0, w3 / n3, M)
                 if bkey is None or k_ > bkey:
                     bkey, bestnow = k_, M
+    why = ""
+    if bestnow is not None:                                                        # the click-to-read reason for the shaded row
+        _m_in = 15 - bestnow
+        _pb, _nb = pstat[(bestnow, "24h")]
+        _w24, _n24 = stat[(bestnow, "24 hours")]
+        _w3, _n3 = stat[(bestnow, "3 hours")]
+        _oth = sorted(((pstat[(M, "24h")][0], M) for M in order if M != bestnow and pstat[(M, "24h")][1] >= 20 and pstat[(M, "24h")][0] is not None), reverse=True)
+        _ln = []
+        if bkey[0] == 1:
+            _ln.append(f"It has the <b>best estimated profit over the last 24 hours</b>: {_pb:+.1f} cents per $1 contract after the Kalshi fee, over {_nb} rounds, if you had followed the call made at this minute at the Kalshi price recorded then.")
+            if _oth:
+                _ln.append(f"The next best is {15 - _oth[0][1]} min in at {_oth[0][0]:+.1f}c; the average of the other minutes is {sum(x[0] for x in _oth) / len(_oth):+.1f}c.")
+        else:
+            _ln.append(f"No minute has 20 rounds of price history in the last 24 hours yet, so it is picked by the <b>best 3-hour record</b>: {_w3} right of {_n3} ({_w3 / max(_n3, 1) * 100:.0f}%).")
+        if _n24:
+            _ln.append(f"Its record over 24 hours: {_w24} right of {_n24} ({_w24 / _n24 * 100:.0f}%).")
+        _ln.append("This is an estimate from recorded prices, not a real fill. Later minutes are more accurate but cost more, so profit is what is compared, not the percent right. It can change as rounds finish. Information only - it does not change any call.")
+        why = (f'<details class="pyp-why-d" data-pat="PYPWHY|{name}"><summary title="Why is this the best right now?">i</summary>'
+               f'<div class="pyp-why"><b>Why {_m_in} min in is the best right now</b><br>' + "<br>".join(_ln) + '</div></details>')
     body = []
     for M in order:
         m_in = 15 - M
@@ -9711,7 +9739,7 @@ def build_pick_poison(name, d, tn):
             now_c = '<span class="hint">-</span>'
         tag = f' <span class="pyp-tag">{names[M]}</span>' if M in names else ""
         if M == bestnow:
-            tag += ' <span class="pyp-tag pyp-now">BEST NOW</span>'
+            tag += ' <span class="pyp-tag pyp-now">BEST NOW</span>' + why
         _rc = ' class="pyp-rowbest"' if M == bestnow else ""
         body.append(f'<tr{_rc}><td class="pyp-min"><b>{m_in} min in</b> <span class="hint">{M}:00 left</span>{tag}</td><td>{now_c}</td>{"".join(cells)}</tr>')
     foot = []
