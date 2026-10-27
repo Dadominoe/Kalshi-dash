@@ -70,7 +70,23 @@ def _path_candles(path, n=26):
     return out
 
 
-def path_svg(path, lines=(), labels=(), shade=None, fill_between=None):
+ROUND_KEYS = ("rounding top", "rounding bottom", "cup with handle")          # the pictures that also show the smooth curve the candles follow
+
+
+def smooth_d(pts):
+    """SVG path data for a smooth curve through the points [(px, py)...] (Catmull-Rom turned into Bezier curves)."""
+    if len(pts) < 3:
+        return "M " + " L ".join(f"{x:.1f},{y:.1f}" for x, y in pts)
+    d = f"M {pts[0][0]:.1f},{pts[0][1]:.1f}"
+    for i in range(len(pts) - 1):
+        p0, p1, p2, p3 = pts[max(0, i - 1)], pts[i], pts[i + 1], pts[min(len(pts) - 1, i + 2)]
+        c1 = (p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6)
+        c2 = (p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6)
+        d += f" C {c1[0]:.1f},{c1[1]:.1f} {c2[0]:.1f},{c2[1]:.1f} {p2[0]:.1f},{p2[1]:.1f}"
+    return d
+
+
+def path_svg(path, lines=(), labels=(), shade=None, fill_between=None, curve=False):
     out = []
     if shade:   # (x1, x2, y_low, y_high)
         x1, x2, lo, hi = shade
@@ -79,6 +95,8 @@ def path_svg(path, lines=(), labels=(), shade=None, fill_between=None):
         out.append(_line(p1, p2, rest[0] if rest else GUIDE))
     cs = _path_candles(path)
     bw = max(3.0, (_px(path[-1][0]) - _px(path[0][0])) / (len(cs) - 1) * 0.62)
+    if curve:                                                                   # the rounded shape itself, dashed, under the candles
+        out.append(f'<path d="{smooth_d([(_px(x), _py(y)) for x, y in path])}" fill="none" stroke="{GOLD}" stroke-width="2" stroke-dasharray="5 3" opacity="0.9"/>')
     for (o, h, l, c, x) in cs:
         cx = _px(x)
         col = UP if c >= o else DOWN
@@ -192,5 +210,5 @@ def svg_for(key):
         return candles_svg(cs, rect, labels)
     if key in PATHS:
         path, lines, labels = PATHS[key]
-        return path_svg(path, lines, labels)
+        return path_svg(path, lines, labels, curve=key in ROUND_KEYS)
     return None

@@ -806,7 +806,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-28-lore106"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-28-plain108"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -5069,7 +5069,7 @@ details.pat > summary { cursor:pointer; }
 .hist-time { font-family:Consolas, 'Courier New', monospace; font-size:13px; color:#c9d1d9; margin-right:4px; }
 .pat-info svg { display:block; margin-bottom:6px; max-width:100%; height:auto; }
 .pat-info-row { display:flex; gap:16px; align-items:flex-start; }
-.pat-pic { flex:0 0 250px; max-width:44%; }
+.pat-pic { flex:0 0 400px; max-width:58%; }
 .pat-pic svg { width:100%; height:auto; margin-bottom:0; }
 .pat-text { flex:1 1 auto; font-size:15px; line-height:1.5; }
 .pat-text > div { margin-bottom:6px; }
@@ -7481,6 +7481,8 @@ function fillPatternInfo(d) {
     '<div><b>What it is:</b> ' + e.what + '</div><div><b>What it usually means:</b> ' +
     e.means + '</div><div><b>Watch for:</b> ' + e.watch + '</div>' + patDirection(d.dataset.bias) +
     '</div></div><div class="pat-disc">' + PATTERN_DATA.disclaimer + '</div>';
+  const pk = d.dataset.patkey, pic = box.querySelector('.pat-pic');
+  if (pic && pk) fetch('/pattern_pic?k=' + encodeURIComponent(pk)).then(r => r.ok ? r.text() : '').then(t => { if (t && t.indexOf('<svg') === 0) pic.innerHTML = t; }).catch(() => {});      // the big labeled picture comes only when the tab is opened (keeps the page light)
 }
 // which way the pattern points if it plays out - green up arrow (bullish), red down arrow (bearish), grey for neither
 function patDirection(bias) {
@@ -8396,6 +8398,7 @@ def build_pressure_bar(asset_name):
 from src.mtf_structure import MTFMonitor, TFS as _MTF_TFS
 from src.pattern_info import INFO as _PAT_INFO, DISCLAIMER as _PAT_DISCLAIMER, explain as _pat_explain
 from src.pattern_diagrams import svg_for as _pat_svg
+from src.pattern_big import big_svg as _pat_big
 
 _mtf = None   # MTFMonitor, started in main(); information only - never used for buying
 _MTF_NAMES = {"1m": "1 min", "5m": "5 min", "15m": "15 min", "1h": "1 hour", "3h": "3 hours", "6h": "6 hours",
@@ -9337,6 +9340,63 @@ def _ct_agree_html(name, marks):
 _FACTS = {"mtime": 0.0, "facts": []}
 
 
+def _plain_fact(f):
+    """Our measured fact cards say things like '18%' / 'ended on the other side' / 'minute 12 of 15' with no explanation (owner, 2026-10-28: 'I do not understand what you are talking about on those windows').
+    This writes ONE plain sentence from the card's own numbers and returns the new rows [(label, text, css)...], or None to leave the card as it is."""
+    try:
+        rd = {str(r_[0]): str(r_[1]) for r_ in f["r"]}
+        b, t_ = str(f["b"]), f["t"]
+        coin = rd.get("Coin") or f.get("c") or "the coin"
+        rounds = rd.get("Rounds") or rd.get("Readings") or ""
+
+        def minute(v):                                                              # '8 of 15' -> 'minute 8 of 15 (7 minutes left)'
+            m_ = re.match(r"(\d+) of 15", v or "")
+            return f"minute {m_.group(1)} of 15 ({15 - int(m_.group(1))} minutes left)" if m_ else (v or "")
+        rng = lambda v: re.sub(r"(?<!candle-)range", "candle-range", v or "")
+        rows = None
+        if t_ == "FLIPS BY TIME" and "other side" in f["s"]:
+            mm, dd = (rd.get("Minute / distance", "") + " / ").split(" / ")[:2]
+            sent = f"In {rounds} {coin} rounds from {rd.get('Time of day (ET)', '')} ET, at {minute(mm)} with price {rng(dd)} away from the line, {b} of them ended on the OTHER side of the line from where price was then."
+            rows = [("In plain words", sent, "t"), ("Rounds counted", rounds, "t"), ("Candle-range", "how far a typical 1-minute candle moves", "t")]
+        elif t_ == "FLIPS" and "other side" in f["s"]:
+            sent = f"In {rounds} {coin} rounds, at {minute(rd.get('Minute of the round'))} with price {rng(rd.get('Distance from the line (ranges)', ''))} away from the line, {b} ended on the OTHER side of the line from where price was then."
+            rows = [("In plain words", sent, "t"), ("Rounds counted", rounds, "t"), ("Candle-range", "how far a typical 1-minute candle moves", "t")]
+        elif t_ == "FLIP RISK":
+            v = rd.get("Price vs the line (ranges; minus = already past it)", "")
+            nums = sorted(float(x_) for x_ in re.findall(r"\d+\.?\d*", v))
+            band = f"between {nums[0]:g} and {nums[-1]:g} candle-ranges" if len(nums) >= 2 else rng(v)
+            pos = (f"price was {band} past the line on the wrong side") if v.startswith("-") else (f"price was {band} on the safe side of the line")
+            sent = f"In {rounds} rounds at {minute(rd.get('Minute of the round'))}, when {pos}, {b} of the locked calls ended on the OTHER side."
+            rows = [("In plain words", sent, "t"), ("Rounds counted", rounds, "t"), ("Candle-range", "how far a typical 1-minute candle moves", "t")]
+        elif t_ == "DISTANCE":
+            sent = f"At {minute(rd.get('Minute of the round'))}, when price was {rng(rd.get('Price was', ''))}, {b} of {rounds} rounds ended on the side price was on."
+            rows = [("In plain words", sent, "t"), ("Rounds counted", rounds, "t"), ("Candle-range", "how far a typical 1-minute candle moves", "t")]
+        elif t_ == "CHOPPY ROUNDS":
+            n = rd.get("Times price already crossed the line", "")
+            sent = f"In {rounds} {coin} rounds where price had already crossed the line {n} time{'s' if n != '1' else ''} by {minute(rd.get('Minute'))}, {b} still ended on the OTHER side of the line."
+            rows = [("In plain words", sent, "t"), ("Rounds counted", rounds, "t")]
+        elif t_ == "BEST AND WORST HOURS":
+            sent = f"{coin} at {rd.get('Hour (ET)', '')} ET: out of {rounds} readings of where price stood against the line, {b} ended on the OTHER side (a lower number means steadier rounds)."
+            rows = [("In plain words", sent, "t"), ("Readings counted", rounds, "t")]
+        elif t_ == "INDICATORS" and "leaned" in f["s"]:
+            k = rd.get("Indicators agreeing", "").replace(" of 6", "")
+            sent = f"At {minute(rd.get('Minute of the round'))}, when {k} of our 6 chart indicators leaned the same way, the round ended that way {b} of the time ({rounds} rounds)."
+            rows = [("In plain words", sent, "t"), ("Rounds counted", rounds, "t")]
+        elif t_ == "THE MARKET":
+            sent = f"When the Kalshi market was leaning {rd.get('Market leaning', '').replace(',', ' with')}, it ended that way {b} of the time ({rounds} {coin} rounds)."
+            rows = [("In plain words", sent, "t"), ("Rounds counted", rounds, "t")]
+        elif t_ == "OTHER MARKETS":
+            sent = f"{rd.get('Market', '')}: at {minute(rd.get('Minute of the round'))}, {b} of {rounds} rounds ended the OTHER way from the side the market was leaning."
+            rows = [("In plain words", sent, "t"), ("Rounds counted", rounds, "t")]
+        elif t_ == "THE LINE":
+            ty = rd.get("Round type", "")
+            sent = f"In {rounds} {coin} rounds where price crossed the line {ty.replace(' crossings', ' times').replace(' crossing', ' time')} so far, {b} {f['s']}."
+            rows = [("In plain words", sent, "t"), ("Rounds counted", rounds, "t")]
+        return rows
+    except Exception:
+        return None
+
+
 def _facts_bank():
     """The fact bank: our own measured facts (facts_bank.json) plus thousands of one-line facts from Wikipedia (facts_wiki.json), reloaded when either file changes."""
     try:
@@ -9348,6 +9408,10 @@ def _facts_bank():
             if os.path.exists(fns[0]):
                 with open(fns[0], "r", encoding="utf-8") as f:
                     facts = json.load(f).get("facts", [])
+                for f_ in facts:                                              # a plain-English sentence on the confusing measured cards
+                    nr_ = _plain_fact(f_)
+                    if nr_:
+                        f_["r"] = nr_
             if os.path.exists(fns[1]):
                 with open(fns[1], "r", encoding="utf-8") as f:
                     for n_, x in enumerate(json.load(f).get("facts", [])):
@@ -14862,6 +14926,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_response(200); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-store"); self.end_headers()
             self.wfile.write(body)
+            return
+        if parsed.path == "/pattern_pic":
+            _pk = (urllib.parse.parse_qs(parsed.query).get("k") or [""])[0]
+            _sv = _pat_big(_pk) if _pk in _PAT_INFO else None
+            if _sv:
+                _bd = _sv.encode("utf-8")
+                self.send_response(200); self.send_header("Content-Type", "image/svg+xml; charset=utf-8"); self.send_header("Content-Length", str(len(_bd)))
+                self.send_header("Cache-Control", "max-age=86400"); self.end_headers()
+                self.wfile.write(_bd)
+            else:
+                self.send_response(404); self.send_header("Content-Length", "0"); self.end_headers()
             return
         if parsed.path == "/tts_status" and _voice_client(self.client_address[0]):
             body = json.dumps(_tts_status()).encode()

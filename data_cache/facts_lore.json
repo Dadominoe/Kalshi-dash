@@ -73,69 +73,267 @@
    "coin": null
   },
   {
-   "tag": "HUNTING",
-   "topic": "Bear market",
-   "text": "An old proverb says do not sell the bear's skin before you have caught the bear. Some think it is where the market word bear comes from.",
+   "tag": "VIKINGS",
+   "topic": "Hacksilver",
+   "text": "Vikings paid in silver by weight. They cut up coins and jewelry into pieces called hacksilver and weighed them on small folding scales.",
    "coin": null
   },
   {
-   "tag": "HUNTING",
-   "topic": "Buck",
-   "text": "One popular explanation says the word buck for a dollar comes from the frontier deerskin trade, where a buckskin was a unit of value.",
+   "tag": "VIKINGS",
+   "topic": "Arabic silver",
+   "text": "Tens of thousands of Arabic silver coins have been dug up in Scandinavia, proof that Viking traders reached the Islamic world.",
    "coin": null
   },
   {
-   "tag": "HUNTING",
-   "topic": "Fur trade",
-   "text": "The Hudson's Bay Company, founded in 1670, used the Made Beaver, the value of one good beaver pelt, as its unit of account.",
+   "tag": "VIKINGS",
+   "topic": "Trade routes",
+   "text": "Viking trade ran from Greenland in the west to Constantinople and the Caspian Sea in the east, using rivers like the Volga and the Dnieper.",
    "coin": null
   },
   {
-   "tag": "HUNTING",
-   "topic": "Wampum",
-   "text": "Polished shell beads called wampum worked as money in the Northeast, and New England colonists accepted them for small payments in the 1600s.",
+   "tag": "VIKINGS",
+   "topic": "Hedeby",
+   "text": "Hedeby, in today's northern Germany, was one of the biggest Viking trading towns. Its mint was among the first in Scandinavia, around the 820s.",
    "coin": null
   },
   {
-   "tag": "HUNTING",
-   "topic": "Hawks and doves",
-   "text": "Central bankers are called hawks when they lean toward higher interest rates and doves when they lean toward lower ones.",
+   "tag": "VIKINGS",
+   "topic": "Danegeld",
+   "text": "In 845 the Franks paid a Viking fleet 7,000 pounds of silver to leave Paris. Paying off raiders with silver became known as Danegeld.",
    "coin": null
   },
   {
-   "tag": "HUNTING",
-   "topic": "Black swan",
-   "text": "Europeans believed every swan was white until a Dutch explorer saw black swans in Australia in 1697. Traders now say black swan for a shock nobody saw coming.",
+   "tag": "VIKINGS",
+   "topic": "Ring money",
+   "text": "Arm rings of silver and gold were money, status and pay all in one. Poets called a generous king a ring-giver.",
    "coin": null
   },
   {
-   "tag": "HUNTING",
-   "topic": "Whales",
-   "text": "A whale is a trader or holder big enough to move a market. The word was first used for casino high rollers.",
+   "tag": "VIKINGS",
+   "topic": "Money words",
+   "text": "The Scandinavian coin names ore and oyri (Danish, Norwegian, Swedish and Icelandic) go back to the Old Norse eyrir, an ounce of silver.",
    "coin": null
   },
   {
-   "tag": "HUNTING",
-   "topic": "Stagging",
-   "text": "In London market slang a stag is someone who applies for a new share issue hoping to sell it fast for a quick profit.",
+   "tag": "VIKINGS",
+   "topic": "Leif Erikson",
+   "text": "Norse sailors reached North America about 1,000 years ago. Their camp at L'Anse aux Meadows in Newfoundland has been dated to the year 1021.",
    "coin": null
   },
   {
-   "tag": "HUNTING",
-   "topic": "Decoys",
-   "text": "Placing big orders you plan to cancel, to fool other traders, is called spoofing. The U.S. made it explicitly illegal in 2010.",
+   "tag": "VIKINGS",
+   "topic": "Greenland",
+   "text": "Erik the Red settled Greenland around the year 985.",
    "coin": null
   },
   {
-   "tag": "HUNTING",
-   "topic": "Reading sign",
-   "text": "Before screens, traders read the ticker tape, a paper strip of prices, the way a tracker reads the ground. Edison improved the stock ticker in 1869.",
+   "tag": "VIKINGS",
+   "topic": "Iceland",
+   "text": "Iceland's Althing, founded in 930, is one of the oldest parliaments still around.",
    "coin": null
   },
   {
-   "tag": "HUNTING",
-   "topic": "Pieces of eight",
-   "text": "Spanish silver pieces of eight were so widely used around the world that the U.S. dollar was modeled on the Spanish dollar.",
+   "tag": "VIKINGS",
+   "topic": "Dublin",
+   "text": "Dublin began as a Viking settlement in the 840s, and Viking Dublin struck Ireland's first coins around 995.",
+   "coin": null
+  },
+  {
+   "tag": "VIKINGS",
+   "topic": "Longships",
+   "text": "Viking longships were light and shallow, so crews could sail across open sea and then row up rivers deep into a country.",
+   "coin": null
+  },
+  {
+   "tag": "VIKINGS",
+   "topic": "Horned helmets",
+   "text": "There is no evidence Vikings wore horned helmets. The idea comes from costumes made for an 1876 opera.",
+   "coin": null
+  },
+  {
+   "tag": "VIKINGS",
+   "topic": "Weekdays",
+   "text": "Thursday is Thor's day and Wednesday is Odin's day (Woden's day). Our weekday names carry the old Norse gods.",
+   "coin": null
+  },
+  {
+   "tag": "VIKINGS",
+   "topic": "Farmers and traders",
+   "text": "Most Vikings were farmers and traders. Raiding was only part of the story, and the Viking Age is usually dated from the 793 attack on Lindisfarne to 1066.",
+   "coin": null
+  },
+  {
+   "tag": "VIKINGS",
+   "topic": "King Cnut",
+   "text": "King Cnut ruled England, Denmark and Norway in the early 1000s, an empire around the North Sea that linked trade across the whole region.",
+   "coin": null
+  },
+  {
+   "tag": "VIKINGS",
+   "topic": "The word",
+   "text": "The word Viking comes from the Old Norse vikingr. To go a viking meant to go on an overseas expedition for trade or plunder.",
+   "coin": null
+  },
+  {
+   "tag": "VIKINGS",
+   "topic": "Cuerdale Hoard",
+   "text": "The Cuerdale Hoard, found in England in 1840, held about 8,600 pieces of Viking-age silver weighing around 40 kilograms.",
+   "coin": null
+  },
+  {
+   "tag": "VIKINGS",
+   "topic": "Samanid silver",
+   "text": "Much of the Arabic silver in Viking hoards was minted in Central Asia, in cities like Samarkand and Tashkent, thousands of miles from Scandinavia.",
+   "coin": null
+  },
+  {
+   "tag": "VIKINGS",
+   "topic": "Maine penny",
+   "text": "A Norwegian silver penny from the 1000s turned up at a Native American site in Maine. It was probably carried there by trade.",
+   "coin": null
+  },
+  {
+   "tag": "VIKINGS",
+   "topic": "Buddha in Sweden",
+   "text": "A small Indian Buddha statue from around the 500s was dug up at Helgo, Sweden, a sign of how far Viking-age trade reached.",
+   "coin": null
+  },
+  {
+   "tag": "VIKINGS",
+   "topic": "Ulfberht",
+   "text": "Some Viking swords carry the name Ulfberht on the blade. A number of them were made of unusually pure steel for their time.",
+   "coin": null
+  },
+  {
+   "tag": "VIKINGS",
+   "topic": "Great Heathen Army",
+   "text": "In 865 a large Viking army landed in East Anglia and fought across England for years. The English called it the Great Heathen Army.",
+   "coin": null
+  },
+  {
+   "tag": "VIKINGS",
+   "topic": "Alfred the Great",
+   "text": "King Alfred of Wessex beat the Viking leader Guthrum at Edington in 878. Afterward much of eastern England became the Danelaw, under Danish law.",
+   "coin": null
+  },
+  {
+   "tag": "VIKINGS",
+   "topic": "Danelaw",
+   "text": "Place names ending in -by or -thorpe in England, like Grimsby and Whitby, mark where Norse settlers lived.",
+   "coin": null
+  },
+  {
+   "tag": "VIKINGS",
+   "topic": "Rollo",
+   "text": "In 911 the Frankish king gave the Viking leader Rollo land around the river Seine. It became Normandy, the land of the North men.",
+   "coin": null
+  },
+  {
+   "tag": "VIKINGS",
+   "topic": "1066",
+   "text": "William the Conqueror, who won England in 1066, was a descendant of the Viking Rollo.",
+   "coin": null
+  },
+  {
+   "tag": "VIKINGS",
+   "topic": "Hardrada",
+   "text": "Harald Hardrada, the last great Viking king, was killed at the Battle of Stamford Bridge in England on September 25, 1066.",
+   "coin": null
+  },
+  {
+   "tag": "VIKINGS",
+   "topic": "Varangian Guard",
+   "text": "From about 988 the Byzantine emperor guarded himself with the Varangian Guard, an elite force with many Norse warriors.",
+   "coin": null
+  },
+  {
+   "tag": "VIKINGS",
+   "topic": "Rus",
+   "text": "The name Russia may come from the Rus, the name given to the Norse traders who sailed down the rivers of eastern Europe.",
+   "coin": null
+  },
+  {
+   "tag": "VIKINGS",
+   "topic": "Ibn Fadlan",
+   "text": "In 922 the Arab traveler Ibn Fadlan met Norse traders on the Volga River and wrote down what he saw, one of the best eyewitness accounts of them.",
+   "coin": null
+  },
+  {
+   "tag": "VIKINGS",
+   "topic": "Runestones",
+   "text": "More than 2,000 runestones survive in Sweden alone. Many were raised to remember a family member who died.",
+   "coin": null
+  },
+  {
+   "tag": "VIKINGS",
+   "topic": "Oseberg ship",
+   "text": "The Oseberg ship, buried in Norway in 834 and dug up in 1904, is one of the best-kept Viking ships ever found.",
+   "coin": null
+  },
+  {
+   "tag": "VIKINGS",
+   "topic": "Skuldelev ships",
+   "text": "Five Viking ships were sunk on purpose around 1070 to block a Danish fjord. They were raised in 1962 and rebuilt.",
+   "coin": null
+  },
+  {
+   "tag": "VIKINGS",
+   "topic": "1893",
+   "text": "In 1893 a copy of the Gokstad Viking ship crossed the Atlantic in 44 days on its way to the Chicago World's Fair.",
+   "coin": null
+  },
+  {
+   "tag": "VIKINGS",
+   "topic": "Thor's hammer",
+   "text": "Small silver Thor's hammer pendants have been found across the Viking world, much like people wear a cross today.",
+   "coin": null
+  },
+  {
+   "tag": "VIKINGS",
+   "topic": "Birka warrior",
+   "text": "A famous Viking grave at Birka in Sweden was long assumed to hold a male warrior. DNA tests in 2017 showed the person was a woman.",
+   "coin": null
+  },
+  {
+   "tag": "VIKINGS",
+   "topic": "Bath day",
+   "text": "The Icelandic word for Saturday, laugardagur, means washing day. The Vikings are known for being clean, with combs and tweezers in many graves.",
+   "coin": null
+  },
+  {
+   "tag": "VIKINGS",
+   "topic": "Word gifts",
+   "text": "English borrowed words from the Vikings, including sky, egg, knife, window, husband, law and skull.",
+   "coin": null
+  },
+  {
+   "tag": "VIKINGS",
+   "topic": "Bluetooth",
+   "text": "The Bluetooth logo is made from the runes of the initials of Harald Bluetooth, a Danish Viking-age king who united Denmark.",
+   "coin": null
+  },
+  {
+   "tag": "VIKINGS",
+   "topic": "Iceland settled",
+   "text": "Norse settlers began making homes in Iceland around the year 874.",
+   "coin": null
+  },
+  {
+   "tag": "VIKINGS",
+   "topic": "Berserkers",
+   "text": "Berserker may mean bear shirt, a warrior who fought in a frenzy. Some scholars think it means bare shirt, with no armor.",
+   "coin": null
+  },
+  {
+   "tag": "VIKINGS",
+   "topic": "Sunstone",
+   "text": "Viking navigators used the sun, stars, birds and the color of the sea. Some think a crystal sunstone helped them on cloudy days, but that is debated.",
+   "coin": null
+  },
+  {
+   "tag": "VIKINGS",
+   "topic": "Norse words",
+   "text": "Tuesday is named for the god Tyr, Wednesday for Odin and Thursday for Thor. Friday is named for Frigg or Freyja.",
    "coin": null
   },
   {
