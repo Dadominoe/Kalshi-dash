@@ -805,7 +805,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-27-all42"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-27-dock48"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -4912,6 +4912,23 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .ct-chip.up { background:#073b22; border-color:#00e676; color:#fff; } .ct-chip.down { background:#4a0f1b; border-color:#e5384f; color:#fff; } .ct-chip.wait { background:#1b1d24; border-color:#4a4f5c; color:#9aa1ad; font-weight:700; font-size:17px; }
 .ct-body { font-size:14px; padding:6px 4px; }
 .pat-old-box { margin:6px 0; }
+/* ---- the locked alert window (top of each card) */
+.topbar .tb-main .alert-dock { order:2; flex:0 0 380px; width:380px; min-width:0; height:128px; min-height:128px; max-height:128px; overflow:hidden; padding:0; position:relative; display:block; }
+.dk-wrap { position:absolute; inset:0; overflow:hidden; border-radius:8px; }
+.dk-empty { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#6e7681; font-size:14px; letter-spacing:.5px; }
+.dk-lane { position:absolute; inset:0; padding:5px 6px; display:flex; flex-direction:column; gap:5px; }
+.dk-lane.scroll { display:block; padding:0; }
+.dk-lane .dock-item { padding:3px 8px; margin:0; }
+.dk-lane .dock-item.dk-card { position:absolute; top:6px; bottom:6px; left:0; width:calc(100% - 34px); padding:8px 12px; display:flex; flex-direction:column; justify-content:center; }
+.dk-lane .dock-item.dk-card b { font-size:17px; } .dk-lane .dock-item.dk-card span { font-size:14px; -webkit-line-clamp:3; }
+/* side by side: the top bar becomes a grid so BTC and XRP line up exactly the same */
+body[data-view="both"] .topbar .tb-main { display:grid; grid-template-columns:minmax(0,1fr) 380px; gap:6px 16px; align-items:start; }
+body[data-view="both"] .topbar .tb-main > .asset-name { grid-column:1; grid-row:1; }
+body[data-view="both"] .topbar .tb-main > .mk-drop, body[data-view="both"] .topbar .tb-main > .mk { grid-column:1; grid-row:2; justify-self:start; }
+body[data-view="both"] .topbar .tb-main > .tb-right { grid-column:1; grid-row:3; margin-left:0; justify-self:start; min-height:172px; }
+body[data-view="both"] .topbar .tb-main > .alert-dock { grid-column:2; grid-row:1 / span 3; }
+body[data-view="both"] .topbar .tb-main > .tb-price { grid-column:1 / -1; grid-row:4; }
+
 /* ---- the Viking top banner */
 h1.dom-banner { position:relative; display:flex; align-items:center; justify-content:center; gap:22px; margin:0 0 12px; padding:14px 20px 26px; border-radius:16px; border:2px solid #3a1219; overflow:hidden; font-weight:400;
   background: radial-gradient(120% 140% at 50% 0%, rgba(255,77,109,.16), transparent 62%), repeating-linear-gradient(0deg, rgba(255,255,255,.02) 0 1px, transparent 1px 4px), linear-gradient(90deg,#0a0b0f,#170a0f 50%,#0a0b0f);
@@ -4931,8 +4948,8 @@ h1.dom-banner { position:relative; display:flex; align-items:center; justify-con
 :root { --ctb-up:#19e68c; --ctb-up-bg:#062a1b; --ctb-down:#ff4d6d; --ctb-down-bg:#2e0c14; --ctb-warn:#ffb020; --ctb-warn-bg:#2a1d05; --ctb-gold:#ffd24a; --ctb-dim:#9aa3b2; }
 .ctb-slot { min-height:372px; margin:6px 0 8px; }
 body.no-ctb .ctb-slot { display:none; }
-body:not(.no-ctb) .ct-drop > summary { display:none; }
-.ctb-wrap { position:relative; height:372px; border-radius:16px; border:2px solid #3a1219; overflow:hidden; cursor:pointer;
+body:not(.no-ctb) .ct-drop > summary .ct-sumx { display:none; }     /* with the banner on, the drop-down under it just says 'The 3 calls' beside the arrow */
+.ctb-wrap { position:relative; height:372px; border-radius:16px; border:2px solid #3a1219; overflow:hidden;
   background: radial-gradient(120% 90% at 50% 0%, rgba(255,77,109,.10), transparent 60%), repeating-linear-gradient(0deg, rgba(255,255,255,.025) 0 1px, transparent 1px 4px), linear-gradient(90deg,#0a0b0f,#140a0e 50%,#0a0b0f);
   box-shadow:0 0 30px rgba(255,77,109,.20) inset, 0 0 22px rgba(255,77,109,.12); }
 .ctb-rail { position:absolute; left:0; right:0; height:5px; z-index:6; opacity:.75; animation:ctbchase 1.1s linear infinite; background:repeating-linear-gradient(90deg,var(--ctb-down) 0 10px,transparent 10px 24px); }
@@ -5982,33 +5999,74 @@ function dockDismiss(name, key) {
   if (x && x.onDismiss) x.onDismiss();
   dockClear(name, key);
 }
+const DK = {};
+function dkBuild(name) {
+  const el = document.createElement('div'); el.className = 'dk-wrap';
+  el.innerHTML = '<div class="dk-empty">alerts show here</div><div class="dk-lane"></div>';
+  const o = {el: el, lane: el.querySelector('.dk-lane'), empty: el.querySelector('.dk-empty'), live: [], seen: {}, items: [], idx: 0, hover: false, mode: '', sig: '', last: performance.now(), name: name};
+  el.addEventListener('pointerenter', e => { if (e.pointerType === 'mouse') o.hover = true; });
+  el.addEventListener('pointerleave', () => { o.hover = false; });
+  return o;
+}
+function dkItemEl(name, x, extra) {
+  const d = document.createElement('div'); d.className = 'dock-item ' + x.cls + (extra || ''); d.title = x.head + ' - ' + x.detail + ' (click to dismiss)';
+  d.onclick = () => dockDismiss(name, x.key);
+  const h = document.createElement('b'); h.textContent = x.head;
+  const t = document.createElement('span'); t.textContent = x.detail;
+  d.appendChild(h); d.appendChild(t);
+  return d;
+}
+// the alert window is LOCKED (fixed size): up to two alerts are held still; with more than two they roll through it like the call banner
 function renderDock() {
   const now = Date.now();
   document.querySelectorAll('.alert-dock[data-dock]').forEach(el => {
     const name = el.getAttribute('data-dock');
     const list = (dockItems[name] || []).filter(x => !x.until || x.until > now);
     dockItems[name] = list;
-    const sig = list.map(x => x.key + '|' + x.cls + '|' + x.head + '|' + x.detail).join('~');
-    if (el.getAttribute('data-sig') === sig) return;
-    el.setAttribute('data-sig', sig);
-    el.textContent = '';
-    if (!list.length) {
-      const e = document.createElement('div'); e.className = 'dock-empty'; e.textContent = 'alerts show here'; el.appendChild(e);
-      return;
+    const o = DK[name] || (DK[name] = dkBuild(name));
+    if (o.el.parentNode !== el) { el.textContent = ''; el.appendChild(o.el); o.sig = ''; }       // the page was redrawn: put the running window back
+    o.items = list;
+    o.empty.style.display = list.length ? 'none' : 'flex';
+    const mode = list.length > 2 ? 'scroll' : 'static';
+    const sig = mode + '|' + (mode === 'static' ? list.map(x => x.key + '|' + x.cls + '|' + x.head + '|' + x.detail).join('~') : '');
+    if (mode === 'scroll') {                                                                        // drop the cards whose alert has been dismissed or has expired
+      o.live = o.live.filter(c => { if (list.some(x => x.key === c.key)) return true; c.el.remove(); return false; });
     }
-    list.forEach(x => {
-      const d = document.createElement('div'); d.className = 'dock-item ' + x.cls; d.title = x.head + ' - ' + x.detail + ' (click to dismiss)';
-      d.onclick = () => dockDismiss(name, x.key);
-      const h = document.createElement('b'); h.textContent = x.head;
-      const t = document.createElement('span'); t.textContent = x.detail;
-      d.appendChild(h); d.appendChild(t); el.appendChild(d);
-    });
+    if (sig === o.sig) return;
+    o.sig = sig; o.mode = mode;
+    o.lane.textContent = ''; o.live = []; o.seen = {};
+    o.lane.className = 'dk-lane' + (mode === 'scroll' ? ' scroll' : '');
+    if (mode === 'static') list.forEach(x => o.lane.appendChild(dkItemEl(name, x)));
   });
 }
 setInterval(renderDock, 500);
+function dkTick(now, fromTimer) {
+  Object.keys(DK).forEach(a => {
+    const o = DK[a];
+    const dt = Math.max(0, Math.min(0.5, (now - o.last) / 1000)); o.last = now;
+    if (o.mode !== 'scroll' || !o.el.isConnected || !o.el.offsetWidth || !o.items.length) return;
+    const W = o.lane.clientWidth;
+    if (!o.hover) {
+      o.live.forEach(c => { c.x -= 52 * dt; });
+      while (o.live.length && o.live[0].x + o.live[0].w < -8) { o.live[0].el.remove(); o.live.shift(); }
+      const tail = o.live[o.live.length - 1];
+      if (!tail || tail.x + tail.w + 22 < W) {
+        let x = o.items.find(it => !o.seen[it.key]);                                                // a new alert goes next
+        if (x) o.seen[x.key] = 1; else { x = o.items[o.idx % o.items.length]; o.idx++; }
+        const el = dkItemEl(a, x, ' dk-card'); o.lane.appendChild(el);
+        const c = {el: el, x: o.started ? W + 4 : 6, w: el.offsetWidth, key: x.key}; o.started = true;
+        el.style.transform = 'translateX(' + c.x + 'px)'; o.live.push(c);
+      }
+    }
+    o.live.forEach(c => { c.el.style.transform = 'translateX(' + c.x + 'px)'; });
+  });
+  if (!fromTimer) requestAnimationFrame(dkTick);
+}
+if (!window.__dkLoop) { window.__dkLoop = 1; requestAnimationFrame(dkTick); setInterval(() => dkTick(performance.now(), true), 120); }
 // time-critical alerts ("flip for sure", incoming buy / sell, huge prints and walls) fly across the whole screen once instead of sitting in the alert box
 let flyCount = 0;
 function flyAcross(name, cls, head, detail) {
+  return;                                                    // the big alerts flying across the screen were switched off (owner, 2026-10-27); they still show in the alert window and are still spoken
   const el = document.createElement('div');
   el.className = 'fly-alert ' + cls;
   el.style.top = (96 + (flyCount++ % 3) * 92) + 'px';
@@ -6470,6 +6528,7 @@ function whaleLane(card) {
   return { top: top, left: left, right: right };
 }
 function showWhaleCrossing(assetName, side, usd, venue) {
+  return;                                                    // the whales swimming across the screen were switched off (owner, 2026-10-27); the sound and the alert box entry stay
   if (!coinShown(assetName)) return;
   const card = document.querySelector('.card[data-asset="' + assetName + '"]');
   const lane = whaleLane(card);
@@ -7036,7 +7095,7 @@ function mtfSyncAttrs(o, n) {
   Array.from(o.attributes).forEach(at => { if (!n.hasAttribute(at.name)) o.removeAttribute(at.name); });
   Array.from(n.attributes).forEach(at => { if (o.getAttribute(at.name) !== at.value) o.setAttribute(at.name, at.value); });
 }
-function mtfHolds(el) { return el.nodeType === 1 && (el.classList.contains('mtf-live') || !!el.querySelector('.mtf-live')); }
+function mtfHolds(el) { return el.nodeType === 1 && (el.classList.contains('mtf-live') || el.classList.contains('ctb-slot') || !!el.querySelector('.mtf-live, .ctb-slot')); }
 function mtfSync(op, np) {
   const keep = new Set(), out = [];
   Array.from(np.childNodes).forEach(n => {
@@ -7046,7 +7105,10 @@ function mtfSync(op, np) {
     }
     if (m) {
       keep.add(m);
-      if (!m.classList.contains('mtf-live')) { mtfSyncAttrs(m, n); mtfSync(m, n); }
+      if (m.classList.contains('ctb-slot')) {                                   // the running call banner is NOT redrawn - only the numbers it reads are refreshed
+        const oj = m.querySelector('.ctb-json'), nj = n.querySelector('.ctb-json');
+        if (oj && nj && oj.textContent !== nj.textContent) oj.textContent = nj.textContent;
+      } else if (!m.classList.contains('mtf-live')) { mtfSyncAttrs(m, n); mtfSync(m, n); }
       out.push(m);
     } else out.push(n);
   });
@@ -7291,11 +7353,10 @@ function ctbAlertHtml(a, x) {
 function ctbBuild(a) {
   const el = document.createElement('div');
   el.className = 'ctb-wrap'; el.setAttribute('data-asset', a);
-  el.innerHTML = '<div class="ctb-rail top"></div><div class="ctb-rail bot"></div><div class="ctb-gutter">' + CTB_LOGO + '</div><div class="ctb-lane"></div><div class="ctb-fade l"></div><div class="ctb-fade r"></div><div class="ctb-calls"></div><div class="ctb-hint">click for the full windows and track record</div>';
+  el.innerHTML = '<div class="ctb-rail top"></div><div class="ctb-rail bot"></div><div class="ctb-gutter">' + CTB_LOGO + '</div><div class="ctb-lane"></div><div class="ctb-fade l"></div><div class="ctb-fade r"></div><div class="ctb-calls"></div><div class="ctb-hint">the three call windows and the track record: open &quot;The 3 calls&quot; below</div>';
   const o = {el: el, lane: el.querySelector('.ctb-lane'), live: [], data: [], alerts: [], seen: {}, idx: 0, hover: false, last: performance.now()};
-  el.addEventListener('mouseenter', () => { o.hover = true; });
-  el.addEventListener('mouseleave', () => { o.hover = false; });
-  el.addEventListener('click', () => { const det = el.closest('.card') && el.closest('.card').querySelector('details.ct-drop'); if (det) det.open = !det.open; });
+  el.addEventListener('pointerenter', e => { if (e.pointerType === 'mouse') o.hover = true; });
+  el.addEventListener('pointerleave', () => { o.hover = false; });
   return o;
 }
 function ctbSync() {
@@ -7314,10 +7375,10 @@ function ctbSync() {
     o.live.forEach(c => { const d = j.cards.concat(o.alerts).find(x => x.key === c.key); if (d && c.html !== d.html) { c.el.innerHTML = d.html; c.html = d.html; c.el.className = 'ctb-card ' + d.cls; } });
   });
 }
-function ctbTick(now) {
+function ctbTick(now, fromTimer) {
   Object.keys(CTB).forEach(a => {
     const o = CTB[a];
-    const dt = Math.min(0.05, (now - o.last) / 1000); o.last = now;
+    const dt = Math.max(0, Math.min(0.5, (now - o.last) / 1000)); o.last = now;
     if (!ctbOn || !o.el.isConnected || !o.el.offsetWidth || !o.data.length) return;
     const W = o.lane.clientWidth;
     if (!o.hover) {
@@ -7328,7 +7389,8 @@ function ctbTick(now) {
         let d = o.alerts.find(x => !o.seen[x.key]);                                   // a new alert jumps the queue
         if (d) o.seen[d.key] = 1; else { const all = o.data.concat(o.alerts); d = all[o.idx % all.length]; o.idx++; }
         const el = document.createElement('div'); el.className = 'ctb-card ' + d.cls; el.innerHTML = d.html; o.lane.appendChild(el);
-        const c = {el: el, x: o.started ? W + 6 : 30, w: el.offsetWidth, key: d.key, html: d.html}; o.started = true;          // the very first card is already on screen el.style.transform = 'translateX(' + c.x + 'px)'; o.live.push(c);
+        const c = {el: el, x: o.started ? W + 6 : 30, w: el.offsetWidth, key: d.key, html: d.html}; o.started = true;
+        el.style.transform = 'translateX(' + c.x + 'px)'; o.live.push(c);          // (the very first card starts already on screen)
       }
     }
     o.live.forEach(c => {
@@ -7338,10 +7400,10 @@ function ctbTick(now) {
       c.el.style.boxShadow = '0 0 ' + Math.round(26 * (1 - f)) + 'px currentColor';
     });
   });
-  requestAnimationFrame(ctbTick);
+  if (!fromTimer) requestAnimationFrame(ctbTick);
 }
 setTimeout(ctbPaint, 0);
-if (!window.__ctbLoop) { window.__ctbLoop = 1; requestAnimationFrame(ctbTick); }          // one animation loop only, so two can never double the speed and make the cards overlap
+if (!window.__ctbLoop) { window.__ctbLoop = 1; requestAnimationFrame(ctbTick); setInterval(() => ctbTick(performance.now(), true), 120); }          // positions follow the clock, so even a throttled tab keeps moving          // one animation loop only, so two can never double the speed and make the cards overlap
 function toggleFit() {
   fitScreen = !fitScreen;
   try { localStorage.setItem('fitScreen', String(fitScreen)); } catch (e) {}
@@ -9023,7 +9085,7 @@ def build_call_timing_panel(name):
     except Exception as _cbe:
         banner = ""
         print(f"[call banner] failed: {_cbe!r}")
-    return (banner + f'<details class="ct-drop" data-pat="CT|{name}"><summary><span class="dd-ic">&#9654;</span><b>The 3 calls</b> {chips} <span class="dd-hint">- click to open the three call windows</span></summary>'
+    return (banner + f'<details class="ct-drop" data-pat="CT|{name}"><summary><span class="dd-ic">&#9654;</span><b>The 3 calls</b><span class="ct-sumx"> {chips} <span class="dd-hint">- click to open the three call windows</span></span></summary>'
             f'<div class="ct-body"><div class="ct-cards">{cards}</div><div class="ct-recs"><div class="ct-rec-h"><b>Track record</b> <span class="hint">- the same table for all three calls</span></div>{tables}{_ct_agree_html(name, marks)}</div>'
             f'<details class="ct-info" data-pat="CTI|{name}"><summary>Scoreboard &amp; info</summary><div class="ct-info-body">{board}</div></details>'
             f'<div class="hint ct-note">More information will be added to each window as we learn what matters. Nothing here changes the real END CALL or trades.</div></div></details>')
