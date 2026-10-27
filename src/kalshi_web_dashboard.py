@@ -806,7 +806,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-27-news80"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-27-flip81"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -4870,6 +4870,10 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .flip-risk-bar { margin:10px 0; padding:14px 18px; border-radius:12px; background:#101a14; border:3px solid #00e676; font-size:16px; box-shadow:0 0 16px rgba(0,230,118,.35); }
 .flip-risk-bar .frb-l { font-weight:900; font-size:17px; letter-spacing:1.5px; margin-right:12px; text-transform:uppercase; color:#fff; }
 .flip-risk-bar b { font-size:40px !important; font-weight:900; line-height:1; margin-right:12px; vertical-align:middle; color:#00e676; }
+.flip-risk-bar .frb-sides { margin:2px 0 6px; font-size:16px; font-weight:800; }
+.flip-risk-bar .frb-side { padding:3px 10px; border-radius:8px; margin-right:10px; }
+.flip-risk-bar .frb-side.up { background:rgba(0,230,118,.18); color:#00e676; } .flip-risk-bar .frb-side.down { background:rgba(255,59,92,.2); color:#ff4d6d; }
+.flip-risk-bar .frb-cross { color:#ffd166; }
 .flip-risk-bar .frb-t { font-size:17px; font-weight:800; color:#e8eaf0; }
 .flip-risk-bar .frb-track { display:block; height:16px; background:#1b1d24; border:1px solid #3d1420; border-radius:8px; margin:10px 0 8px; overflow:hidden; }
 .flip-risk-bar .frb-track i { display:block; height:100%; border-radius:8px; background:#00e676; box-shadow:0 0 10px rgba(0,230,118,.7); }
@@ -10090,16 +10094,49 @@ _FLIP_WAIT_BAR = ('<div class="flip-risk-bar ok"><span class="frb-l">FLIP RISK</
                   '<span class="frb-track"><i style="width:0%"></i></span><span class="hint">the bar fills in as soon as the numbers arrive - it is never turned off</span></div>')
 
 
+_SIDE_LOG = {}
+
+
+def _cross_html(name, spot, line):
+    """Which side of the line price is on right now, and the last time it crossed (UP -> DOWN or DOWN -> UP) in this round. Information only."""
+    try:
+        if not spot or not line:
+            return ""
+        side = "UP" if spot >= line else "DOWN"
+        k = (name, round(float(line), 6))
+        st = _SIDE_LOG.get(k)
+        if st is None:
+            for old in [x for x in _SIDE_LOG if x[0] == name]:
+                _SIDE_LOG.pop(old, None)
+            st = _SIDE_LOG[k] = {"side": side, "n": 0, "last": None}
+        elif st["side"] != side:
+            st["n"] += 1
+            st["last"] = (st["side"], side, time.time())
+            st["side"] = side
+        cls = "up" if side == "UP" else "down"
+        txt = f'<span class="frb-side {cls}">price is {side} of the line</span>'
+        if st["last"]:
+            a, b, tt = st["last"]
+            when = _viewtz.t12(dt.datetime.fromtimestamp(tt, _viewtz.get()), True)
+            txt += f' <span class="frb-cross">FLIPPED {a} &rarr; {b} at {when} &middot; {st["n"]} crossing{"s" if st["n"] != 1 else ""} this round</span>'
+        else:
+            txt += ' <span class="frb-cross">no crossing yet this round</span>'
+        return f'<div class="frb-sides">{txt}</div>'
+    except Exception:
+        return ""
+
+
 def _pre_risk_html(name, spot, line, left):
     fr = _flip_pre(name, spot, line, left)
     if not fr:
-        return _FLIP_WAIT_BAR
+        return _FLIP_WAIT_BAR.replace('<span class="hint">', _cross_html(name, spot, line) + '<span class="hint">')
     r, sd, side = fr
     cls = "down" if r >= 0.38 else ("warn" if r >= 0.28 else "ok")                    # lowered 2026-10-27 (owner: the warning only popped up at 40-something percent)
     txt = "price is right at the line - it can cross either way" if r >= 0.36 else ("price is near the line" if r >= 0.28 else "price is well clear of the line")
     return (f'<div class="flip-risk-bar {cls}"><span class="frb-l">FLIP RISK</span> <b>{r * 100:.0f}%</b> <span class="frb-t">{txt}</span>'
             f'<span class="frb-track"><i style="width:{min(100, r * 100):.0f}%"></i></span>'
-            f'<span class="hint">no call yet &middot; price is {sd:.1f} candle-ranges {"above" if side == 1 else "below"} the line &middot; from the last 60 days of rounds: when price was this far from the line at this point, '
+            f'{_cross_html(name, spot, line)}'
+            f'<span class="hint">price is {sd:.1f} candle-ranges {"above" if side == 1 else "below"} the line &middot; from the last 60 days of rounds: when price was this far from the line at this point, '
             f'{r * 100:.0f}% of rounds ended on the OTHER side. Information only.</span></div>')
 
 
@@ -10295,7 +10332,7 @@ def _end_call_html(name, d, tn, fair, left, spot, line):
         return (f'<div class="tug-end tug-end-wait"><span class="tug-end-l">END CALL</span> '
                 f'<span class="tug-wait-badge">NOT LOCKED YET - locks in {mm_}:{ss_:02d}</span> '
                 f'<span class="tug-wait-lean {"up" if yes else "down"}">Leaning {"YES / UP" if yes else "NO / DOWN"} {lean:.0f}%</span> '
-                f'<span class="tug-wait-note">right now - this can still change until it locks at the 8th minute</span>{_pre_risk_html(name, spot, line, left)}</div>')
+                f'{_pre_risk_html(name, spot, line, left)}</div>')
     lm, ls = divmod(int(lk["left"]), 60)
     if lk["side"] == "LATE":
         return ('<div class="tug-end tug-end-none"><span class="tug-end-l">END CALL</span> <b>no locked call this round</b> '
@@ -10306,9 +10343,7 @@ def _end_call_html(name, d, tn, fair, left, spot, line):
     else:
         _fb, _fn = _flip_html(name, _fl)
     if lk["side"] == "NONE":
-        return (f'<div class="tug-end tug-end-none"><span class="tug-end-l">END CALL - LOCKED</span> <b>NO CALL - too close to call</b> {_fb} '
-                f'<span class="hint">- at the 8th minute ({lm}:{ls:02d} left) the lean was only {lk["lean"]:.0f}%. Reads that weak have been right only about 50-56% of the time, '
-                f'so there is no call this round. It will not change.</span>{_fn}{_pre_risk_html(name, spot, line, left)}</div>')
+        return (f'<div class="tug-end tug-end-none"><span class="tug-end-l">END CALL</span> <b>NO CALL</b> {_fb}{_fn}{_pre_risk_html(name, spot, line, left)}</div>')
     yes = lk["side"] == "YES"
     lean = lk["lean"]
     tier = "STRONG" if lean >= 80 else ("GOOD" if lean >= 70 else "WEAK")
@@ -10324,6 +10359,7 @@ def _end_call_html(name, d, tn, fair, left, spot, line):
         _txt = ("FLIPPING - price is already on the other side of the line" if _sd < 0 else ("flip risk is building - price is close to the line" if _r >= 0.30 else "low"))
         risk_html = (f'<div class="flip-risk-bar {_cls}"><span class="frb-l">FLIP RISK</span> <b>{_r * 100:.0f}%</b> <span class="frb-t">{_txt}</span>'
                      f'<span class="frb-track"><i style="width:{min(100, _r * 100):.0f}%"></i></span>'
+                     f'{_cross_html(name, spot, line)}'
                      f'<span class="hint">{abs(_sd):.1f} candle-ranges {"on the call side" if _sd >= 0 else "PAST the line"} &middot; from the last 60 days of rounds: calls at this distance with this much time left failed {_r * 100:.0f}% of the time</span></div>'
                      f'<span class="flip-risk" data-name="{name}" data-key="{name}::{ticker}" data-risk="{_r:.3f}" data-call="{lk["side"]}" style="display:none;"></span>')
     live = ('<div class="tug-end-live ok">Price is still on the %s side of the line - holding.</div>' % ("UP" if yes else "DOWN") if holding else
