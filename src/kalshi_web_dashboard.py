@@ -806,7 +806,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-28-voicesync102"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-28-hourwarn103"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -7139,12 +7139,23 @@ function checkMarketWarn() {                                            // the 5
   });
 }
 function checkHourWarn() {
+  const danger = {};
+  document.querySelectorAll('.hr-state').forEach(el => {
+    const name = el.getAttribute('data-name'), tier = el.getAttribute('data-tier');
+    const card = document.querySelector('.card[data-asset="' + name + '"]'), w = card && card.querySelector('.hr-warn');
+    if (tier === 'danger' && coinShown(name)) danger[name] = (w ? w.textContent.replace(/^\W*LAST HOUR: DANGEROUS - /, '').trim() : 'under 75% of the calls right in the last hour');
+  });
+  ['BTC', 'XRP'].forEach(name => {                                       // the DANGEROUS last hour also sits in that coin's alert window until it is healthy again (owner, 2026-10-28)
+    if (danger[name]) dockPush(name, 'dock-sell', '⚠ LAST HOUR: DANGEROUS', danger[name] + ' - information only', 0, 'hour');
+    else dockClear(name, 'hour');
+    if (!document.querySelector('.hr-state[data-name="' + name + '"]') && document.querySelector('.card[data-asset="' + name + '"]')) hourTier[name] = 'none';    // too few calls to grade: remembered, so going from that straight to DANGEROUS is still announced
+  });
   document.querySelectorAll('.hr-state').forEach(el => {
     const name = el.getAttribute('data-name'), tier = el.getAttribute('data-tier'), key = el.getAttribute('data-key');
     if (!name || !tier) return;
     const was = hourTier[name];
     hourTier[name] = tier;
-    if (was === undefined || was === tier) return;                     // first look after a page load, or no change: say nothing
+    if (was === tier || (was === undefined && tier !== 'danger')) return;      // no change: say nothing; a DANGEROUS hour is said even on the first look (owner, 2026-10-28), once per call (shared voice feed = once on every screen)
     if (tier === 'danger') narSay(name + '. Danger. The calls have been under seventy five percent in the last hour.', 'hd:' + key, 600000, 'hour_danger');
     else if (tier === 'good' && was === 'danger') narSay(name + '. Back on track. The calls are healthy again.', 'hg:' + key, 600000, 'hour_good');
     else if (tier === 'great') narSay(name + '. The calls are hot. Eighty percent and up in the last hour.', 'hr:' + key, 600000, 'hour_great');
@@ -10290,7 +10301,7 @@ def _hour_warning_html(name):
         k = sum(1 for h in recent if h["correct"])
         if n == 0:                                                       # every coin always shows its last-hour line (owner, 2026-10-27) - with too few calls it just says so
             return '<div class="hr-ok hr-none">LAST HOUR: no locked calls yet</div>'
-        if n < 4:
+        if n < 3:                                                        # graded from 3 calls (owner, 2026-10-28: 2 of 3 = 67% must show the warning; it was 4)
             return f'<div class="hr-ok hr-none">LAST HOUR: {k} of {n} calls right ({k / n * 100:.0f}%) - too few calls to grade yet</div>'
         r = k / n
         tier = "great" if r >= HOUR_GREAT else ("good" if r >= HOUR_GOOD else "danger")
