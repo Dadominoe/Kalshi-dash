@@ -32,6 +32,7 @@ plainly, never hidden.
 """
 import csv
 import datetime as dt
+from html import escape          # used by the call banner, the fact bank, the upcoming-news panel and the pattern alerts
 import gzip
 import http.server
 import json
@@ -805,7 +806,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-27-burst64"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-27-news80"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -4912,27 +4913,31 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .ct-chip.up { background:#073b22; border-color:#00e676; color:#fff; } .ct-chip.down { background:#4a0f1b; border-color:#e5384f; color:#fff; } .ct-chip.wait { background:#1b1d24; border-color:#4a4f5c; color:#9aa1ad; font-weight:700; font-size:17px; }
 .ct-body { font-size:14px; padding:6px 4px; }
 .pat-old-box { margin:6px 0; }
+.tb-main .asset-name { position:relative; }
+.ev-i { width:24px; height:24px; border-radius:50%; border:1.5px solid #58a6ff; background:transparent; color:#58a6ff; font:italic 800 15px Georgia,serif; cursor:pointer; padding:0; line-height:1; }
+.ev-i:hover { background:#58a6ff; color:#0d1117; }
+.ev-pop { position:absolute; top:100%; left:0; z-index:400; width:min(780px,92vw); margin-top:6px; background:#0d1117; border:2px solid #ff4d6d; border-radius:12px; padding:10px 14px; box-shadow:0 8px 28px rgba(0,0,0,.7); font-size:14px; font-weight:400; }
+.ev-title { font-size:17px; margin-bottom:4px; }
+.hr-ok.hr-none { color:#9aa3b2; border-color:#4a5160; background:#14161c; }
 .whale-cross, .whale-lane, .fly-alert { display:none !important; }      /* the whales and the flying alerts never show on screen (owner, 2026-10-27) - the alert window, the sound and the voice stay */
 /* ---- the locked alert window (top of each card) */
-.topbar .tb-main .alert-dock { order:2; flex:0 0 380px; width:380px; min-width:0; height:100px; min-height:100px; max-height:100px; overflow:hidden; padding:0; position:relative; display:block; }   /* the locked notification window: holds two, scrolls when there are more (owner, 2026-10-27) */
+.topbar .tb-main .alert-dock { order:2; flex:0 0 600px; width:600px; min-width:0; height:160px; min-height:160px; max-height:160px; overflow:hidden; padding:0; position:relative; display:block; }   /* the locked notification window: holds two, scrolls when there are more (owner, 2026-10-27) */
 .dk-wrap { position:absolute; inset:0; overflow:hidden; border-radius:8px; }
 .dk-empty { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#6e7681; font-size:14px; letter-spacing:.5px; }
 .dk-lane { position:absolute; inset:0; padding:5px 6px; display:flex; flex-direction:column; gap:5px; }
 .dk-lane.scroll { display:block; padding:0; }
 .dk-lane .dock-item { padding:3px 8px; margin:0; }
 .dk-lane .dock-item.dk-card { position:absolute; top:6px; bottom:6px; left:0; width:calc(100% - 34px); padding:8px 12px; display:flex; flex-direction:column; justify-content:center; }
-.dk-lane .dock-item.dk-card b { font-size:17px; } .dk-lane .dock-item.dk-card span { font-size:14px; -webkit-line-clamp:3; }
+.dk-lane .dock-item.dk-card b { font-size:20px; } .dk-lane .dock-item.dk-card span { font-size:16px; -webkit-line-clamp:4; }
 /* side by side: the top bar becomes a grid so BTC and XRP line up exactly the same */
-body[data-view="both"] .topbar .tb-main { display:grid; grid-template-columns:minmax(0,1fr) 380px; gap:4px 16px; align-items:start; }
+body[data-view="both"] .topbar .tb-main { display:grid; grid-template-columns:minmax(0,1fr) 520px; gap:4px 16px; align-items:start; }
 body[data-view="both"] .topbar .tb-main > .asset-name { grid-column:1; grid-row:1; }
 body[data-view="both"] .topbar .tb-main > .mk-drop, body[data-view="both"] .topbar .tb-main > .mk { grid-column:1; grid-row:2; justify-self:start; }
-body[data-view="both"] .topbar .tb-main > .alert-dock { grid-column:2; grid-row:1 / span 2; }
-body[data-view="both"] .topbar .tb-main > .tb-right { grid-column:1 / -1; grid-row:3; margin:0; justify-self:start; min-height:0; }
+body[data-view="both"] .topbar .tb-main > .alert-dock { grid-column:2; grid-row:1 / span 3; width:520px; }
+body[data-view="both"] .topbar .tb-main > .tb-right { grid-column:1; grid-row:3; margin:0; justify-self:start; min-height:0; }
 body[data-view="both"] .topbar .tb-main > .tb-price { grid-column:1 / -1; grid-row:4; }
 body[data-view="both"] .tb-right .streak-pull-wrap { right:auto; left:0; }
-/* side by side: the buy / sell pressure bars come FIRST in the column (right under the banner), so they and the volume bar are on screen when the page loads */
-body[data-view="both"] .tugcol { display:flex; flex-direction:column; }
-body[data-view="both"] .tugcol > .press-row { order:-1; margin:0 0 8px; }          /* the streak drop-down opens to the right from its own edge, so it can never run off the left of the screen */
+.flip-top { display:none; }
 
 /* ---- the Viking top banner */
 h1.dom-banner { position:relative; display:flex; align-items:center; justify-content:center; gap:16px; margin:0 0 6px; padding:5px 18px 15px; border-radius:16px; border:2px solid #3a1219; overflow:hidden; font-weight:400;
@@ -5309,7 +5314,8 @@ details.pat > summary { cursor:pointer; }
 .pw-livetxt { color:#ffd54a; }
 .pw-dot { display:inline-block; width:8px; height:8px; border-radius:50%; background:#ffd54a; margin-right:6px; vertical-align:1px; animation:pwPulse 1.4s ease-in-out infinite; }
 @keyframes pwPulse { 0%,100% { opacity:1; } 50% { opacity:0.25; } }
-.press-live { margin:0 0 12px; padding-bottom:12px; border-bottom:1px solid #30363d; }
+.press-live { margin:0 0 8px; padding-bottom:8px; border-bottom:1px solid #30363d; }
+.press-xtra { margin-top:6px; } .press-xtra > summary { cursor:pointer; font-size:14px; color:#58a6ff; padding:4px 0; }
 .press-bar-live { height:54px; } .press-bar-live .press-buy, .press-bar-live .press-sell { font-size:18px; }
 .press-chip { font-size:13px; padding:2px 8px; border-radius:10px; border:1px solid #30363d; background:#161b22; }
 .press-chip.up { color:#3fb950; border-color:#238636; } .press-chip.down { color:#f85149; border-color:#da3633; } .press-chip.flat { color:#8b949e; }
@@ -6053,7 +6059,7 @@ function dkTick(now, fromTimer) {
     if (o.mode !== 'scroll' || !o.el.isConnected || !o.el.offsetWidth || !o.items.length) return;
     const W = o.lane.clientWidth;
     if (!o.hover) {
-      o.live.forEach(c => { c.x -= 42 * dt; });
+      o.live.forEach(c => { c.x -= 22 * dt; });
       while (o.live.length && o.live[0].x + o.live[0].w < -8) { o.live[0].el.remove(); o.live.shift(); }
       const tail = o.live[o.live.length - 1];
       if (!tail || tail.x + tail.w + (o.items.length > 1 ? 22 : Math.round(W * 1.1)) < W) {          // with a single alert it scrolls by, then a gap, then again (never right behind itself)
@@ -6925,7 +6931,8 @@ function ctbNews(coin, cls, html, key) {                                  // a c
   o.news = o.news || [];
   o.news.push({key: key, cls: cls, html: html});
 }
-function checkMarketChanges() {                                           // the type of market changed on some period: put it on the scroll-by
+function checkMarketChanges() {                                           // switched OFF (owner, 2026-10-27: too much) - only the 5-minute market card, once in the middle of each round, remains
+  return;
   const now = Date.now();
   document.querySelectorAll('.mk-row').forEach(tr => {
     const dd = tr.closest('details.mk-drop'), coin = dd && dd.getAttribute('data-coin'), per = tr.getAttribute('data-period'), st = tr.getAttribute('data-state');
@@ -6935,7 +6942,9 @@ function checkMarketChanges() {                                           // the
     if (m.said === null) { m.said = st; return; }                          // first look after a page load: say nothing
     if (st === m.said) { m.pend = null; return; }
     if (st !== m.pend) { m.pend = st; m.since = now; return; }
-    if (now - m.since < 20000) return;                                     // a change has to hold 20 seconds
+    if (per === '5 min') { m.said = st; m.pend = null; return; }            // the 5-minute market has its own once-a-round card
+    if (now - m.since < 300000) return;                                    // a change on a longer period has to hold 5 minutes
+    if (now - (mktSeen['last|' + coin] || 0) < 1200000) { m.said = st; m.pend = null; return; }          // and at most one such card per coin every 20 minutes
     const old = m.said; m.said = st; m.pend = null;
     const chg = parseFloat(tr.getAttribute('data-chg'));
     const chgTxt = isNaN(chg) ? '-' : (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
@@ -6948,8 +6957,8 @@ function checkMarketChanges() {                                           // the
       + '<div class="ctb-row"><span>It was</span><b class="t">' + old + '</b></div>'
       + '<div class="ctb-row"><span>Price change</span><b class="t">' + chgTxt + '</b></div>'
       + '<div class="ctb-row"><span>Rule</span><b class="t">' + need + '</b></div>';
+    mktSeen['last|' + coin] = now;
     ctbNews(coin, col, html, 'mk|' + k + '|' + now);
-    setTimeout(() => ctbNews(coin, col, html, 'mk2|' + k + '|' + now), 180000);
   });
 }
 const mktState = {};
@@ -7422,6 +7431,22 @@ function ctbBuild(a) {
   el.addEventListener('pointerleave', () => { o.hover = false; });
   return o;
 }
+const evOpen = {};
+function evPaint() { document.querySelectorAll('.ev-pop').forEach(p => { p.style.display = evOpen[p.getAttribute('data-ev')] ? 'block' : 'none'; }); }
+function evToggle(name, ev) { if (ev) ev.stopPropagation(); evOpen[name] = !evOpen[name]; evPaint(); }
+document.addEventListener('click', e => { if (!e.target.closest('.ev-pop') && !e.target.closest('.ev-i')) { Object.keys(evOpen).forEach(k => { evOpen[k] = false; }); evPaint(); } });
+function flipTopSync() {                                   // side by side: a copy of the FLIP RISK bar sits on top of the pressure bars (the one inside the END CALL box is hidden in that view)
+  document.querySelectorAll('.card[data-asset]').forEach(card => {
+    const col = card.querySelector('.tugcol');
+    if (!col) return;
+    const src = col.querySelector('.tug .tug-end');                      // the whole END CALL box (with its FLIP RISK bar)
+    let top = col.querySelector(':scope > .flip-top');
+    if (!src) { if (top) top.remove(); return; }
+    if (!top) { top = document.createElement('div'); top.className = 'flip-top'; col.insertBefore(top, col.firstChild); }
+    const html = src.outerHTML;
+    if (top.getAttribute('data-h') !== html) { top.innerHTML = html; top.setAttribute('data-h', html); }
+  });
+}
 function ctbSync() {
   document.querySelectorAll('.ctb-slot').forEach(slot => {
     const a = slot.getAttribute('data-asset');
@@ -7429,7 +7454,7 @@ function ctbSync() {
     if (o.el.parentNode !== slot) slot.appendChild(o.el);
     let j = null;
     try { j = JSON.parse(slot.querySelector('.ctb-json').textContent); } catch (e) { return; }
-    o.data = j.cards; o.info = j.info || []; o.smoked = !!j.smoked; o.quiet = !!j.quiet;
+    o.data = j.cards; o.info = j.info || []; o.smoked = !!j.smoked; o.quiet = !!j.quiet; o.mk5 = j.mk5 || null; o.mid = !!j.mid; o.round = j.round || '';
     const nowMs = Date.now();
     o.alerts = [] /* notifications scroll in the top window, not in the banner */.filter(x => !x.until || x.until > nowMs)
       .map(x => ({key: 'al|' + x.key + '|' + (x.until || 0), cls: ({'dock-buy': 'up', 'dock-sell': 'down'})[x.cls] || 'warn', html: ctbAlertHtml(a, x)}));
@@ -7453,7 +7478,7 @@ function ctbTick(now, fromTimer) {
     if (!ctbOn || !o.el.isConnected || !o.el.offsetWidth || !o.data.length) return;
     const W = o.lane.clientWidth;
     if (!o.hover) {
-      o.live.forEach(c => { c.x -= 38 * dt; });
+      o.live.forEach(c => { c.x -= 20 * dt; });
       while (o.live.length && o.live[0].x + o.live[0].w < -12) { o.live[0].el.remove(); o.live.shift(); }
       const tail = o.live[o.live.length - 1];
       if (!tail || tail.x + tail.w + 110 < W) {
@@ -7463,14 +7488,22 @@ function ctbTick(now, fromTimer) {
         if (calls.length && !(o.burst && o.burst.length) && (calls.length > (o.lockedN || 0) || Date.now() - (o.lastBurst || 0) > 90000)) { o.burst = calls.map(x => x.key); o.lastBurst = Date.now(); }       // a new lock, or 90 seconds: roll the locked calls by
         o.lockedN = calls.length;
         let d = (o.news && o.news.length) ? o.news.shift() : null; const evc = o.data.find(x => x.key === 'events');          // market-change cards go first
+        if (!d && o.mk5 && o.mid && o.mk5Round !== o.round) { d = o.mk5; o.mk5Round = o.round; }                    // the 5-minute market, once, in the middle of the round
         if (!d && o.burst && o.burst.length) { const k = o.burst.shift(); d = o.data.find(x => x.key === k) || null; }
+        const flc = o.data.find(x => x.key === 'flip');
+        if (!d && flc && (flc.cls === 'down' || flc.cls === 'warn') && Date.now() - (o.lastFlip || 0) > 60000) { d = flc; o.lastFlip = Date.now(); }          // what affects the trader comes first: a building flip risk is shown about once a minute
         if (!d && evc && Date.now() - o.lastEv > 25 * 60000) { d = evc; o.lastEv = Date.now(); }                          // the COMING UP card every ~25 minutes
         if (d) o.seen[d.key] = 1;
         else if (o.info && o.info.length) {                                                                              // otherwise: a random fact (never one that has been shown, until all have)          // facts when decided / no calls yet / every third card                                  // the market is decided: random cool information instead of the calls
-          o.shown = o.shown || {};
-          let pool = o.info.filter(it => !o.shown[it.key]);
-          if (!pool.length || Object.keys(o.shown).length > 4000) { o.shown = {}; pool = o.info; }                 // every fact shown at least once: start over
-          d = pool[Math.floor(Math.random() * pool.length)]; o.shown[d.key] = 1; o.lastInfo = d.key;
+          if (!o.shown) { try { o.shown = JSON.parse(localStorage.getItem('ctbShown2:' + a) || '{}') || {}; } catch (e) { o.shown = {}; } }
+          const nowT = Date.now(), HOLD = 5 * 3600 * 1000;                                                         // a fact that has gone by is not shown again for 5 hours (remembered across reloads)
+          let pool = o.info.filter(it => !o.shown[it.key] || nowT - o.shown[it.key] > HOLD);
+          if (!pool.length) pool = o.info.slice().sort((p, q) => (o.shown[p.key] || 0) - (o.shown[q.key] || 0)).slice(0, 5);   // nothing fresh left: the ones shown longest ago
+          d = pool[Math.floor(Math.random() * pool.length)];
+          o.shown[d.key] = nowT;
+          Object.keys(o.shown).forEach(kk => { if (nowT - o.shown[kk] > HOLD * 2) delete o.shown[kk]; });
+          try { localStorage.setItem('ctbShown2:' + a, JSON.stringify(o.shown)); } catch (e) {}
+          o.lastInfo = d.key;
         } else { const all = o.data; d = all[o.idx % all.length]; o.idx++; }
         const el = document.createElement('div'); el.className = 'ctb-card ' + d.cls; el.innerHTML = d.html; o.lane.appendChild(el);
         const c = {el: el, x: o.started ? W + 6 : 30, w: el.offsetWidth, key: d.key, html: d.html}; o.started = true;
@@ -7843,6 +7876,7 @@ async function refreshInner() {
   pfvgPaint();
   ctbPaint();
   ctbSync();
+  evPaint();
   restorePatternTabs();
   drawAllBm();                         // after the pull-downs are restored, so an open heat map is drawn
   applyMarketPick();
@@ -8075,10 +8109,10 @@ def _live_pressure_html(asset_name, win, slow_pct):
         f'<span class="hint">window:</span> {btns}</span>'
         f'<span class="press-verdict {verdict[1]}">{verdict[0]}</span></div>'
         f'<div class="press-bar press-bar-live"><div class="press-buy" style="width:{live:.1f}%;background:#238636">{live:.0f}% buy</div>'
-        f'<div class="press-sell" style="width:{sell_pct:.1f}%;background:#da3633">{sell_pct:.0f}% sell</div><span class="press-mid"></span></div>'
+        f'<div class="press-sell" style="width:{sell_pct:.1f}%;background:#da3633">{sell_pct:.0f}% sell</div><span class="press-mid"></span></div></div>',
         f'{svg}'
         f'<div class="hint">now {live:.0f}% buy &middot; <span class="{"up" if d_ >= 0 else "down"}">buy share {"up" if d_ >= 0 else "down"} {abs(d_):.0f} points ({ago:.0f}% to {live:.0f}%) vs 10 seconds ago</span>'
-        f' &middot; money in the window: bought {_usd_short(bw)} / sold {_usd_short(sw)} &middot; the faint band on the line is the 1-minute reading</div></div>')
+        f' &middot; money in the window: bought {_usd_short(bw)} / sold {_usd_short(sw)} &middot; the faint band on the line is the 1-minute reading</div>')
 
 
 def build_pressure_bar(asset_name):
@@ -8135,17 +8169,20 @@ def build_pressure_bar(asset_name):
             f'<td>{v["n"] or "-"}</td><td>{bk}</td></tr>')
     table = ('<table class="press-table"><tr><th>Exchange</th><th>buy vs sell (1m)</th><th>buy %</th><th>$ traded 1m</th>'
              '<th>trades</th><th>book bids %</th></tr>' + "".join(rows) + '</table>')
+    live_top, live_extra = _live_pressure_html(asset_name, getattr(_view_tf, "pw", 10), main * 100)
     return (
         f'<div class="row press-row" data-asset-press="{asset_name}">'
-        + _live_pressure_html(asset_name, getattr(_view_tf, "pw", 10), main * 100) +
+        + live_top +
         f'<div class="press-head"><span><span class="pw-tag pw-1m">1 MINUTE</span> <b>{asset_name} buy / sell pressure</b></span> <span class="hint">{s["live_n"]} exchanges live &middot; last minute '
         f'&middot; net {("+" if net >= 0 else "-")}{_usd_short(abs(net))}</span> <span class="press-verdict {_pct_cls(buy)}">{verdict}</span></div>'
         f'<div class="press-bar"><div class="press-buy" style="width:{buy:.1f}%">{buy:.0f}% buy</div>'
         f'<div class="press-sell" style="width:{sell:.1f}%">{sell:.0f}% sell</div><span class="press-mid"></span></div>'
-        f'<div class="press-chips">{"".join(chips)}{book}</div>{deriv_html}'
+        f'<div class="press-chips">{"".join(chips)}{book}</div>'
+        f'<details class="press-xtra" data-pat="PRESSX|{asset_name}"><summary>more pressure details <span class="hint">- the live graph, funding, open interest, by exchange</span></summary>'
+        f'{live_extra}{deriv_html}'
         + _pressure_help(asset_name) +
         f'<details class="press-more" data-pat="PRESS|{asset_name}"><summary class="hint">by exchange (information only - never used for buying)</summary>'
-        f'{table}</details></div>')
+        f'{table}</details></details></div>')
 
 
 from src.mtf_structure import MTFMonitor, TFS as _MTF_TFS
@@ -9040,16 +9077,25 @@ _FACTS = {"mtime": 0.0, "facts": []}
 
 
 def _facts_bank():
-    """The fact bank (hundreds of statements of things we measured), reloaded when the file changes."""
+    """The fact bank: our own measured facts (facts_bank.json) plus thousands of one-line facts from Wikipedia (facts_wiki.json), reloaded when either file changes."""
     try:
-        fn = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data_cache", "facts_bank.json")
-        mt = os.path.getmtime(fn)
+        base = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data_cache")
+        fns = [os.path.join(base, "facts_bank.json"), os.path.join(base, "facts_wiki.json")]
+        mt = max([os.path.getmtime(f) for f in fns if os.path.exists(f)] or [0.0])
         if mt != _FACTS["mtime"]:
-            with open(fn, "r", encoding="utf-8") as f:
-                _FACTS["facts"] = json.load(f).get("facts", [])
+            facts = []
+            if os.path.exists(fns[0]):
+                with open(fns[0], "r", encoding="utf-8") as f:
+                    facts = json.load(f).get("facts", [])
+            if os.path.exists(fns[1]):
+                with open(fns[1], "r", encoding="utf-8") as f:
+                    for n_, x in enumerate(json.load(f).get("facts", [])):
+                        facts.append({"t": x["tag"], "b": x["text"], "s": "", "r": [["Topic", x["topic"], "t"], ["Source", "Wikipedia", "t"]],
+                                      "c": "BTC" if x["tag"] == "BITCOIN" else ("XRP" if x["tag"] == "XRP" else None), "k": f"w-{n_}"})
+            _FACTS["facts"] = facts
             _FACTS["mtime"] = mt
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[facts] bank load failed: {e!r}")
     return _FACTS["facts"]
 
 
@@ -9162,7 +9208,8 @@ def _ctb_payload(name, d, tn, marks, res):
     # cool information for when the market is decided (Kalshi leaning 90% or more): facts from our own tests, plus a few live numbers
     info = []
     def _ic(key, tag, big, small, rs):
-        info.append({"key": "i-" + key, "cls": "info", "html": f'<div class="ctb-hd"><span class="ctb-which">DID YOU KNOW &middot; {tag}</span></div><div class="ctb-call" style="font-size:34px;white-space:normal;line-height:1.1">{big}<small>{small}</small></div>'
+        _fs = 34 if len(big) <= 22 else (26 if len(big) <= 60 else (21 if len(big) <= 120 else 18))
+        info.append({"key": "i-" + key, "cls": "info", "html": f'<div class="ctb-hd"><span class="ctb-which">DID YOU KNOW &middot; {tag}</span></div><div class="ctb-call" style="font-size:{_fs}px;white-space:normal;line-height:1.15">{big}<small>{small}</small></div>'
                      f'<div class="ctb-bar"><i style="width:100%;background:#7aa2ff"></i></div>' + rows(rs)})
     _ic("flip", "FLIPS", "About 5%", "of 90c+ markets flip", [("At the 8th minute", "a 90c+ lean ends the other way ~5% of rounds", "t"), ("Tested on", "BTC and XRP, 68 days of rounds", "t")])
     _ic("same", "OTHER MARKETS", "Same as Bitcoin", "", [("Gold, oil, silver, gas", "flip at about the same rate", "t"), ("At the 8th minute", "about 25% end the other way", "t"), ("Tested on", "8 commodity markets, 68 days", "t")])
@@ -9186,7 +9233,8 @@ def _ctb_payload(name, d, tn, marks, res):
             _ic(f["k"], escape(f["t"]), escape(str(f["b"])), escape(str(f["s"])), [(escape(str(a)), escape(str(b)), (c if c in ("up", "down", "warn") else "t")) for a, b, *cc in f["r"] for c in [cc[0] if cc else "t"]][:4])
         if n_hand_ >= 4:                                                              # only two of the hand-written facts per minute, so they do not keep coming back
             hand_ = info[:n_hand_]
-            info[:] = info[n_hand_:] + [hand_[mi_ % n_hand_], hand_[(mi_ + 3) % n_hand_]]
+            off_ = 0 if name == "BTC" else 2                                          # BTC and XRP never get the same hand-written fact in the same minute
+            info[:] = info[n_hand_:] + [hand_[(mi_ + off_) % n_hand_], hand_[(mi_ + off_ + 3) % n_hand_]]
     except Exception:
         pass
     try:                                                              # COMING UP: the next scheduled events that can move crypto
@@ -9203,13 +9251,27 @@ def _ctb_payload(name, d, tn, marks, res):
             cards.append(ev_card)
     except Exception:
         pass
+    mk5 = None
+    try:                                                              # the 5-minute market, shown once in the middle of each round
+        hz = {r[0]: r for r in market_horizons(name)}
+        if hz.get("5 min"):
+            _l5, chg5, st5, t5 = hz["5 min"]
+            lean5 = _mk_lean(st5, chg5, t5)
+            cl5 = "up" if st5 == "BULL" else ("down" if st5 == "BEAR" else "warn")
+            mk5 = {"key": "mk5", "cls": cl5, "html": f'<div class="ctb-hd"><span><span class="ctb-coin">{name}</span> <span class="ctb-which">THE 5-MINUTE MARKET</span></span></div>'
+                   f'<div class="ctb-call" style="font-size:34px;white-space:normal;line-height:1.1">{st5}{(" - leaning " + lean5.lower()) if lean5 else ""}<small>{chg5:+.2f}%</small></div>'
+                   f'<div class="ctb-bar"><i style="width:100%;background:var(--ctb-{cl5})"></i></div>'
+                   + rows([("Price change, last 5 min", f"{chg5:+.2f}%", cl5), ("Needed to leave NEUTRAL", f"+/-{t5:.2f}%", "t")]
+                          + [(f"The {p} market", f"{hz[p][2]} ({hz[p][1]:+.2f}%)", "up" if hz[p][2] == "BULL" else ("down" if hz[p][2] == "BEAR" else "t")) for p in ("15 min", "1 hour") if hz.get(p)])}
+    except Exception:
+        pass
     smoked = False
     try:
         smoked = d.get("confidence") is not None and d.get("leaning") in ("YES", "NO") and float(d["confidence"]) >= 0.90
     except Exception:
         smoked = False
     strip = f'<span class="ctb-coin">{name}</span>' + "".join(f'<div class="ctb-chip {c}{" gold" if rl else ""}"><span class="k">{k}</span><span class="v">{v}</span></div>' for k, v, c, rl in chips)
-    return json.dumps({"cards": cards, "calls": strip, "info": info, "smoked": smoked, "quiet": not any((marks.get(str(M)) or ["NONE"])[0] in ("YES", "NO") for M in (11, 7, 3))}).replace("</", "<\\/")
+    return json.dumps({"cards": cards, "calls": strip, "info": info, "mk5": mk5, "mid": bool(left_now is not None and 400 <= left_now <= 500), "round": d.get("ticker"), "smoked": smoked, "quiet": not any((marks.get(str(M)) or ["NONE"])[0] in ("YES", "NO") for M in (11, 7, 3))}).replace("</", "<\\/")
 
 
 def build_call_timing_panel(name):
@@ -9643,9 +9705,11 @@ def _hour_warning_html(name):
             if 0 <= (now - t).total_seconds() <= 3600:
                 recent.append(h)
         n = len(recent)
-        if n < 4:
-            return ""
         k = sum(1 for h in recent if h["correct"])
+        if n == 0:                                                       # every coin always shows its last-hour line (owner, 2026-10-27) - with too few calls it just says so
+            return '<div class="hr-ok hr-none">LAST HOUR: no locked calls yet</div>'
+        if n < 4:
+            return f'<div class="hr-ok hr-none">LAST HOUR: {k} of {n} calls right ({k / n * 100:.0f}%) - too few calls to grade yet</div>'
         r = k / n
         tier = "great" if r >= HOUR_GREAT else ("good" if r >= HOUR_GOOD else "danger")
         state = f'<span class="hr-state" data-name="{name}" data-tier="{tier}" data-key="{name}::{recent[-1]["ticker"]}" style="display:none;"></span>'
@@ -11499,6 +11563,26 @@ def build_fvg_panel(asset_name, spot=None):
             '<p class="hint">Treat them as places to watch, not as signals. Information only - it never feeds a call or a trade. The numbers are in bot_state/fvg_backtest_report.txt.</p></div></details>')
     _fvg_cache[asset_name] = (ck, html)
     return html
+
+
+def build_events_popover():
+    """The list behind the 'i' button: the next scheduled events that can move crypto, with a countdown. Information only - it never says which way."""
+    try:
+        from src import events_info as _evi
+        evs = _evi.upcoming(8)
+    except Exception:
+        return ""
+    if not evs:
+        return ""
+    tz = _viewtz.get()
+    rows = []
+    for e in evs:
+        w = e["when"].astimezone(tz)
+        when = f"{w:%a %b} {w.day}" + ("" if (e["when"].hour == 0 and e["when"].minute == 0) else ", " + _viewtz.t12(w))
+        rows.append(f'<tr><td><b>{escape(e["name"])}</b></td><td>{when}</td><td class="{"down" if e["hours"] <= 3 else ("warn" if e["hours"] <= 24 else "flat")}"><b>{escape(e["left"])}</b></td><td class="hint">{escape(e["why"])}</td></tr>')
+    return ('<div class="ev-title"><b>Market information</b> <span class="hint">- upcoming news and scheduled events that can move crypto</span></div>'
+            f'<table class="lc-table"><tr><th>Event</th><th>When</th><th>Countdown</th><th>Why it can move crypto</th></tr>{"".join(rows)}</table>'
+            '<div class="hint">It tells you WHEN something may move the market, never which way. Times are in your own time zone. Information only.</div>')
 
 
 def build_events_panel():
@@ -13440,10 +13524,10 @@ def render_html():
         except Exception as _fve:
             print(f"[fair value gaps] panel failed: {_fve!r}")
         try:
-            events_html = build_events_panel() if name in ("BTC", "XRP") else ""
+            events_pop_html = build_events_popover() if name in ("BTC", "XRP") else ""
         except Exception as _eve:
-            events_html = ""
-            print(f"[events] panel failed: {_eve!r}")
+            events_pop_html = ""
+            print(f"[events] popover failed: {_eve!r}")
         try:
             call_timing_html = build_call_timing_panel(name) if name in ("BTC", "XRP") else ""            # the call banner + the three call windows now sit at the TOP of the card (owner, 2026-10-27)
         except Exception as _cte:
@@ -13488,7 +13572,7 @@ def render_html():
           {experimental_html}
           <div class="topbar">
             <div class="tb-main">
-              <div class="asset-name"><span class="asset-label asset-{name}">{name}</span> {flip_badge_html}{clock_html}{boom_html}{win_alert_html}{lock_alert_html}</div>
+              <div class="asset-name"><span class="asset-label asset-{name}">{name}</span> <button class="ev-i" title="Market information - upcoming important news (click)" onclick="evToggle('{name}', event)">i</button>{flip_badge_html}{clock_html}{boom_html}{win_alert_html}{lock_alert_html}<div class="ev-pop" data-ev="{name}" style="display:none">{events_pop_html}</div></div>
               {regime_badge_html}
               <div class="alert-dock" data-dock="{name}"></div>
               <div class="tb-right">{flip_meter_html}{flip_counts_html}</div>
@@ -13499,7 +13583,7 @@ def render_html():
               </div>
             </div>
           </div>
-          {call_timing_html}{events_html}
+          {call_timing_html}
           <div class="cwrow">{call_windows_html}</div>
           {daily_range_row_html}
           <div class="tugrow">
