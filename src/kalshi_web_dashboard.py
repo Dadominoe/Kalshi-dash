@@ -806,7 +806,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-27-fast97"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-27-names98"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -6500,7 +6500,7 @@ function checkPatternAlerts() {                                         // head 
       const up = bias === 'bullish', dn = bias === 'bearish', col = up ? 'var(--ctb-up)' : (dn ? 'var(--ctb-down)' : 'var(--ctb-warn)');
       const html = '<div class="ctb-hd"><span><span class="ctb-coin">' + name + '</span> <span class="ctb-which">' + (st === 'forming' ? 'FORMING' : 'FORMED') + ' &middot; ' + tf + '</span></span></div>'
         + '<div style="display:flex;gap:12px;align-items:center;margin:4px 0"><div style="flex:0 0 170px;line-height:0">' + svg + '</div>'
-        + '<div><div class="ctb-call" style="font-size:25px;white-space:normal;line-height:1.1;color:' + col + '">' + (up ? '&#9650; UP' : (dn ? '&#9660; DOWN' : 'WATCH')) + '<small>projected</small></div>'
+        + '<div><div style="font-size:17px;font-weight:900;color:#fff;line-height:1.1;text-transform:uppercase;margin-bottom:2px">' + pat.replace(/ at [0-9].*$/, '') + '</div><div class="ctb-call" style="font-size:25px;white-space:normal;line-height:1.1;color:' + col + '">' + (up ? '&#9650; UP' : (dn ? '&#9660; DOWN' : 'WATCH')) + '<small>projected</small></div>'
         + '<div style="font-size:14px;color:#e8eaf0;line-height:1.25">' + (rt ? 'worked <b>' + rt + '%</b> of the time (' + rn + ' scored)' : 'no track record yet') + '</div></div></div>'
         + '<div class="ctb-bar"><i style="width:' + (rt ? Math.min(100, +rt) : 0) + '%;background:' + col + '"></i></div>'
         + '<div class="ctb-row"><span>Pattern</span><b class="t">' + pat + '</b></div><div class="ctb-row"><span>If it plays out</span><b class="t">' + dir.replace('If it plays out, ', '') + '</b></div>';
@@ -9315,9 +9315,9 @@ def _ctb_indicator_cards(name):
         if len(means) > 62:
             means = means[:59].rsplit(" ", 1)[0] + "..."
         out.append({"key": f"ind-{tf}-{ex['key']}-{bucket}", "cls": "info", "pct": 1, "html":
-                    f'<div class="ctb-hd"><span><span class="ctb-coin">{name}</span> <span class="ctb-which">INDICATOR &middot; {tf} &middot; {escape(l["status"])}</span></span></div>'
+                    f'<div class="ctb-hd"><span><span class="ctb-coin">{name}</span> <span class="ctb-which">PATTERN &middot; {tf} &middot; {escape(l["status"])}</span></span></div>'
                     f'<div style="display:flex;gap:12px;align-items:center;margin:4px 0"><div style="flex:0 0 170px;line-height:0">{svg}</div>'
-                    f'<div><div class="ctb-call" style="font-size:27px;color:{col}">{"&#9650; UP" if up else "&#9660; DOWN"}<small>projected</small></div>'
+                    f'<div><div style="font-size:17px;font-weight:900;color:#fff;line-height:1.1;text-transform:uppercase;margin-bottom:2px">{escape(ex["key"])}</div><div class="ctb-call" style="font-size:27px;color:{col}">{"&#9650; UP" if up else "&#9660; DOWN"}<small>projected</small></div>'
                     f'<div style="font-size:14px;color:#e8eaf0;line-height:1.25">{rate_txt}</div></div></div>'
                     f'<div class="ctb-bar"><i style="width:{bar:.0f}%;background:{col}"></i></div>'
                     + f'<div class="ctb-row"><span>Pattern</span><b class="t">{escape(ex["key"][:1].upper() + ex["key"][1:])}</b></div>'
@@ -14195,8 +14195,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         pass  # silence default request logging
 
     def _ip(self):
-        xf = (self.headers.get("X-Forwarded-For", "") or "").split(",")[0].strip()
-        return xf or self.client_address[0]
+        xf = [p.strip() for p in (self.headers.get("X-Forwarded-For", "") or "").split(",") if p.strip()]
+        return xf[-1] if xf else self.client_address[0]                           # the LAST entry is the one the host's own proxy added; the first can be typed by the visitor
 
     def _send(self, code, body=b"", ctype="text/html; charset=utf-8", headers=()):
         self.send_response(code)

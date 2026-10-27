@@ -83,6 +83,18 @@ def _h(s):
     return hashlib.sha256((s or "").strip().lower().encode("utf-8")).hexdigest()[:32]
 
 
+def norm_email(e):
+    """One mailbox, one key: lower case, no +tag, no dots in Gmail names, googlemail = gmail (so me+2@gmail.com and m.e@gmail.com are the same person's free pass)."""
+    e = (e or "").strip().lower()
+    if "@" not in e:
+        return e
+    local, dom = e.rsplit("@", 1)
+    local = local.split("+", 1)[0]
+    if dom in ("gmail.com", "googlemail.com"):
+        dom, local = "gmail.com", local.replace(".", "")
+    return local + "@" + dom
+
+
 # ---- lifetime members: everybody who paid the original $300 is locked in for life
 def migrate_lifetime():
     """Once, on the hosted site: everybody already here with no membership dates is an original $300 member -> marked LIFETIME (the people file is saved first).
@@ -160,7 +172,7 @@ def trial_available(name, ip):
     if u.get("trial_used"):
         return False, "You already used your free pass."
     t = _read(TRIALS_FILE, {})
-    if u.get("email") and ("email:" + _h(u["email"])) in t:
+    if u.get("email") and (("email:" + _h(u["email"])) in t or ("email:" + _h(norm_email(u["email"]))) in t):
         return False, "This e-mail address already used its free pass."
     if ("ip:" + _h(ip)) in t and time.time() - t[("ip:" + _h(ip))] < 30 * 86400:
         return False, "A free pass was already used from this network in the last 30 days."
@@ -177,6 +189,7 @@ def start_trial(name, ip):
         now = time.time()
         if u.get("email"):
             t["email:" + _h(u["email"])] = now
+            t["email:" + _h(norm_email(u["email"]))] = now
         t["ip:" + _h(ip)] = now
         _write(TRIALS_FILE, t)
         _acc.set_fields(name, trial_used=True, member_until=now + TRIAL_HOURS * 3600, plan="free pass")
@@ -190,7 +203,7 @@ def create_account(name, pw, email, note, ip, terms=""):
     email = (email or "").strip().lower()
     if not EMAIL_RE.match(email):
         return False, "Please type a real e-mail address."
-    if any((u.get("email") or "") == email for u in _acc.list_users().values()):
+    if any(norm_email(u.get("email") or "") == norm_email(email) for u in _acc.list_users().values()):
         return False, "That e-mail address already has an account. Sign in instead."
     ok, msg = _acc.create_instant(name, pw, email, note, ip, terms)
     return ok, msg
