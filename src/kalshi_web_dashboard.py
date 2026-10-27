@@ -806,7 +806,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-28-plain108"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-28-cost109"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -8116,7 +8116,16 @@ async function refreshInner() {
   checkSweepAlerts();
   checkPatternAlerts();
 }
-setInterval(refresh, 1000);
+// how often the page asks for fresh data. This PC and the home network keep 1 second. The public website (it pays for every byte it sends) asks every 3 seconds, and every 1 second only in the LAST MINUTE of a round
+// when price is close to the line (owner, 2026-10-28). The flip meter has its own fast lane (/flip_now, about twice a second) and keeps running the whole time either way.
+const LOCAL_PAGE = ['localhost', '127.', '192.168.', '10.'].some(x => location.hostname.indexOf(x) === 0) || /^172[.](1[6-9]|2[0-9]|3[01])[.]/.test(location.hostname);
+function nextRefreshMs() {
+  if (LOCAL_PAGE) return 1000;
+  let fast = false;
+  document.querySelectorAll('.clock[data-left]').forEach(c => { if (+c.getAttribute('data-left') <= 60 && c.getAttribute('data-near') === '1') fast = true; });
+  return fast ? 1000 : 3000;
+}
+(function refreshLoop() { refresh(); setTimeout(refreshLoop, nextRefreshMs()); })();
 window.onload = function() {
   updateAssetToggleButtons(); updateBuildingToggleButton(); updateVoiceToggleButton(); syncSweepButtons(); syncFitButton(); syncSoundButton();
   let wantedSound = false;
@@ -8139,7 +8148,7 @@ window.onload = function() {
 };
 </script>
 </head><body>
-__USERBAR__<h1 class="dom-banner"><span class="dom-logo"><svg viewBox="0 0 100 100" fill="none" stroke-linecap="round" stroke-linejoin="round"><g stroke="#ffd0d8" stroke-width="3.4"><path d="M14 92 L 86 20"/><path d="M86 92 L 14 20"/></g><g fill="#ffd0d8" stroke="#ffd0d8" stroke-width="1.5"><path d="M6 10 Q 28 8 26 30 L 17 22 Z"/><path d="M94 10 Q 72 8 74 30 L 83 22 Z"/></g><path d="M33 44 C 12 46, 8 26, 17 12 C 20 26, 28 32, 37 36 Z" fill="#ff4d6d" stroke="#ff4d6d" stroke-width="1.5"/><path d="M67 44 C 88 46, 92 26, 83 12 C 80 26, 72 32, 63 36 Z" fill="#ff4d6d" stroke="#ff4d6d" stroke-width="1.5"/><path d="M32 66 C 30 44, 40 32, 50 32 C 60 32, 70 44, 68 66 L 68 72 L 32 72 Z" fill="#1a0a0e" stroke="#ff4d6d" stroke-width="4.5"/><path d="M31 56 H 69" stroke="#ff4d6d" stroke-width="3.2"/><path d="M50 56 V 80" stroke="#ff4d6d" stroke-width="5"/><path d="M40 48 H 46 M54 48 H 60" stroke="#ff4d6d" stroke-width="2.6"/></svg></span><span class="dom-text"><span class="dom-title">THE DOMINATOR</span><span class="dom-sub">&#9876; THE HUNTER &middot; LIVE DASHBOARD &#9876;</span></span><span class="dom-logo dom-logo-r"><svg viewBox="0 0 100 100" fill="none" stroke-linecap="round" stroke-linejoin="round"><g stroke="#ffd0d8" stroke-width="3.4"><path d="M14 92 L 86 20"/><path d="M86 92 L 14 20"/></g><g fill="#ffd0d8" stroke="#ffd0d8" stroke-width="1.5"><path d="M6 10 Q 28 8 26 30 L 17 22 Z"/><path d="M94 10 Q 72 8 74 30 L 83 22 Z"/></g><path d="M33 44 C 12 46, 8 26, 17 12 C 20 26, 28 32, 37 36 Z" fill="#ff4d6d" stroke="#ff4d6d" stroke-width="1.5"/><path d="M67 44 C 88 46, 92 26, 83 12 C 80 26, 72 32, 63 36 Z" fill="#ff4d6d" stroke="#ff4d6d" stroke-width="1.5"/><path d="M32 66 C 30 44, 40 32, 50 32 C 60 32, 70 44, 68 66 L 68 72 L 32 72 Z" fill="#1a0a0e" stroke="#ff4d6d" stroke-width="4.5"/><path d="M31 56 H 69" stroke="#ff4d6d" stroke-width="3.2"/><path d="M50 56 V 80" stroke="#ff4d6d" stroke-width="5"/><path d="M40 48 H 46 M54 48 H 60" stroke="#ff4d6d" stroke-width="2.6"/></svg></span><span class="dom-note">read only, never trades - refreshes every 1s__VERSION_TAG__</span><span class="dom-shields"></span></h1>
+__USERBAR__<h1 class="dom-banner"><span class="dom-logo"><svg viewBox="0 0 100 100" fill="none" stroke-linecap="round" stroke-linejoin="round"><g stroke="#ffd0d8" stroke-width="3.4"><path d="M14 92 L 86 20"/><path d="M86 92 L 14 20"/></g><g fill="#ffd0d8" stroke="#ffd0d8" stroke-width="1.5"><path d="M6 10 Q 28 8 26 30 L 17 22 Z"/><path d="M94 10 Q 72 8 74 30 L 83 22 Z"/></g><path d="M33 44 C 12 46, 8 26, 17 12 C 20 26, 28 32, 37 36 Z" fill="#ff4d6d" stroke="#ff4d6d" stroke-width="1.5"/><path d="M67 44 C 88 46, 92 26, 83 12 C 80 26, 72 32, 63 36 Z" fill="#ff4d6d" stroke="#ff4d6d" stroke-width="1.5"/><path d="M32 66 C 30 44, 40 32, 50 32 C 60 32, 70 44, 68 66 L 68 72 L 32 72 Z" fill="#1a0a0e" stroke="#ff4d6d" stroke-width="4.5"/><path d="M31 56 H 69" stroke="#ff4d6d" stroke-width="3.2"/><path d="M50 56 V 80" stroke="#ff4d6d" stroke-width="5"/><path d="M40 48 H 46 M54 48 H 60" stroke="#ff4d6d" stroke-width="2.6"/></svg></span><span class="dom-text"><span class="dom-title">THE DOMINATOR</span><span class="dom-sub">&#9876; THE HUNTER &middot; LIVE DASHBOARD &#9876;</span></span><span class="dom-logo dom-logo-r"><svg viewBox="0 0 100 100" fill="none" stroke-linecap="round" stroke-linejoin="round"><g stroke="#ffd0d8" stroke-width="3.4"><path d="M14 92 L 86 20"/><path d="M86 92 L 14 20"/></g><g fill="#ffd0d8" stroke="#ffd0d8" stroke-width="1.5"><path d="M6 10 Q 28 8 26 30 L 17 22 Z"/><path d="M94 10 Q 72 8 74 30 L 83 22 Z"/></g><path d="M33 44 C 12 46, 8 26, 17 12 C 20 26, 28 32, 37 36 Z" fill="#ff4d6d" stroke="#ff4d6d" stroke-width="1.5"/><path d="M67 44 C 88 46, 92 26, 83 12 C 80 26, 72 32, 63 36 Z" fill="#ff4d6d" stroke="#ff4d6d" stroke-width="1.5"/><path d="M32 66 C 30 44, 40 32, 50 32 C 60 32, 70 44, 68 66 L 68 72 L 32 72 Z" fill="#1a0a0e" stroke="#ff4d6d" stroke-width="4.5"/><path d="M31 56 H 69" stroke="#ff4d6d" stroke-width="3.2"/><path d="M50 56 V 80" stroke="#ff4d6d" stroke-width="5"/><path d="M40 48 H 46 M54 48 H 60" stroke="#ff4d6d" stroke-width="2.6"/></svg></span><span class="dom-note">read only, never trades - refreshes every 1-3s__VERSION_TAG__</span><span class="dom-shields"></span></h1>
 <div class="view-bar"><span class="hint">Show:</span>
   <button class="size-mode-btn" data-view="BTC" onclick="setAssetView('BTC')">BTC only</button>
   <button class="size-mode-btn" data-view="XRP" onclick="setAssetView('XRP')">XRP only</button>
@@ -13997,7 +14006,12 @@ def render_html():
         _frac = min(1.0, _left / 900.0)
         _cl = "clock-hot" if _left <= 30 else ("clock-warn" if _left <= 120 else "")
         _stroke = "#f85149" if _left <= 30 else ("#d29922" if _left <= 120 else "#58a6ff")
-        clock_html = (f'<div class="clock {_cl}" title="{d.get("ticker", "")}">'
+        try:                                                                       # 'close' = price near the line (high flip risk, or less than a candle-range away): the website refreshes faster then, in the last minute
+            _fpn = _flip_pre(name, _sp, _tp, _left) if (_sp is not None and _tp) else None
+            _near = 1 if (_fpn and (_fpn[0] >= 0.15 or _fpn[1] < 1.0)) else 0
+        except Exception:
+            _near = 0
+        clock_html = (f'<div class="clock {_cl}" data-left="{_left}" data-near="{_near}" title="{d.get("ticker", "")}">'
                       f'<svg width="22" height="22" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="#30363d" stroke-width="3"/>'
                       f'<circle cx="12" cy="12" r="10" fill="none" stroke="{_stroke}" stroke-width="3" stroke-linecap="round" '
                       f'stroke-dasharray="{_frac * 62.83:.1f} 62.83" transform="rotate(-90 12 12)"/></svg>'
