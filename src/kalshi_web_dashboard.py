@@ -806,7 +806,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-27-pats89"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-27-flow92"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -4888,6 +4888,10 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
   body[data-view="BTC"] .card[data-asset="BTC"] > .pat-win, body[data-view="XRP"] .card[data-asset="XRP"] > .pat-win { grid-column:2; margin-top:0; }
 }
 .ct-drop { margin:4px 0; position:relative; }
+.pyp-t { width:100%; border-collapse:collapse; font-size:14px; } .pyp-t th { text-align:left; font-size:12px; letter-spacing:.8px; text-transform:uppercase; color:#8b949e; padding:4px 8px; border-bottom:2px solid #30363d; }
+.pyp-t td { padding:4px 8px; border-top:1px solid rgba(255,255,255,.07); white-space:nowrap; } .pyp-t td.pyp-best { box-shadow:inset 0 0 0 2px #ffd24a; background:rgba(255,210,74,.10); border-radius:6px; }
+.pyp-min { font-size:14px; } .pyp-tag { font-size:11px; letter-spacing:.8px; color:#ffd24a; border:1px solid #ffd24a; border-radius:999px; padding:0 7px; margin-left:6px; } .pyp-foot td { border-top:2px solid #30363d; } .pyp-note { margin-top:8px; }
+.pyp-body { overflow-x:auto; }
 .ct-body { position:absolute; left:0; top:calc(100% + 4px); width:100%; min-width:680px; max-width:min(1300px, 98vw); z-index:60; max-height:78vh; overflow:auto; background:#0d1117; border:2px solid #39d0d8; border-radius:12px; padding:12px; box-shadow:0 14px 44px rgba(0,0,0,.75); }
 .ct-cards { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:10px; }
 @media (max-width:900px) { .ct-cards { grid-template-columns:1fr; } .ct-body { min-width:0; } }
@@ -6883,7 +6887,8 @@ function narVoice(text, voice) {
 }
 function narUsd(v) { return v >= 1e6 ? (v / 1e6).toFixed(1) + ' million dollars' : (v >= 1e3 ? Math.round(v / 1e3) + ' thousand dollars' : Math.round(v) + ' dollars'); }
 const shareCardState = {};
-function checkShareCards() {                                             // "buyers / sellers are in control, N percent of the money" as a card on the call banner
+function checkShareCards() {                                             // SWITCHED OFF (owner, 2026-10-27: 'that is misleading') - no buyers / sellers 'in control' card on the call banner
+  return;
   if (!ctbOn) return;
   ['BTC', 'XRP'].forEach(name => {
     const card = document.querySelector('.card[data-asset="' + name + '"]');
@@ -7533,7 +7538,11 @@ function ctbTick(now, fromTimer) {
         if (!d && flc && (flc.cls === 'down' || flc.cls === 'warn') && Date.now() - (o.lastFlip || 0) > 60000) { d = flc; o.lastFlip = Date.now(); }          // what affects the trader comes first: a building flip risk is shown about once a minute
         if (!d && evc && Date.now() - o.lastEv > 25 * 60000) { d = evc; o.lastEv = Date.now(); }
         const mbc = o.data.find(x => x.key === 'member'); if (!o.lastMember) o.lastMember = Date.now() - 16 * 60000;
-        if (!d && mbc && Date.now() - o.lastMember > 20 * 60000) { d = mbc; o.lastMember = Date.now(); }                          // the MEMBERSHIP card (website only) every ~20 minutes                          // the COMING UP card every ~25 minutes
+        if (!d && mbc && Date.now() - o.lastMember > 20 * 60000) { d = mbc; o.lastMember = Date.now(); }
+        const fpc = o.data.find(x => x.key === 'flowprice'); if (!o.lastFP) o.lastFP = Date.now() - 6 * 60000;
+        if (!d && fpc && Date.now() - o.lastFP > 12 * 60000) { d = fpc; o.lastFP = Date.now(); }                              // flow vs price agree / disagree, every ~12 minutes
+        const lbc = o.data.find(x => x.key === 'linebeh'); if (!o.lastLB) o.lastLB = Date.now() - 2 * 60000;
+        if (!d && lbc && Date.now() - o.lastLB > 15 * 60000) { d = lbc; o.lastLB = Date.now(); }                              // line behavior, every ~15 minutes                          // the MEMBERSHIP card (website only) every ~20 minutes                          // the COMING UP card every ~25 minutes
         if (d) o.seen[d.key] = 1;
         else if (o.info && o.info.length) {                                                                              // otherwise: a random fact (never one that has been shown, until all have)          // facts when decided / no calls yet / every third card                                  // the market is decided: random cool information instead of the calls
           if (!o.shown) { try { o.shown = JSON.parse(localStorage.getItem('ctbShown2:' + a) || '{}') || {}; } catch (e) { o.shown = {}; } }
@@ -8663,6 +8672,13 @@ def _ct_pass():
                     row.append(_ct_snapshot(name, d, tn, side, lean, M))                       # the full picture of this call, for its window
                 except Exception as e:
                     print(f"[call timing] snapshot failed: {e!r}")
+            else:
+                try:                                                                          # a small picture for the other minutes (Pick your poison): price, line, flip risk
+                    _cs = side if side in ("YES", "NO") else ("YES" if fair >= 0.5 else "NO")
+                    _fr = _flip_risk(name, _cs, tn["spot"], tn["line"], left)
+                    row.append({"spot": tn["spot"], "line": tn["line"], "flip": round(_fr[0], 3) if _fr else None})
+                except Exception:
+                    pass
             with _ct_mu:
                 rec["m"][str(M)] = row
             changed = True
@@ -8753,6 +8769,51 @@ def _ct_backfill():
         print(f"[call timing] backfill failed: {e!r}")
 
 
+_CT_BF_ALL_FLAG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data_cache", "call_timing_backfilled_all.flag")
+
+
+def _ct_backfill_all():
+    """One time: rebuild the call at EVERY minute mark (13 to 1 minutes left) of past rounds from tug_log.csv (nearest sample to each mark, within 16 s) and round_results.json, for Pick your poison. Only fills marks that are missing."""
+    if os.path.exists(_CT_BF_ALL_FLAG):
+        return
+    try:
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data_cache", "round_results.json"), "r", encoding="utf-8") as f:
+            results = json.load(f)
+        best = {}
+        with open(_TUG_LOG, "r", newline="", encoding="utf-8") as f:
+            for row in csv.DictReader(f):
+                try:
+                    left = float(row["seconds_left"]); coin = row["asset"]; tk = row["ticker"]
+                    if coin not in ("BTC", "XRP") or results.get(tk) not in ("YES", "NO") or row["price_vs_line_up"] == "":
+                        continue
+                    fair = float(row["price_vs_line_up"])
+                    ky = float(row["kalshi_yes"]) if row.get("kalshi_yes") else None
+                except (KeyError, ValueError):
+                    continue
+                M = int(round(left / 60.0))
+                if M in CT_MARKS and abs(left - M * 60) <= 16:
+                    dist = abs(left - M * 60)
+                    if (coin, tk, M) not in best or dist < best[(coin, tk, M)][0]:
+                        lean = max(fair, 1 - fair) * 100
+                        side = ("YES" if fair >= 0.5 else "NO") if lean >= END_CALL_MIN_LEAN else "NONE"
+                        best[(coin, tk, M)] = (dist, side, round(lean, 1), None if ky is None else round(ky, 3))
+        added = 0
+        with _ct_mu:
+            for (coin, tk, M), (_d, side, lean, ky) in best.items():
+                rec = _ct[coin].setdefault(tk, {"m": {}, "res": results[tk], "bf": 1})
+                if rec.get("res") is None:
+                    rec["res"] = results[tk]
+                if str(M) not in rec["m"]:
+                    rec["m"][str(M)] = [side, lean, ky]
+                    added += 1
+            _ct_save()
+        with open(_CT_BF_ALL_FLAG, "w", encoding="utf-8") as f:
+            f.write(f"backfilled {added} marks on {dt.datetime.now().isoformat()}")
+        print(f"[call timing] backfilled {added} marks for every minute from tug_log.csv")
+    except Exception as e:
+        print(f"[call timing] full backfill failed: {e!r}")
+
+
 def _ct_marks_records(name, M):
     """[{"ticker","correct"}] oldest first for the call made at M minutes left. Mid (7) is the real END CALL history."""
     if M == 7 and _end_hist.get(name):
@@ -8813,6 +8874,7 @@ def _ct_rec_line(recs, hours=None):
 def _ct_loop():
     time.sleep(25)
     _ct_backfill()
+    _ct_backfill_all()
     while True:
         try:
             _ct_pass()
@@ -9395,6 +9457,39 @@ def _ctb_payload(name, d, tn, marks, res, allrecs=None):
             cards.append(ev_card)
     except Exception:
         pass
+    try:                                                              # FLOW vs PRICE: do the money and the price point the same way (rolled by about every 12 minutes)
+        if tn and tn.get("flow_up") is not None and tn.get("spot") and tn.get("line"):
+            fu = tn["flow_up"] >= 0.5
+            up_s = tn["spot"] >= tn["line"]
+            ag = fu == up_s
+            cl_ = "up" if ag else "warn"
+            cards.append({"key": "flowprice", "cls": cl_, "html": f'<div class="ctb-hd"><span><span class="ctb-coin">{name}</span> <span class="ctb-which">FLOW vs PRICE</span></span></div>'
+                          f'<div class="ctb-call" style="font-size:30px;white-space:normal;line-height:1.1">{"FLOW AND PRICE AGREE" if ag else "FLOW AND PRICE DISAGREE"}<small>{"same way" if ag else "pulling apart"}</small></div>'
+                          f'<div class="ctb-bar"><i style="width:100%;background:var(--ctb-{cl_})"></i></div>'
+                          + rows([("Price is", f'{"ABOVE" if up_s else "BELOW"} the line', "up" if up_s else "down"), ("The money is pushing", "UP" if fu else "DOWN", "up" if fu else "down"),
+                                  ("What it has meant", "price side usually wins" if ag else "the PRICE side won about 3 rounds in 4", "t" if ag else "warn")])})
+    except Exception:
+        pass
+    try:                                                              # LINE BEHAVIOR: how the price has been crossing the line (rolled by about every 15 minutes)
+        with _lc_mu:
+            lrs = list(_lc_rounds.get(name, []))
+        now_t = time.time()
+        if lrs:
+            cur_ = next((r for r in reversed(lrs) if r["close"] > now_t >= r["start"]), None)
+            hr_ = _lc.hour_buckets(lrs, _viewtz.get(), now_t, 1)
+            st_ = _lc.hour_stats(hr_[0], _lc_results) if hr_ else None
+            if cur_ is not None and st_ and st_["rounds"]:
+                nc_ = len(cur_["cross"])
+                lb_ = _lc.classify(cur_, now_t) if cur_.get("n", 0) >= 20 else None
+                cards.append({"key": "linebeh", "cls": "info", "html": f'<div class="ctb-hd"><span><span class="ctb-coin">{name}</span> <span class="ctb-which">LINE BEHAVIOR</span></span></div>'
+                              f'<div class="ctb-call" style="font-size:30px;white-space:normal;line-height:1.1">{nc_} crossing{"" if nc_ == 1 else "s"} this round<small>now {"ABOVE" if cur_["d_last"] > 0 else "BELOW"} the line</small></div>'
+                              f'<div class="ctb-bar"><i style="width:{min(100, nc_ * 25)}%;background:#7aa2ff"></i></div>'
+                              + rows([("This hour so far", f'{st_["per_round"]:.1f} crossings per round ({st_["rounds"]} rounds)', "t"),
+                                      ("2 or more crossings", f'{st_["multi"]} of {st_["rounds"]} rounds', "warn" if st_["multi"] * 3 >= st_["rounds"] else "t"),
+                                      ("Ended opposite of the 8th-minute side", ("-" if not st_["flip8_n"] else f'{st_["flip8"]} of {st_["flip8_n"]}'), "t")]
+                                     + ([("Right now", escape(str(lb_["label"])), "t")] if lb_ else []))})
+    except Exception:
+        pass
     try:                                                              # MEMBERSHIP: shown on the website only, about every 20 minutes
         if HOSTED_PASSWORD and _mem.MEMBERSHIP_ON:
             cards.append({"key": "member", "cls": "warn", "html": '<div class="ctb-hd"><span class="ctb-which">THE DOMINATOR &middot; MEMBERSHIP</span><span class="ctb-real">JOIN US</span></div>'
@@ -9426,6 +9521,103 @@ def _ctb_payload(name, d, tn, marks, res, allrecs=None):
     return json.dumps({"cards": cards, "calls": strip, "info": info, "mk5": mk5, "mid": bool(left_now is not None and 400 <= left_now <= 500), "round": d.get("ticker"), "smoked": smoked, "quiet": not any((marks.get(str(M)) or ["NONE"])[0] in ("YES", "NO") for M in (11, 7, 3))}).replace("</", "<\\/")
 
 
+_pyp_cache = {}
+_PYP_WINS = (("Last hour", 1, 3), ("3 hours", 3, 6), ("6 hours", 6, 10), ("12 hours", 12, 20), ("24 hours", 24, 30), ("Today", "today", 20), ("Overall", None, 60))     # label, hours back, rounds needed before a column's 'best' is marked
+
+
+def _pyp_rows(name):
+    """{minutes_left: [(close time, correct)]} for every minute mark, rebuilt at most every 20 seconds (the windows are cut per viewer, so 'today' follows their own clock)."""
+    c = _pyp_cache.get(name)
+    if c and time.time() - c[0] < 20:
+        return c[1]
+    out = {}
+    for M in CT_MARKS:
+        rows = []
+        for h in _ct_marks_records(name, M):
+            if h.get("correct") is None:
+                continue
+            t = _window_close_utc(h.get("ticker"))
+            if t is not None:
+                rows.append((t, bool(h["correct"])))
+        out[M] = rows
+    _pyp_cache[name] = (time.time(), out)
+    return out
+
+
+def build_pick_poison(name, d, tn):
+    """PICK YOUR POISON: a call for every minute of the round (2 to 14 minutes in), with its record per window, so the minutes can be compared. Best minute per column marked. Information only."""
+    rows = _pyp_rows(name)
+    now = dt.datetime.now(dt.timezone.utc)
+    day0 = now.astimezone(_viewtz.get()).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(dt.timezone.utc)
+    left_now = tn["left"] if tn else None
+    rec = {}
+    if d.get("ticker"):
+        with _ct_mu:
+            rec = dict(_ct[name].get(d["ticker"]) or {})
+    marks, res = rec.get("m", {}), rec.get("res")
+    order = sorted(CT_MARKS, key=lambda M: -M)                                   # 13 minutes left (2 minutes in) ... 1 minute left (14 minutes in)
+    stat = {}
+    for M in order:
+        for lab, hrs, need in _PYP_WINS:
+            if hrs is None:
+                cut = None
+            elif hrs == "today":
+                cut = day0
+            else:
+                cut = now - dt.timedelta(hours=hrs)
+            sel = [ok for t, ok in rows.get(M, []) if cut is None or t >= cut]
+            stat[(M, lab)] = (sum(sel), len(sel))
+    best = {}
+    for lab, hrs, need in _PYP_WINS:
+        cand = [(stat[(M, lab)][0] / stat[(M, lab)][1], M) for M in order if stat[(M, lab)][1] >= need]
+        if cand:
+            top = max(c[0] for c in cand)
+            best[lab] = {M for p, M in cand if p >= top - 1e-9}
+    names = {11: "EARLY", 7: "MID (real END CALL)", 3: "LATE"}
+    body = []
+    for M in order:
+        m_in = 15 - M
+        cells = []
+        for lab, hrs, need in _PYP_WINS:
+            w, n = stat[(M, lab)]
+            if not n:
+                cells.append('<td class="flat">-</td>')
+                continue
+            pct = w / n * 100
+            css = "up" if pct >= 70 else ("down" if pct < 55 else "flat")
+            star = " pyp-best" if M in best.get(lab, ()) else ""
+            cells.append(f'<td class="{star.strip()}"><b class="{css}">{pct:.0f}%</b> <span class="hint">{w}-{n - w}</span></td>')
+        mk = marks.get(str(M))
+        if mk:
+            side, lean = mk[0], mk[1]
+            ex = mk[3] if len(mk) > 3 and isinstance(mk[3], dict) else {}
+            if side == "NONE":
+                now_c = f'<span class="flat">no call {lean:.0f}%</span>'
+            else:
+                now_c = f'<b class="{"up" if side == "YES" else "down"}">{"&#9650; UP" if side == "YES" else "&#9660; DOWN"} {lean:.0f}%</b>'
+            if res in ("YES", "NO") and side in ("YES", "NO"):
+                now_c += f' <b class="{"up" if res == side else "down"}">{"RIGHT" if res == side else "WRONG"}</b>'
+            elif ex.get("flip") is not None:
+                now_c += f' <span class="hint">flip risk {ex["flip"] * 100:.0f}%</span>'
+        elif left_now is not None and left_now > M * 60:
+            mm_, ss_ = divmod(int(left_now - M * 60), 60)
+            now_c = f'<span class="hint">in {mm_}:{ss_:02d}</span>'
+        else:
+            now_c = '<span class="hint">-</span>'
+        tag = f' <span class="pyp-tag">{names[M]}</span>' if M in names else ""
+        body.append(f'<tr><td class="pyp-min"><b>{m_in} min in</b> <span class="hint">{M}:00 left</span>{tag}</td><td>{now_c}</td>{"".join(cells)}</tr>')
+    foot = []
+    for lab, hrs, need in _PYP_WINS:
+        bm = sorted(best.get(lab, ()), reverse=True)
+        foot.append(f'<td class="pyp-best"><b>{", ".join(str(15 - M) for M in bm)} min in</b></td>' if bm else '<td class="flat">-</td>')
+    return (f'<details class="ct-drop pyp-drop" data-pat="PYP|{name}"><summary><span class="dd-ic">&#9654;</span><b>Pick your poison</b>'
+            f'<span class="dd-hint"> - a call at every minute, 2 to 14 minutes in, with its record - click to compare</span></summary>'
+            f'<div class="ct-body pyp-body"><table class="pyp-t"><tr><th>Call made at</th><th>This round</th>{"".join(f"<th>{l}</th>" for l, _h, _n in _PYP_WINS)}</tr>'
+            f'{"".join(body)}<tr class="pyp-foot"><td class="pyp-min"><b>Best minute</b></td><td></td>{"".join(foot)}</tr></table>'
+            '<div class="hint pyp-note">Every minute of the round gets its own call from the same price-vs-line rule, written down at that minute and scored from Kalshi\'s result. Gold-bordered = the best record in that column '
+            '(only once it has enough rounds). A short window is noisy - give it time. A later call is almost always the more accurate one simply because less time is left for the round to change, so compare the coins and the markets minute by minute, not just later-is-better. Mid (8 min in) is the real END CALL. Nothing here changes a call or a trade. Information only.</div></div></details>')
+
+
 def build_call_timing_panel(name):
     """The 3 calls: one floating pull-down with three windows (EARLY / MID / LATE), each with the full picture of its call, plus a small 'Scoreboard & info' tab. Information only."""
     if name not in ("BTC", "XRP"):
@@ -9452,10 +9644,15 @@ def build_call_timing_panel(name):
     except Exception as _cbe:
         banner = ""
         print(f"[call banner] failed: {_cbe!r}")
+    try:
+        pyp = build_pick_poison(name, d, tn)
+    except Exception as _pye:
+        pyp = ""
+        print(f"[pick your poison] failed: {_pye!r}")
     return (banner + f'<details class="ct-drop" data-pat="CT|{name}"><summary><span class="dd-ic">&#9654;</span><b>The 3 calls</b><span class="ct-sumx"> {chips} <span class="dd-hint">- click to open the three call windows</span></span></summary>'
             f'<div class="ct-body"><div class="ct-cards">{cards}</div><div class="ct-recs"><div class="ct-rec-h"><b>Track record</b> <span class="hint">- the same table for all three calls</span></div>{tables}{_ct_agree_html(name, marks)}</div>'
             f'<details class="ct-info" data-pat="CTI|{name}"><summary>Scoreboard &amp; info</summary><div class="ct-info-body">{board}</div></details>'
-            f'<div class="hint ct-note">More information will be added to each window as we learn what matters. Nothing here changes the real END CALL or trades.</div></div></details>')
+            f'<div class="hint ct-note">More information will be added to each window as we learn what matters. Nothing here changes the real END CALL or trades.</div></div></details>' + pyp)
 
 
 
