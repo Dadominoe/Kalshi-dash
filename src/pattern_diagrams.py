@@ -45,6 +45,31 @@ def candles_svg(cs, rect=None, labels=()):
     return _wrap("".join(out))
 
 
+def _path_candles(path, n=26):
+    """Turns a price path [(x, y)...] (x 0-100, y 0-100) into n candles (open, high, low, close, x): each candle closes on the path, opens where the last one closed, and its wicks reach every swing high / low of the path inside it,
+    so a peak or a trough in the path is a real wick in the picture. (2026-10-27: pictures use candles, not a line - owner.)"""
+    x0, x1 = path[0][0], path[-1][0]
+
+    def at(x):
+        for (ax, ay), (bx, by) in zip(path, path[1:]):
+            if ax <= x <= bx:
+                return ay if bx == ax else ay + (by - ay) * (x - ax) / (bx - ax)
+        return path[-1][1]
+    xs = [x0 + (x1 - x0) * i / (n - 1) for i in range(n)]
+    out, prev = [], at(xs[0]) - (at(xs[1]) - at(xs[0]))
+    for i, x in enumerate(xs):
+        lo_x = xs[i - 1] if i else x0
+        c = at(x)
+        turn = [ay for ax, ay in path if lo_x <= ax <= x]                   # the path's own swing points inside this candle
+        c += 0 if (turn or i in (0, n - 1)) else 1.3 * ((i * 5) % 7 - 3) / 3     # a little life in the bodies, but never on a swing point
+        o = prev
+        hi = max([o, c] + turn) + 1.2 + (i * 3) % 4 * 0.8
+        lo = min([o, c] + turn) - 1.2 - (i * 5) % 4 * 0.8
+        out.append((o, min(100, hi), max(0, lo), c, x))
+        prev = c
+    return out
+
+
 def path_svg(path, lines=(), labels=(), shade=None, fill_between=None):
     out = []
     if shade:   # (x1, x2, y_low, y_high)
@@ -52,10 +77,14 @@ def path_svg(path, lines=(), labels=(), shade=None, fill_between=None):
         out.append(f'<rect x="{_px(x1):.1f}" y="{_py(hi):.1f}" width="{_px(x2) - _px(x1):.1f}" height="{_py(lo) - _py(hi):.1f}" fill="{GOLD}" opacity="0.12"/>')
     for (p1, p2, *rest) in lines:
         out.append(_line(p1, p2, rest[0] if rest else GUIDE))
-    pts = " ".join(f"{_px(x):.1f},{_py(y):.1f}" for x, y in path)
-    out.append(f'<polyline points="{pts}" fill="none" stroke="#58a6ff" stroke-width="2" stroke-linejoin="round"/>')
-    ex, ey = path[-1]
-    out.append(f'<circle cx="{_px(ex):.1f}" cy="{_py(ey):.1f}" r="3" fill="#58a6ff"/>')
+    cs = _path_candles(path)
+    bw = max(3.0, (_px(path[-1][0]) - _px(path[0][0])) / (len(cs) - 1) * 0.62)
+    for (o, h, l, c, x) in cs:
+        cx = _px(x)
+        col = UP if c >= o else DOWN
+        top, bot = max(o, c), min(o, c)
+        out.append(f'<line x1="{cx:.1f}" y1="{_py(h):.1f}" x2="{cx:.1f}" y2="{_py(l):.1f}" stroke="{col}" stroke-width="1.2"/>')
+        out.append(f'<rect x="{cx - bw / 2:.1f}" y="{_py(top):.1f}" width="{bw:.1f}" height="{max(1.5, _py(bot) - _py(top)):.1f}" fill="{col}"/>')
     for (x, y, t) in labels:
         out.append(_label(x, y, t))
     return _wrap("".join(out))
