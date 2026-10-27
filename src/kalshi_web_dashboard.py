@@ -806,7 +806,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-27-rsi86"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-27-join87"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -7496,7 +7496,9 @@ function ctbTick(now, fromTimer) {
         if (!d && o.burst && o.burst.length) { const k = o.burst.shift(); d = o.data.find(x => x.key === k) || null; o.lastBurst = Date.now(); }
         const flc = o.data.find(x => x.key === 'flip');
         if (!d && flc && (flc.cls === 'down' || flc.cls === 'warn') && Date.now() - (o.lastFlip || 0) > 60000) { d = flc; o.lastFlip = Date.now(); }          // what affects the trader comes first: a building flip risk is shown about once a minute
-        if (!d && evc && Date.now() - o.lastEv > 25 * 60000) { d = evc; o.lastEv = Date.now(); }                          // the COMING UP card every ~25 minutes
+        if (!d && evc && Date.now() - o.lastEv > 25 * 60000) { d = evc; o.lastEv = Date.now(); }
+        const mbc = o.data.find(x => x.key === 'member'); if (!o.lastMember) o.lastMember = Date.now() - 16 * 60000;
+        if (!d && mbc && Date.now() - o.lastMember > 20 * 60000) { d = mbc; o.lastMember = Date.now(); }                          // the MEMBERSHIP card (website only) every ~20 minutes                          // the COMING UP card every ~25 minutes
         if (d) o.seen[d.key] = 1;
         else if (o.info && o.info.length) {                                                                              // otherwise: a random fact (never one that has been shown, until all have)          // facts when decided / no calls yet / every third card                                  // the market is decided: random cool information instead of the calls
           if (!o.shown) { try { o.shown = JSON.parse(localStorage.getItem('ctbShown2:' + a) || '{}') || {}; } catch (e) { o.shown = {}; } }
@@ -9355,6 +9357,14 @@ def _ctb_payload(name, d, tn, marks, res, allrecs=None):
                        + rows([(escape(e["name"]), escape(e["left"]), "t") for e in evs] + [("Why it matters", escape(e0["why"]), "warn")])}
             info.append(ev_card)
             cards.append(ev_card)
+    except Exception:
+        pass
+    try:                                                              # MEMBERSHIP: shown on the website only, about every 20 minutes
+        if HOSTED_PASSWORD and _mem.MEMBERSHIP_ON:
+            cards.append({"key": "member", "cls": "warn", "html": '<div class="ctb-hd"><span class="ctb-which">THE DOMINATOR &middot; MEMBERSHIP</span><span class="ctb-real">JOIN US</span></div>'
+                          '<div class="ctb-call" style="font-size:30px;white-space:normal;line-height:1.1">Get your membership<small>full access, every call, every alert</small></div>'
+                          '<div class="ctb-bar"><i style="width:100%;background:var(--ctb-warn)"></i></div>'
+                          + rows([("How to get it", "send the owner a PRIVATE MESSAGE", "warn"), ("Why message", "so it is set up properly", "t"), ("Already a member?", "thank you - nothing to do", "up")])})
     except Exception:
         pass
     mk5 = None
