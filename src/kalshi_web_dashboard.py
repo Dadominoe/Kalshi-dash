@@ -806,7 +806,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-27-pct85"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-27-rsi86"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -6328,7 +6328,7 @@ function showLockToast(name, call, kp) {
 // RSI extreme alert - added 2026-10-10 per user request: big pulsing banner (no screen flash) + beep + voice when the
 // 1-minute RSI(14) reaches 25 or below (oversold) or 75 or above (overbought). Fires once per entry into the zone; it
 // leaves the zone at 28 / 72 so a wobble around 25 or 75 does not re-alert. Information only - never used for buying.
-const RSI_LOW = 25, RSI_HIGH = 75, RSI_BACK_LOW = 28, RSI_BACK_HIGH = 72;
+const RSI_LOW = 30, RSI_HIGH = 70, RSI_BACK_LOW = 31, RSI_BACK_HIGH = 69;      // owner 2026-10-27: the alert stays up the whole time the RSI is overbought (70+) / oversold (30-) and goes when it is not any more
 const rsiZone = {};
 const rsiDismissed = {};
 try { Object.assign(rsiZone, JSON.parse(sessionStorage.getItem('rsiZone') || '{}')); } catch (e) {}
@@ -6378,7 +6378,7 @@ function checkRsiAlerts() {
     const z = live[name].z, v = live[name].v;
     dockPush(name, z === 'under' ? 'dock-rsi-under' : 'dock-rsi-over',
       '\u26A0 ' + (z === 'under' ? 'OVERSOLD' : 'OVERBOUGHT') + ' - RSI ' + v.toFixed(0),
-      '1-minute RSI ' + (z === 'under' ? 'at or below 25' : 'at or above 75') + ' - information only',
+      '1-minute RSI ' + (z === 'under' ? 'at or below 30' : 'at or above 70') + ' - stays until it is not ' + (z === 'under' ? 'oversold' : 'overbought') + ' - information only',
       0, 'rsi', () => { rsiDismissed[name] = true; });
   });
 }
