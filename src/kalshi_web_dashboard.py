@@ -806,7 +806,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-27-flip81"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-27-flip82"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -6063,7 +6063,7 @@ function dkTick(now, fromTimer) {
     if (o.mode !== 'scroll' || !o.el.isConnected || !o.el.offsetWidth || !o.items.length) return;
     const W = o.lane.clientWidth;
     if (!o.hover) {
-      o.live.forEach(c => { c.x -= 22 * dt; });
+      o.live.forEach(c => { c.x -= 30 * dt; });
       while (o.live.length && o.live[0].x + o.live[0].w < -8) { o.live[0].el.remove(); o.live.shift(); }
       const tail = o.live[o.live.length - 1];
       if (!tail || tail.x + tail.w + (o.items.length > 1 ? 22 : Math.round(W * 1.1)) < W) {          // with a single alert it scrolls by, then a gap, then again (never right behind itself)
