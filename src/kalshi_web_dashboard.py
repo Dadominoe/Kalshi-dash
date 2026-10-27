@@ -806,7 +806,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-28-hourplay105"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-28-lore106"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -9341,7 +9341,7 @@ def _facts_bank():
     """The fact bank: our own measured facts (facts_bank.json) plus thousands of one-line facts from Wikipedia (facts_wiki.json), reloaded when either file changes."""
     try:
         base = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data_cache")
-        fns = [os.path.join(base, "facts_bank.json"), os.path.join(base, "facts_wiki.json")]
+        fns = [os.path.join(base, "facts_bank.json"), os.path.join(base, "facts_wiki.json"), os.path.join(base, "facts_lore.json")]
         mt = max([os.path.getmtime(f) for f in fns if os.path.exists(f)] or [0.0])
         if mt != _FACTS["mtime"]:
             facts = []
@@ -9353,6 +9353,11 @@ def _facts_bank():
                     for n_, x in enumerate(json.load(f).get("facts", [])):
                         facts.append({"t": x["tag"], "b": x["text"], "s": "", "r": [["Topic", x["topic"], "t"], ["Source", "Wikipedia", "t"]],
                                       "c": "BTC" if x["tag"] == "BITCOIN" else ("XRP" if x["tag"] == "XRP" else None), "k": f"w-{n_}"})
+            if os.path.exists(fns[2]):                                    # lore: gold, hunting-and-trading, coin and stock-market history (hand-checked one-liners)
+                with open(fns[2], "r", encoding="utf-8") as f:
+                    for n_, x in enumerate(json.load(f).get("facts", [])):
+                        facts.append({"t": x["tag"], "b": x["text"], "s": "", "r": [["Topic", x["topic"], "t"], ["Source", "History (not live data)", "t"]],
+                                      "c": x.get("coin") or ("BTC" if x["tag"] == "BITCOIN" else ("XRP" if x["tag"] == "XRP" else None)), "k": f"l-{n_}"})
             _FACTS["facts"] = facts
             _FACTS["mtime"] = mt
     except Exception as e:
@@ -9586,20 +9591,23 @@ def _ctb_payload(name, d, tn, marks, res, allrecs=None):
             pool = sorted([f for f in _bank if f.get("c") in (None, name)], key=lambda f: f["k"])
             _hasp = lambda f: "%" in (str(f["b"]) + str(f["s"]) + "".join(str(x_) for r_ in f["r"] for x_ in r_[:2]))
             pp_ = [f for f in pool if _hasp(f)]
-            pl_ = [f for f in pool if not _hasp(f)]
+            lo_ = [f for f in pool if str(f["k"]).startswith("l-")]                          # the history / gold / hunting lore gets its own slots (3 a minute)
+            pl_ = [f for f in pool if not _hasp(f) and not str(f["k"]).startswith("l-")]
             _rnd.Random(f"{name}{dt.date.today().isoformat()}").shuffle(pp_)               # a different order every day
             _rnd.Random(f"{name}{dt.date.today().isoformat()}b").shuffle(pl_)
+            _rnd.Random(f"{name}{dt.date.today().isoformat()}c").shuffle(lo_)
             _pool_memo.clear() if len(_pool_memo) > 6 else None
-            _pool_memo[_pk] = _pm = (pp_, pl_)
-        pp_, pl_ = _pm
+            _pool_memo[_pk] = _pm = (pp_, pl_, lo_)
+        pp_, pl_, lo_ = _pm
         mi_ = int(time.time() // 60)
         sp_ = (mi_ * 30) % max(1, len(pp_))                                            # each minute gets the NEXT 30 percentage facts and the NEXT 6 plain ones - no overlap until the whole bank has gone round
         sl_ = (mi_ * 6) % max(1, len(pl_))
+        so_ = (mi_ * 3 + (0 if name == "BTC" else 29)) % max(1, len(lo_))              # BTC and XRP read different lore at the same time
         n_hand_ = len(info)
         _fm = _factcards_memo.get((name, mi_, _pk))
         if _fm is None:
             _n0 = len(info)
-            for f in (pp_ + pp_)[sp_:sp_ + 30] + (pl_ + pl_)[sl_:sl_ + 6]:
+            for f in (pp_ + pp_)[sp_:sp_ + 30] + (pl_ + pl_)[sl_:sl_ + 6] + (lo_ + lo_)[so_:so_ + 3]:
                 _ic(f["k"], escape(f["t"]), escape(str(f["b"])), escape(str(f["s"])), [(escape(str(a)), escape(str(b)), (c if c in ("up", "down", "warn") else "t")) for a, b, *cc in f["r"] for c in [cc[0] if cc else "t"]][:4])
             _factcards_memo.clear() if len(_factcards_memo) > 6 else None
             _factcards_memo[(name, mi_, _pk)] = list(info[_n0:])

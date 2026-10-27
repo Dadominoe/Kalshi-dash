@@ -1,0 +1,346 @@
+{
+ "facts": [
+  {
+   "tag": "GOLD",
+   "topic": "Gold",
+   "text": "All the gold ever mined would fit in a cube about 22 meters (72 feet) on each side.",
+   "coin": null
+  },
+  {
+   "tag": "GOLD",
+   "topic": "Gold",
+   "text": "Gold is weighed in troy ounces. A troy ounce is about 31.1 grams, a little heavier than the everyday ounce of 28.35 grams.",
+   "coin": null
+  },
+  {
+   "tag": "GOLD",
+   "topic": "Gold",
+   "text": "The first gold and silver coins were made by the kingdom of Lydia (in today's Turkey) around 2,600 years ago.",
+   "coin": null
+  },
+  {
+   "tag": "GOLD",
+   "topic": "Gold",
+   "text": "In 1933 the U.S. government made it illegal for most people to own gold coins, bars or certificates. The ban lasted until 1974.",
+   "coin": null
+  },
+  {
+   "tag": "GOLD",
+   "topic": "Gold",
+   "text": "For about a century the U.S. dollar was defined as a weight of gold: $20.67 an ounce until 1934, when it was reset to $35.",
+   "coin": null
+  },
+  {
+   "tag": "GOLD",
+   "topic": "Gold",
+   "text": "On August 15, 1971 President Nixon ended the dollar's link to gold. That closed the Bretton Woods system and let currencies float.",
+   "coin": null
+  },
+  {
+   "tag": "GOLD",
+   "topic": "Gold",
+   "text": "Gold first crossed $1,000 an ounce in March 2008 and first crossed $2,000 an ounce in August 2020.",
+   "coin": null
+  },
+  {
+   "tag": "GOLD",
+   "topic": "Gold",
+   "text": "Fort Knox is said to hold about 147 million troy ounces of U.S. gold, roughly 4,580 tonnes.",
+   "coin": null
+  },
+  {
+   "tag": "GOLD",
+   "topic": "Gold rush",
+   "text": "The California Gold Rush started in January 1848 when James Marshall spotted gold at Sutter's Mill. About 300,000 people came for it.",
+   "coin": null
+  },
+  {
+   "tag": "GOLD",
+   "topic": "Gold rush",
+   "text": "The Klondike Gold Rush (1896 to 1899) pulled tens of thousands of prospectors north to Canada's Yukon.",
+   "coin": null
+  },
+  {
+   "tag": "GOLD",
+   "topic": "Gold",
+   "text": "In 2022 and again in 2023, central banks bought more than 1,000 tonnes of gold in a year, the most in decades.",
+   "coin": null
+  },
+  {
+   "tag": "GOLD",
+   "topic": "Gold",
+   "text": "Pure gold is soft enough to shape by hand, which is why jewelry gold is mixed with other metals. 24 karat means pure.",
+   "coin": null
+  },
+  {
+   "tag": "HUNTING",
+   "topic": "Bear market",
+   "text": "An old proverb says do not sell the bear's skin before you have caught the bear. Some think it is where the market word bear comes from.",
+   "coin": null
+  },
+  {
+   "tag": "HUNTING",
+   "topic": "Buck",
+   "text": "One popular explanation says the word buck for a dollar comes from the frontier deerskin trade, where a buckskin was a unit of value.",
+   "coin": null
+  },
+  {
+   "tag": "HUNTING",
+   "topic": "Fur trade",
+   "text": "The Hudson's Bay Company, founded in 1670, used the Made Beaver, the value of one good beaver pelt, as its unit of account.",
+   "coin": null
+  },
+  {
+   "tag": "HUNTING",
+   "topic": "Wampum",
+   "text": "Polished shell beads called wampum worked as money in the Northeast, and New England colonists accepted them for small payments in the 1600s.",
+   "coin": null
+  },
+  {
+   "tag": "HUNTING",
+   "topic": "Hawks and doves",
+   "text": "Central bankers are called hawks when they lean toward higher interest rates and doves when they lean toward lower ones.",
+   "coin": null
+  },
+  {
+   "tag": "HUNTING",
+   "topic": "Black swan",
+   "text": "Europeans believed every swan was white until a Dutch explorer saw black swans in Australia in 1697. Traders now say black swan for a shock nobody saw coming.",
+   "coin": null
+  },
+  {
+   "tag": "HUNTING",
+   "topic": "Whales",
+   "text": "A whale is a trader or holder big enough to move a market. The word was first used for casino high rollers.",
+   "coin": null
+  },
+  {
+   "tag": "HUNTING",
+   "topic": "Stagging",
+   "text": "In London market slang a stag is someone who applies for a new share issue hoping to sell it fast for a quick profit.",
+   "coin": null
+  },
+  {
+   "tag": "HUNTING",
+   "topic": "Decoys",
+   "text": "Placing big orders you plan to cancel, to fool other traders, is called spoofing. The U.S. made it explicitly illegal in 2010.",
+   "coin": null
+  },
+  {
+   "tag": "HUNTING",
+   "topic": "Reading sign",
+   "text": "Before screens, traders read the ticker tape, a paper strip of prices, the way a tracker reads the ground. Edison improved the stock ticker in 1869.",
+   "coin": null
+  },
+  {
+   "tag": "HUNTING",
+   "topic": "Pieces of eight",
+   "text": "Spanish silver pieces of eight were so widely used around the world that the U.S. dollar was modeled on the Spanish dollar.",
+   "coin": null
+  },
+  {
+   "tag": "BITCOIN",
+   "topic": "Bitcoin",
+   "text": "The first bitcoin block, made January 3, 2009, has a headline from The Times in it: Chancellor on brink of second bailout for banks.",
+   "coin": "BTC"
+  },
+  {
+   "tag": "BITCOIN",
+   "topic": "Bitcoin",
+   "text": "Only 21 million bitcoin will ever exist. The reward for making new ones is cut in half about every four years, most recently in April 2024.",
+   "coin": "BTC"
+  },
+  {
+   "tag": "BITCOIN",
+   "topic": "Bitcoin Pizza Day",
+   "text": "On May 22, 2010 a programmer paid 10,000 bitcoin for two pizzas, the first well-known purchase made with bitcoin.",
+   "coin": "BTC"
+  },
+  {
+   "tag": "BITCOIN",
+   "topic": "Bitcoin",
+   "text": "In October 2009 the first published bitcoin price was set from the cost of the electricity used to make one: about 1,309 bitcoin for a dollar.",
+   "coin": "BTC"
+  },
+  {
+   "tag": "BITCOIN",
+   "topic": "Bitcoin",
+   "text": "Bitcoin first reached $1 in February 2011, $1,000 in November 2013, about $20,000 in December 2017 and $100,000 in December 2024.",
+   "coin": "BTC"
+  },
+  {
+   "tag": "BITCOIN",
+   "topic": "Mt. Gox",
+   "text": "In its day the Mt. Gox exchange handled most of the world's bitcoin trades. It collapsed in February 2014 with about 850,000 bitcoin missing.",
+   "coin": "BTC"
+  },
+  {
+   "tag": "BITCOIN",
+   "topic": "Satoshi",
+   "text": "Satoshi Nakamoto, the unknown creator of bitcoin, is estimated to hold about one million bitcoin that has never moved.",
+   "coin": "BTC"
+  },
+  {
+   "tag": "BITCOIN",
+   "topic": "Bitcoin ETFs",
+   "text": "The U.S. approved the first spot bitcoin ETFs on January 10, 2024.",
+   "coin": "BTC"
+  },
+  {
+   "tag": "ETHEREUM",
+   "topic": "Ethereum",
+   "text": "Ethereum was proposed by Vitalik Buterin in late 2013, when he was 19, and went live on July 30, 2015.",
+   "coin": null
+  },
+  {
+   "tag": "ETHEREUM",
+   "topic": "Ethereum",
+   "text": "In 2016 a hack of a project called The DAO led to a split in Ethereum, which is why Ethereum and Ethereum Classic both exist.",
+   "coin": null
+  },
+  {
+   "tag": "ETHEREUM",
+   "topic": "The Merge",
+   "text": "On September 15, 2022 Ethereum switched from mining to staking, cutting its energy use by more than 99.9%.",
+   "coin": null
+  },
+  {
+   "tag": "XRP",
+   "topic": "XRP",
+   "text": "All 100 billion XRP were created at the start. None are mined, and Ripple holds a large share of them.",
+   "coin": "XRP"
+  },
+  {
+   "tag": "XRP",
+   "topic": "XRP Ledger",
+   "text": "The XRP Ledger went live in 2012 and settles a payment in about 3 to 5 seconds.",
+   "coin": "XRP"
+  },
+  {
+   "tag": "CRYPTO",
+   "topic": "Dogecoin",
+   "text": "Dogecoin was made in December 2013 as a joke, using the Shiba Inu dog meme as its face.",
+   "coin": null
+  },
+  {
+   "tag": "CRYPTO",
+   "topic": "Litecoin",
+   "text": "Litecoin was created in 2011 by Charlie Lee. It makes a block about every 2.5 minutes, four times faster than bitcoin, and caps at 84 million coins.",
+   "coin": null
+  },
+  {
+   "tag": "CRYPTO",
+   "topic": "Binance Coin",
+   "text": "Binance sold its own token, BNB, to the public in July 2017, the same year the exchange was founded.",
+   "coin": null
+  },
+  {
+   "tag": "CRYPTO",
+   "topic": "Coinbase",
+   "text": "Coinbase went public by direct listing on Nasdaq on April 14, 2021, the first big crypto exchange to do it.",
+   "coin": null
+  },
+  {
+   "tag": "CRYPTO",
+   "topic": "Kraken",
+   "text": "Kraken, one of the oldest crypto exchanges still running, was founded in 2011.",
+   "coin": null
+  },
+  {
+   "tag": "CRYPTO",
+   "topic": "Yap stones",
+   "text": "On the island of Yap people used giant stone discs as money and tracked who owned them by memory, without moving them. That is a lot like a blockchain ledger.",
+   "coin": null
+  },
+  {
+   "tag": "MARKETS",
+   "topic": "Wall Street",
+   "text": "The New York Stock Exchange traces back to May 17, 1792, when 24 brokers signed the Buttonwood Agreement under a tree on Wall Street.",
+   "coin": null
+  },
+  {
+   "tag": "MARKETS",
+   "topic": "Dutch East India Company",
+   "text": "The Dutch East India Company sold the first shares to the public in Amsterdam in 1602.",
+   "coin": null
+  },
+  {
+   "tag": "MARKETS",
+   "topic": "Black Monday",
+   "text": "On October 19, 1987 the Dow fell 22.6% in one day, its biggest one-day percentage drop ever.",
+   "coin": null
+  },
+  {
+   "tag": "MARKETS",
+   "topic": "1929",
+   "text": "After the 1929 crash the Dow did not get back to its 1929 high until November 1954.",
+   "coin": null
+  },
+  {
+   "tag": "MARKETS",
+   "topic": "Nasdaq",
+   "text": "The Nasdaq, which opened on February 8, 1971, was the world's first electronic stock market.",
+   "coin": null
+  },
+  {
+   "tag": "MARKETS",
+   "topic": "Circuit breakers",
+   "text": "After the 1987 crash U.S. exchanges added circuit breakers that pause trading. They fired four times in two weeks in March 2020.",
+   "coin": null
+  },
+  {
+   "tag": "MARKETS",
+   "topic": "Tickers",
+   "text": "One-letter stock tickers are prized: F is Ford and T is AT&T.",
+   "coin": null
+  },
+  {
+   "tag": "MARKETS",
+   "topic": "Japan",
+   "text": "Japan's Nikkei 225 peaked on December 29, 1989 and took until February 2024, over 34 years, to climb back above that high.",
+   "coin": null
+  },
+  {
+   "tag": "MARKETS",
+   "topic": "Oil",
+   "text": "On April 20, 2020 the U.S. oil price went below zero for the first time ever, closing near minus $37 a barrel.",
+   "coin": null
+  },
+  {
+   "tag": "MARKETS",
+   "topic": "Foreign exchange",
+   "text": "The foreign exchange market is the biggest market on Earth, trading about $7.5 trillion a day in 2022.",
+   "coin": null
+  },
+  {
+   "tag": "MONEY",
+   "topic": "Federal Reserve",
+   "text": "The U.S. Federal Reserve was created on December 23, 1913.",
+   "coin": null
+  },
+  {
+   "tag": "MONEY",
+   "topic": "Greenbacks",
+   "text": "The U.S. government issued greenbacks, paper money not backed by gold or silver coin, to help pay for the Civil War.",
+   "coin": null
+  },
+  {
+   "tag": "MONEY",
+   "topic": "Euro",
+   "text": "The euro began as an electronic currency in 1999. Euro notes and coins only arrived on January 1, 2002.",
+   "coin": null
+  },
+  {
+   "tag": "MONEY",
+   "topic": "Zimbabwe",
+   "text": "In 2009 Zimbabwe printed a 100 trillion dollar note during a hyperinflation.",
+   "coin": null
+  },
+  {
+   "tag": "MONEY",
+   "topic": "Bank of England",
+   "text": "The Bank of England was founded in 1694 to raise money for a war with France.",
+   "coin": null
+  }
+ ]
+}
