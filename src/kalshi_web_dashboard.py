@@ -806,7 +806,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-27-fit100"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-27-sound101"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -5739,10 +5739,14 @@ function syncSoundButton() {
   btn.classList.toggle('sound-off', !soundEnabled);
 }
 function toggleSound() {
-  if (soundEnabled) {
+  if (soundEnabled) {                                                // the SOUND button is the master switch: OFF silences the narrator (the Dominator voice) too, not just the old alerts
     soundEnabled = false;
     try { localStorage.setItem('soundWanted', '0'); } catch (e) {}
+    try { narCoin = {BTC: false, XRP: false}; narratorOn = false; localStorage.setItem('narCoin', JSON.stringify(narCoin)); localStorage.setItem('narOn', '0'); } catch (e) {}
+    try { narQueue.length = 0; narBusyUntil = 0; } catch (e) {}
     try { window.speechSynthesis.cancel(); } catch (e) {}
+    try { if (ttsAudio) { ttsAudio.onended = null; ttsAudio.onerror = null; ttsAudio.pause(); } } catch (e) {}
+    try { narPaint(); narBanner(); } catch (e) {}
     syncSoundButton();
   } else enableSound();
 }
@@ -5757,6 +5761,12 @@ function enableSound(quiet) {
     try { const w = new SpeechSynthesisUtterance(' '); w.volume = 0; window.speechSynthesis.speak(w); } catch (e) {}
     return;
   }
+  try {                                                              // clicking SOUND ON also switches both coins' narrators (the Dominator voice) on and says so, so the button is audible
+    narCoin = {BTC: true, XRP: true}; narratorOn = true; audioUnlocked = true;
+    localStorage.setItem('narCoin', JSON.stringify(narCoin)); localStorage.setItem('narOn', '1');
+    narPaint(); narBanner();
+    if (sigOff.indexOf('session_open') < 0 && !clipPlay('session_open')) speakRaw('Narrator on.');
+  } catch (e) {}
   playAlienSound('BTC'); // quick confirmation beep so you know it worked
   // warm up speech synthesis on this same click gesture - some browsers
   // need the FIRST speak() call to happen inside a user gesture before
@@ -6802,6 +6812,35 @@ function alvToggle() {
   p.innerHTML = '<div class="alv-h"><b>Alert voices</b> <span class="hint">tick = the alert speaks when the narrator is ON. The play button lets you hear it.</span><label class="alv-old"><input type="checkbox" ' + (oldSoundsOn ? 'checked' : '') + ' onchange="oldSoundsSet(this.checked)"> old beeps, sirens and chimes <span class="hint">(archived and OFF - tick to bring them back)</span></label><label class="alv-old"><input type="checkbox" ' + (compVoiceOn ? 'checked' : '') + ' onchange="compVoiceSet(this.checked)"> computer voice for lines that have no recording <span class="hint">(OFF - those lines stay silent)</span></label><button class="alv-x" onclick="alvToggle()">close</button></div>' + ['BTC', 'XRP'].map(c => '<div class="alv-voice"><b>' + c + ' VOICE</b> <button type="button" class="alv-vb' + (voiceBy[c] === 'dominator' ? ' on' : '') + '" onclick="voiceSetSet(\'' + c + '\', \'dominator\')">Dominator (male)</button><button type="button" class="alv-vb' + (voiceBy[c] === 'girl' ? ' on' : '') + '" onclick="voiceSetSet(\'' + c + '\', \'girl\')">Girl (female)</button> <button type="button" onclick="coinTag(\'' + c + '\', function () {})">&#9654; hear it</button></div>').join('') + '<div class="alv-voice hint">The list below shows the takes of the voice you picked last.</div><div class="alv-flip"><b>FLIP METER STEPS</b> <span class="hint">the flip-risk % that fires each flip alert (earlier = more warning but more false alarms)</span><div class="alv-fsteps"><label>1 Scalp opportunity <input type="number" min="5" max="95" step="5" value="' + Math.round(flipSteps.early * 100) + '" onchange="flipStepSet(\'early\', this.value)">%</label><label>2 Incoming <input type="number" min="5" max="95" step="5" value="' + Math.round(flipSteps.rise * 100) + '" onchange="flipStepSet(\'rise\', this.value)">%</label><label>3 Reversal <input type="number" min="5" max="95" step="5" value="' + Math.round(flipSteps.flip * 100) + '" onchange="flipStepSet(\'flip\', this.value)">%</label></div></div><div class="alv-list">' +
     keys.map(k => '<label class="alv-row"><input type="checkbox" ' + (sigOff.indexOf(k) < 0 ? 'checked' : '') + ' onchange="alvSet(\'' + k + '\', this.checked)"> <span>' + (clipMap[k].label || k) + '</span> <span class="hint">' + (clipMap[k].nopick ? 'a recording for every call' : clipMap[k].files.length + ' take' + (clipMap[k].files.length > 1 ? 's' : '')) + '</span> <button type="button" onclick="event.preventDefault(); clipPlay(\'' + k + '\')">&#9654;</button>' + (clipMap[k].note ? '<span class="alv-note hint">' + clipMap[k].note + '</span>' : '') + '</label><div class="alv-takes">' + (clipMap[k].nopick ? [] : clipMap[k].files).map((f, i) => '<span class="alv-take"><button type="button" onclick="clipPlayFile(\'' + f + '\')" title="play this take">' + (i + 1) + '</button><label title="untick = never play this take"><input type="checkbox" ' + (badTakes.indexOf(f) < 0 ? 'checked' : '') + ' onchange="takeSet(\'' + f + '\', this.checked)"></label></span>').join('') + '</div>').join('') + '</div>';
   document.body.appendChild(p);
+}
+function soundCheck() {                                              // one click: plays the Dominator clip and says in plain words what this browser did with it
+  audioUnlocked = true;
+  let p = document.getElementById('sc-panel');
+  if (p) p.remove();
+  p = document.createElement('div'); p.id = 'sc-panel';
+  p.style.cssText = 'position:fixed;left:50%;top:70px;transform:translateX(-50%);z-index:99999;width:min(520px,94vw);background:#0d1117;border:2px solid #ffd24a;border-radius:10px;padding:12px 14px;color:#e6edf3;font:14px/1.5 system-ui,sans-serif;box-shadow:0 8px 30px rgba(0,0,0,.7)';
+  document.body.appendChild(p);
+  const rows = [];
+  const show = () => { p.innerHTML = '<b style="color:#ffd24a">Sound check</b> <button onclick="this.parentNode.remove()" style="float:right">close</button><div style="margin-top:6px">' + rows.map(r => '<div>' + r + '</div>').join('') + '</div>'; };
+  const ua = navigator.userAgent, br = /Edg\//.test(ua) ? 'Edge' : (/OPR\//.test(ua) ? 'Opera' : (/Firefox\//.test(ua) ? 'Firefox' : (/Chrome\//.test(ua) ? 'Chrome' : (/Safari\//.test(ua) ? 'Safari' : 'unknown'))));
+  rows.push('Browser: <b>' + br + '</b> on ' + (navigator.platform || '?'));
+  rows.push('SOUND button: <b>' + (soundEnabled ? 'ON' : 'OFF') + '</b>; narrators: BTC <b>' + (narCoin.BTC ? 'ON' : 'off') + '</b>, XRP <b>' + (narCoin.XRP ? 'ON' : 'off') + '</b>; volume <b>' + Math.round(narVol * 100) + '%</b>');
+  show();
+  fetch('/clipmap?set=dominator', {cache: 'no-store'}).then(r => { rows.push('Voice list: ' + (r.ok ? '<b style="color:#3fb950">loaded</b> (' + r.status + ')' : '<b style="color:#ff4d6d">FAILED (' + r.status + ')</b>')); show(); return r.ok ? r.json() : {}; }).catch(e => { rows.push('Voice list: <b style="color:#ff4d6d">could not load</b>'); show(); return {}; }).then(j => {
+    const keys = Object.keys(j || {}).filter(k => j[k] && j[k].files && j[k].files.length);
+    rows.push('Recorded alerts available: <b>' + keys.length + '</b>'); show();
+    const f = keys.length ? (j['session_open'] && j['session_open'].files.length ? j['session_open'].files[0] : j[keys[0]].files[0]) : null;
+    if (!f) { rows.push('<b style="color:#ff4d6d">No recordings to play - tell Claude.</b>'); show(); return; }
+    const a = new Audio('/clip?f=' + encodeURIComponent(f)); a.volume = 1;
+    let done = false;
+    const fin = (msg, bad) => { if (done) return; done = true; rows.push('Playing the Dominator voice: <b style="color:' + (bad ? '#ff4d6d' : '#3fb950') + '">' + msg + '</b>'); show(); };
+    a.onended = () => fin('finished - if you heard it, the sound works here');
+    a.onerror = () => fin('the file would not load (error ' + (a.error ? a.error.code : '?') + ')', true);
+    a.play().then(() => rows.push('Browser allowed the sound to start. <b>Did you hear it?</b> If not, check the laptop volume / output device / that this tab is not muted.')).catch(e => fin('BLOCKED by the browser (' + (e && e.name) + '). Click the page once and try again; on Safari: Safari menu > Settings for this website > Auto-Play > Allow All.', true)).then(show);
+    setTimeout(() => { if (!done) fin('no result after 8 seconds', true); }, 8000);
+  });
+  try { const v = window.speechSynthesis.getVoices(); rows.push('Computer voices on this laptop: <b>' + v.length + '</b>'); } catch (e) { rows.push('Computer voices: not available'); }
+  show();
 }
 function alvSet(k, on) {
   sigOff = sigOff.filter(x => x !== k);
@@ -8033,6 +8072,7 @@ __USERBAR__<h1 class="dom-banner"><span class="dom-logo"><svg viewBox="0 0 100 1
   <button class="size-mode-btn" data-view="XRP" onclick="setAssetView('XRP')">XRP only</button>
   <button class="size-mode-btn" data-view="both" onclick="setAssetView('both')">Both</button>
   <button class="size-mode-btn" id="ctb-btn" onclick="ctbToggle()" title="Show or hide the scrolling call banner (the early, mid and late calls). Off = the old 'The 3 calls' bar.">Call banner: ON</button>
+  <button class="size-mode-btn" id="sc-btn" onclick="soundCheck()" title="Plays a test voice and tells you what this browser did with it (use it when sound is not working)">Sound check</button>
   <button class="size-mode-btn" id="fit-btn" onclick="toggleFit()" title="Scales the page so everything from the top to the bottom of the chart fits the window, and keeps it that way after every reload - for streaming when nobody is touching the mouse">Fit to screen: ON</button></div>
 <div id="content">Loading...</div>
 <div class="sound-bar">
