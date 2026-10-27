@@ -806,7 +806,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-27-ind84"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-27-pct85"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -7493,7 +7493,7 @@ function ctbTick(now, fromTimer) {
         o.lockedN = calls.length;
         let d = (o.news && o.news.length) ? o.news.shift() : null; const evc = o.data.find(x => x.key === 'events');          // market-change cards go first
         if (!d && o.mk5 && o.mid && o.mk5Round !== o.round) { d = o.mk5; o.mk5Round = o.round; }                    // the 5-minute market, once, in the middle of the round
-        if (!d && o.burst && o.burst.length) { const k = o.burst.shift(); d = o.data.find(x => x.key === k) || null; }
+        if (!d && o.burst && o.burst.length) { const k = o.burst.shift(); d = o.data.find(x => x.key === k) || null; o.lastBurst = Date.now(); }
         const flc = o.data.find(x => x.key === 'flip');
         if (!d && flc && (flc.cls === 'down' || flc.cls === 'warn') && Date.now() - (o.lastFlip || 0) > 60000) { d = flc; o.lastFlip = Date.now(); }          // what affects the trader comes first: a building flip risk is shown about once a minute
         if (!d && evc && Date.now() - o.lastEv > 25 * 60000) { d = evc; o.lastEv = Date.now(); }                          // the COMING UP card every ~25 minutes
@@ -7503,7 +7503,9 @@ function ctbTick(now, fromTimer) {
           const nowT = Date.now(), HOLD = 5 * 3600 * 1000;                                                         // a fact that has gone by is not shown again for 5 hours (remembered across reloads)
           let pool = o.info.filter(it => !o.shown[it.key] || nowT - o.shown[it.key] > HOLD);
           if (!pool.length) pool = o.info.slice().sort((p, q) => (o.shown[p.key] || 0) - (o.shown[q.key] || 0)).slice(0, 5);   // nothing fresh left: the ones shown longest ago
-          d = pool[Math.floor(Math.random() * pool.length)];
+          const pf = pool.filter(it => it.pct);                                                                    // the real measured percentage facts come first (4 in 5)
+          const use = (pf.length && Math.random() < 0.8) ? pf : pool;
+          d = use[Math.floor(Math.random() * use.length)];
           o.shown[d.key] = nowT;
           Object.keys(o.shown).forEach(kk => { if (nowT - o.shown[kk] > HOLD * 2) delete o.shown[kk]; });
           try { localStorage.setItem('ctbShown2:' + a, JSON.stringify(o.shown)); } catch (e) {}
@@ -9177,7 +9179,7 @@ def _ctb_indicator_cards(name):
         means = ex["means"].split(";")[0].split(". ")[0].rstrip(".")
         if len(means) > 62:
             means = means[:59].rsplit(" ", 1)[0] + "..."
-        out.append({"key": f"ind-{tf}-{ex['key']}-{bucket}", "cls": "info", "html":
+        out.append({"key": f"ind-{tf}-{ex['key']}-{bucket}", "cls": "info", "pct": 1, "html":
                     f'<div class="ctb-hd"><span><span class="ctb-coin">{name}</span> <span class="ctb-which">INDICATOR &middot; {tf} &middot; {escape(l["status"])}</span></span></div>'
                     f'<div style="display:flex;gap:12px;align-items:center;margin:4px 0"><div style="flex:0 0 170px;line-height:0">{svg}</div>'
                     f'<div><div class="ctb-call" style="font-size:27px;color:{col}">{"&#9650; UP" if up else "&#9660; DOWN"}<small>projected</small></div>'
@@ -9302,7 +9304,8 @@ def _ctb_payload(name, d, tn, marks, res, allrecs=None):
     info = []
     def _ic(key, tag, big, small, rs):
         _fs = 34 if len(big) <= 22 else (26 if len(big) <= 60 else (21 if len(big) <= 120 else 18))
-        info.append({"key": "i-" + key, "cls": "info", "html": f'<div class="ctb-hd"><span class="ctb-which">DID YOU KNOW &middot; {tag}</span></div><div class="ctb-call" style="font-size:{_fs}px;white-space:normal;line-height:1.15">{big}<small>{small}</small></div>'
+        _pc = int("%" in (big + small + "".join(str(a_) + str(b_) for a_, b_, *_x in rs)))
+        info.append({"key": "i-" + key, "cls": "info", "pct": _pc, "html": f'<div class="ctb-hd"><span class="ctb-which">DID YOU KNOW &middot; {tag}</span></div><div class="ctb-call" style="font-size:{_fs}px;white-space:normal;line-height:1.15">{big}<small>{small}</small></div>'
                      f'<div class="ctb-bar"><i style="width:100%;background:#7aa2ff"></i></div>' + rows(rs)})
     _ic("flip", "FLIPS", "About 5%", "of 90c+ markets flip", [("At the 8th minute", "a 90c+ lean ends the other way ~5% of rounds", "t"), ("Tested on", "BTC and XRP, 68 days of rounds", "t")])
     _ic("same", "OTHER MARKETS", "Same as Bitcoin", "", [("Gold, oil, silver, gas", "flip at about the same rate", "t"), ("At the 8th minute", "about 25% end the other way", "t"), ("Tested on", "8 commodity markets, 68 days", "t")])
@@ -9318,11 +9321,16 @@ def _ctb_payload(name, d, tn, marks, res, allrecs=None):
     try:                                                              # 14 facts from the bank, a different handful every minute (and different for each coin)
         import random as _rnd
         pool = sorted([f for f in _facts_bank() if f.get("c") in (None, name)], key=lambda f: f["k"])
-        _rnd.Random(f"{name}{dt.date.today().isoformat()}").shuffle(pool)            # a different order every day
+        _hasp = lambda f: "%" in (str(f["b"]) + str(f["s"]) + "".join(str(x_) for r_ in f["r"] for x_ in r_[:2]))
+        pp_ = [f for f in pool if _hasp(f)]
+        pl_ = [f for f in pool if not _hasp(f)]
+        _rnd.Random(f"{name}{dt.date.today().isoformat()}").shuffle(pp_)               # a different order every day
+        _rnd.Random(f"{name}{dt.date.today().isoformat()}b").shuffle(pl_)
         mi_ = int(time.time() // 60)
-        st_ = (mi_ * 36) % max(1, len(pool))                                          # each minute gets the NEXT 36 facts - no overlap between minutes until the whole bank has gone round
+        sp_ = (mi_ * 30) % max(1, len(pp_))                                            # each minute gets the NEXT 30 percentage facts and the NEXT 6 plain ones - no overlap until the whole bank has gone round
+        sl_ = (mi_ * 6) % max(1, len(pl_))
         n_hand_ = len(info)
-        for f in (pool + pool)[st_:st_ + 36]:
+        for f in (pp_ + pp_)[sp_:sp_ + 30] + (pl_ + pl_)[sl_:sl_ + 6]:
             _ic(f["k"], escape(f["t"]), escape(str(f["b"])), escape(str(f["s"])), [(escape(str(a)), escape(str(b)), (c if c in ("up", "down", "warn") else "t")) for a, b, *cc in f["r"] for c in [cc[0] if cc else "t"]][:4])
         if n_hand_ >= 4:                                                              # only two of the hand-written facts per minute, so they do not keep coming back
             hand_ = info[:n_hand_]
