@@ -805,7 +805,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-27-dock48"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-27-dock49"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -4912,6 +4912,7 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .ct-chip.up { background:#073b22; border-color:#00e676; color:#fff; } .ct-chip.down { background:#4a0f1b; border-color:#e5384f; color:#fff; } .ct-chip.wait { background:#1b1d24; border-color:#4a4f5c; color:#9aa1ad; font-weight:700; font-size:17px; }
 .ct-body { font-size:14px; padding:6px 4px; }
 .pat-old-box { margin:6px 0; }
+.whale-cross, .whale-lane, .fly-alert { display:none !important; }      /* the whales and the flying alerts never show on screen (owner, 2026-10-27) - the alert window, the sound and the voice stay */
 /* ---- the locked alert window (top of each card) */
 .topbar .tb-main .alert-dock { order:2; flex:0 0 380px; width:380px; min-width:0; height:128px; min-height:128px; max-height:128px; overflow:hidden; padding:0; position:relative; display:block; }
 .dk-wrap { position:absolute; inset:0; overflow:hidden; border-radius:8px; }
