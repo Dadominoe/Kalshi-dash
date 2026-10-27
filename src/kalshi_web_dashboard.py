@@ -805,7 +805,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-26-fvg32"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-27-all42"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -4912,6 +4912,61 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .ct-chip.up { background:#073b22; border-color:#00e676; color:#fff; } .ct-chip.down { background:#4a0f1b; border-color:#e5384f; color:#fff; } .ct-chip.wait { background:#1b1d24; border-color:#4a4f5c; color:#9aa1ad; font-weight:700; font-size:17px; }
 .ct-body { font-size:14px; padding:6px 4px; }
 .pat-old-box { margin:6px 0; }
+/* ---- the Viking top banner */
+h1.dom-banner { position:relative; display:flex; align-items:center; justify-content:center; gap:22px; margin:0 0 12px; padding:14px 20px 26px; border-radius:16px; border:2px solid #3a1219; overflow:hidden; font-weight:400;
+  background: radial-gradient(120% 140% at 50% 0%, rgba(255,77,109,.16), transparent 62%), repeating-linear-gradient(0deg, rgba(255,255,255,.02) 0 1px, transparent 1px 4px), linear-gradient(90deg,#0a0b0f,#170a0f 50%,#0a0b0f);
+  box-shadow:0 0 30px rgba(255,77,109,.18) inset, 0 0 22px rgba(255,77,109,.10); }
+.dom-logo svg { width:64px; height:64px; filter:drop-shadow(0 0 9px rgba(255,77,109,.8)); display:block; }
+.dom-logo-r svg { transform:scaleX(-1); }
+.dom-text { display:flex; flex-direction:column; align-items:center; gap:4px; }
+.dom-title { font:900 38px/1 Cinzel, "Trajan Pro", Georgia, "Times New Roman", serif; letter-spacing:9px; color:#fff; text-shadow:0 0 16px rgba(255,77,109,.85), 0 2px 0 #5a0f1d; animation:domglow 4s ease-in-out infinite; }
+@keyframes domglow { 50% { text-shadow:0 0 26px rgba(255,77,109,1), 0 2px 0 #5a0f1d; } }
+.dom-sub { font-size:13px; letter-spacing:5px; font-weight:800; color:#ff4d6d; }
+.dom-note { position:absolute; right:16px; top:8px; font-size:11px; color:#8b93a1; letter-spacing:.4px; }
+.dom-shields { position:absolute; left:0; right:0; bottom:0; height:16px; border-top:1px solid rgba(255,77,109,.45); background:radial-gradient(circle at 13px 8px, #ffd24a 0 2.4px, #ff4d6d 2.4px 6.6px, #3a0f19 6.6px 7.6px, #1a0a0e 7.6px 8.2px, transparent 8.2px) 0 0/26px 16px repeat-x; animation:domdrift 9s linear infinite; }
+@keyframes domdrift { to { background-position:26px 0; } }
+@media (max-width:760px) { .dom-title { font-size:24px; letter-spacing:5px; } .dom-logo svg { width:42px; height:42px; } .dom-sub { font-size:10px; letter-spacing:3px; } .dom-note { display:none; } }
+
+/* ---- the call banner (digital sign). Colours are variables so the Hunter theme can tune them. */
+:root { --ctb-up:#19e68c; --ctb-up-bg:#062a1b; --ctb-down:#ff4d6d; --ctb-down-bg:#2e0c14; --ctb-warn:#ffb020; --ctb-warn-bg:#2a1d05; --ctb-gold:#ffd24a; --ctb-dim:#9aa3b2; }
+.ctb-slot { min-height:372px; margin:6px 0 8px; }
+body.no-ctb .ctb-slot { display:none; }
+body:not(.no-ctb) .ct-drop > summary { display:none; }
+.ctb-wrap { position:relative; height:372px; border-radius:16px; border:2px solid #3a1219; overflow:hidden; cursor:pointer;
+  background: radial-gradient(120% 90% at 50% 0%, rgba(255,77,109,.10), transparent 60%), repeating-linear-gradient(0deg, rgba(255,255,255,.025) 0 1px, transparent 1px 4px), linear-gradient(90deg,#0a0b0f,#140a0e 50%,#0a0b0f);
+  box-shadow:0 0 30px rgba(255,77,109,.20) inset, 0 0 22px rgba(255,77,109,.12); }
+.ctb-rail { position:absolute; left:0; right:0; height:5px; z-index:6; opacity:.75; animation:ctbchase 1.1s linear infinite; background:repeating-linear-gradient(90deg,var(--ctb-down) 0 10px,transparent 10px 24px); }
+.ctb-rail.top { top:0; } .ctb-rail.bot { bottom:0; animation-direction:reverse; background:repeating-linear-gradient(90deg,var(--ctb-up) 0 10px,transparent 10px 24px); }
+@keyframes ctbchase { to { background-position:24px 0; } }
+.ctb-gutter { position:absolute; left:0; top:0; bottom:70px; width:74px; z-index:5; display:flex; align-items:flex-start; justify-content:center; padding-top:16px; background:linear-gradient(90deg,#16070b,#0d0608); border-right:2px solid rgba(255,77,109,.55); }
+.ctb-gutter svg { width:48px; height:48px; filter:drop-shadow(0 0 7px rgba(255,77,109,.75)); }
+.ctb-lane { position:absolute; left:74px; right:0; top:0; bottom:70px; overflow:hidden; }
+.ctb-fade { position:absolute; top:0; bottom:70px; width:70px; z-index:3; pointer-events:none; }
+.ctb-fade.l { left:74px; background:linear-gradient(90deg,#0b0c10,transparent); } .ctb-fade.r { right:0; background:linear-gradient(270deg,#07080b,transparent); }
+.ctb-hint { position:absolute; right:14px; top:12px; z-index:5; font-size:12px; color:var(--ctb-dim); letter-spacing:.5px; opacity:.8; }
+.ctb-calls { position:absolute; left:0; right:0; bottom:0; height:70px; z-index:5; display:flex; align-items:center; gap:12px; padding:0 16px 0 90px; background:linear-gradient(180deg,#120709,#0b0508); border-top:2px solid rgba(255,77,109,.55); }
+.ctb-calls .ctb-coin { font-size:24px; }
+.ctb-chip { display:flex; flex-direction:column; align-items:center; justify-content:center; flex:1; min-width:0; padding:4px 8px; border-radius:10px; border:1.5px solid; line-height:1.15; }
+.ctb-chip .k { font-size:12px; letter-spacing:1.4px; font-weight:800; opacity:.85; } .ctb-chip .v { font-size:19px; font-weight:900; white-space:nowrap; }
+.ctb-chip.up { color:var(--ctb-up); border-color:var(--ctb-up); background:var(--ctb-up-bg); } .ctb-chip.down { color:var(--ctb-down); border-color:var(--ctb-down); background:var(--ctb-down-bg); }
+.ctb-chip.warn { color:var(--ctb-warn); border-color:var(--ctb-warn); background:var(--ctb-warn-bg); } .ctb-chip.gold { border-color:var(--ctb-gold); box-shadow:0 0 12px rgba(255,210,74,.5); }
+.ctb-card { position:absolute; top:14px; width:430px; height:276px; padding:12px 16px; border-radius:14px; border:2px solid; background:#0d0f14; overflow:hidden; will-change:transform,opacity; }
+.ctb-card.up { color:var(--ctb-up); border-color:var(--ctb-up); background:linear-gradient(180deg,var(--ctb-up-bg),#0b0d12); }
+.ctb-card.down { color:var(--ctb-down); border-color:var(--ctb-down); background:linear-gradient(180deg,var(--ctb-down-bg),#0b0d12); }
+.ctb-card.warn { color:var(--ctb-warn); border-color:var(--ctb-warn); background:linear-gradient(180deg,var(--ctb-warn-bg),#0b0d12); }
+.ctb-card.gold { border-color:var(--ctb-gold); }
+.ctb-hd { display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
+.ctb-coin { font-weight:900; font-size:24px; color:#ff9f1c; }
+.ctb-which { font-size:14px; letter-spacing:1.3px; font-weight:800; color:var(--ctb-dim); text-transform:uppercase; }
+.ctb-real { color:var(--ctb-gold); border:1px solid var(--ctb-gold); border-radius:999px; padding:1px 9px; font-size:11px; letter-spacing:1px; white-space:nowrap; }
+.ctb-call { margin:4px 0 4px; font-size:38px; font-weight:900; letter-spacing:.4px; white-space:nowrap; }
+.ctb-call small { font-size:17px; font-weight:700; margin-left:8px; opacity:.9; }
+.ctb-bar { height:10px; border-radius:5px; background:#1b1d24; margin:2px 0 6px; overflow:hidden; } .ctb-bar i { display:block; height:100%; border-radius:5px; box-shadow:0 0 10px currentColor; }
+.ctb-row { display:flex; justify-content:space-between; gap:10px; font-size:16px; padding:4px 0; border-top:1px solid rgba(255,255,255,.07); color:#e8eaf0; }
+.ctb-row span:first-child { color:var(--ctb-dim); flex:0 0 auto; max-width:46%; } .ctb-row b { font-weight:700; text-align:right; min-width:0; }
+.ctb-row b.up { color:var(--ctb-up); } .ctb-row b.down { color:var(--ctb-down); } .ctb-row b.warn { color:var(--ctb-warn); } .ctb-row b.t { color:#e8eaf0; }
+@media (max-width:760px) { .ctb-card { width:320px; } .ctb-chip .v { font-size:13px; } .ctb-calls { gap:6px; padding-left:80px; } .ctb-calls .ctb-coin { font-size:16px; } }
+
 body.no-pfvg .pfvg { display:none; } .pfvg-sw { cursor:pointer; color:#e6edf3; } .pfvg-sw input { vertical-align:middle; }
 .mtf-btn { background:#1f6feb !important; border-color:#58a6ff !important; color:#fff !important; font-weight:700; margin-right:14px; }
 .mtf-btn.size-mode-active { background:#238636 !important; border-color:#3fb950 !important; }
@@ -6775,6 +6830,23 @@ function flipLadder(name, key, r, call, sd) {
     }
 }
 const hourTier = {};
+const mktState = {};
+function checkMarketWarn() {                                            // the 5-minute market changing between BULL / NEUTRAL / BEAR is announced in the narrator voice (a change must hold 90 s, and one announcement per coin every 3 min)
+  const now = Date.now(), view = document.body.getAttribute('data-view');
+  document.querySelectorAll('.mk-row[data-period="5 min"]').forEach(tr => {
+    const dd = tr.closest('details.mk-drop'), name = dd && dd.getAttribute('data-coin'), st = tr.getAttribute('data-state');
+    if (!name || !st) return;
+    if ((view === 'BTC' || view === 'XRP') && view !== name) return;      // alerts follow the view
+    const m = mktState[name] || (mktState[name] = {said: null, pend: null, since: 0, last: 0});
+    if (m.said === null) { m.said = st; return; }                          // first look after a page load: say nothing
+    if (st === m.said) { m.pend = null; return; }
+    if (st !== m.pend) { m.pend = st; m.since = now; return; }
+    if (now - m.since < 90000 || now - m.last < 180000) return;
+    m.said = st; m.pend = null; m.last = now;
+    const w = st === 'BULL' ? 'Bull' : (st === 'BEAR' ? 'Bear' : 'Neutral');
+    narSay(name + '. ' + w + ' market.', 'mk:' + name + ':' + st + ':' + now, 600000, 'market_' + st.toLowerCase());
+  });
+}
 function checkHourWarn() {
   document.querySelectorAll('.hr-state').forEach(el => {
     const name = el.getAttribute('data-name'), tier = el.getAttribute('data-tier'), key = el.getAttribute('data-key');
@@ -6800,7 +6872,7 @@ function flipPre(name, v) {                                            // before
     st.cross = now;
     const rc = v.side === 'UP' ? 'reversal_up' : 'reversal_down';
     if (narCoin[name]) narSay(name + '. We are flipping.', 'pc:' + v.key + ':' + now, 60000, rc, null, true); else speakUrgent(name + '. We are flipping.');
-  } else if (v.risk >= 0.40 && !st.scalp) {
+  } else if (v.risk >= 0.34 && !st.scalp) {
     st.scalp = true;
     if (narCoin[name]) narSay(name + '. Scalp opportunity. Possible flip. ' + Math.round(v.risk * 100) + ' percent.', 'ps:' + v.key, 600000, 'flip_warn', null, true); else speakUrgent(name + '. Scalp opportunity. Possible flip.');
   }
@@ -7199,6 +7271,77 @@ function pfvgPaint() {
 }
 function pfvgSet(on) { pfvgOn = !!on; try { localStorage.setItem('pfvg', pfvgOn ? '1' : '0'); } catch (e) {} pfvgPaint(); }
 setTimeout(pfvgPaint, 0); setInterval(pfvgPaint, 1000);
+// ---- the call banner: the running banner lives here (not in the page that is redrawn every second); after each redraw it is moved into the new slot
+let ctbOn = __CTB_DEF__;                                              // the PC starts with the banner ON; the website starts with it OFF (each viewer's button remembers their own choice)
+try { const sv0 = localStorage.getItem('ctbOn'); if (sv0 !== null) ctbOn = sv0 === '1'; } catch (e) {}
+const CTB = {};
+const CTB_LOGO = '<svg viewBox="0 0 100 100" fill="none" stroke-linecap="round" stroke-linejoin="round"><g stroke="#ffd0d8" stroke-width="3.4"><path d="M14 92 L 86 20"/><path d="M86 92 L 14 20"/></g><g fill="#ffd0d8" stroke="#ffd0d8" stroke-width="1.5"><path d="M6 10 Q 28 8 26 30 L 17 22 Z"/><path d="M94 10 Q 72 8 74 30 L 83 22 Z"/></g><path d="M33 44 C 12 46, 8 26, 17 12 C 20 26, 28 32, 37 36 Z" fill="#ff4d6d" stroke="#ff4d6d" stroke-width="1.5"/><path d="M67 44 C 88 46, 92 26, 83 12 C 80 26, 72 32, 63 36 Z" fill="#ff4d6d" stroke="#ff4d6d" stroke-width="1.5"/><path d="M32 66 C 30 44, 40 32, 50 32 C 60 32, 70 44, 68 66 L 68 72 L 32 72 Z" fill="#1a0a0e" stroke="#ff4d6d" stroke-width="4.5"/><path d="M31 56 H 69" stroke="#ff4d6d" stroke-width="3.2"/><path d="M50 56 V 80" stroke="#ff4d6d" stroke-width="5"/><path d="M40 48 H 46 M54 48 H 60" stroke="#ff4d6d" stroke-width="2.6"/></svg>';
+function ctbPaint() {
+  document.body.classList.toggle('no-ctb', !ctbOn);
+  const b = document.getElementById('ctb-btn');
+  if (b) { b.textContent = 'Call banner: ' + (ctbOn ? 'ON' : 'OFF'); b.className = 'size-mode-btn' + (ctbOn ? ' size-mode-active' : ''); }
+}
+function ctbToggle() { ctbOn = !ctbOn; try { localStorage.setItem('ctbOn', ctbOn ? '1' : '0'); } catch (e) {} ctbPaint(); }
+function ctbEsc(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function ctbAlertHtml(a, x) {
+  return '<div class="ctb-hd"><span><span class="ctb-coin">' + a + '</span> <span class="ctb-which">ALERT</span></span><span class="ctb-real">LIVE</span></div>'
+    + '<div class="ctb-call" style="font-size:30px;white-space:normal;line-height:1.15;margin:12px 0">' + ctbEsc(x.head) + '</div><div class="ctb-bar"><i style="width:100%;background:currentColor"></i></div>'
+    + '<div class="ctb-row" style="border-top:0;font-size:18px"><span style="max-width:100%;color:#e8eaf0">' + ctbEsc(x.detail || '') + '</span></div>';
+}
+function ctbBuild(a) {
+  const el = document.createElement('div');
+  el.className = 'ctb-wrap'; el.setAttribute('data-asset', a);
+  el.innerHTML = '<div class="ctb-rail top"></div><div class="ctb-rail bot"></div><div class="ctb-gutter">' + CTB_LOGO + '</div><div class="ctb-lane"></div><div class="ctb-fade l"></div><div class="ctb-fade r"></div><div class="ctb-calls"></div><div class="ctb-hint">click for the full windows and track record</div>';
+  const o = {el: el, lane: el.querySelector('.ctb-lane'), live: [], data: [], alerts: [], seen: {}, idx: 0, hover: false, last: performance.now()};
+  el.addEventListener('mouseenter', () => { o.hover = true; });
+  el.addEventListener('mouseleave', () => { o.hover = false; });
+  el.addEventListener('click', () => { const det = el.closest('.card') && el.closest('.card').querySelector('details.ct-drop'); if (det) det.open = !det.open; });
+  return o;
+}
+function ctbSync() {
+  document.querySelectorAll('.ctb-slot').forEach(slot => {
+    const a = slot.getAttribute('data-asset');
+    const o = CTB[a] || (CTB[a] = ctbBuild(a));
+    if (o.el.parentNode !== slot) slot.appendChild(o.el);
+    let j = null;
+    try { j = JSON.parse(slot.querySelector('.ctb-json').textContent); } catch (e) { return; }
+    o.data = j.cards;
+    const nowMs = Date.now();
+    o.alerts = (typeof dockItems !== 'undefined' ? (dockItems[a] || []) : []).filter(x => !x.until || x.until > nowMs)
+      .map(x => ({key: 'al|' + x.key + '|' + (x.until || 0), cls: ({'dock-buy': 'up', 'dock-sell': 'down'})[x.cls] || 'warn', html: ctbAlertHtml(a, x)}));
+    const cs = o.el.querySelector('.ctb-calls');
+    if (cs.innerHTML !== j.calls) cs.innerHTML = j.calls;
+    o.live.forEach(c => { const d = j.cards.concat(o.alerts).find(x => x.key === c.key); if (d && c.html !== d.html) { c.el.innerHTML = d.html; c.html = d.html; c.el.className = 'ctb-card ' + d.cls; } });
+  });
+}
+function ctbTick(now) {
+  Object.keys(CTB).forEach(a => {
+    const o = CTB[a];
+    const dt = Math.min(0.05, (now - o.last) / 1000); o.last = now;
+    if (!ctbOn || !o.el.isConnected || !o.el.offsetWidth || !o.data.length) return;
+    const W = o.lane.clientWidth;
+    if (!o.hover) {
+      o.live.forEach(c => { c.x -= 48 * dt; });
+      while (o.live.length && o.live[0].x + o.live[0].w < -12) { o.live[0].el.remove(); o.live.shift(); }
+      const tail = o.live[o.live.length - 1];
+      if (!tail || tail.x + tail.w + 110 < W) {
+        let d = o.alerts.find(x => !o.seen[x.key]);                                   // a new alert jumps the queue
+        if (d) o.seen[d.key] = 1; else { const all = o.data.concat(o.alerts); d = all[o.idx % all.length]; o.idx++; }
+        const el = document.createElement('div'); el.className = 'ctb-card ' + d.cls; el.innerHTML = d.html; o.lane.appendChild(el);
+        const c = {el: el, x: o.started ? W + 6 : 30, w: el.offsetWidth, key: d.key, html: d.html}; o.started = true;          // the very first card is already on screen el.style.transform = 'translateX(' + c.x + 'px)'; o.live.push(c);
+      }
+    }
+    o.live.forEach(c => {
+      const m = c.x + c.w / 2, d = Math.abs((m - W / 2) / (W / 2)), f = Math.min(1, d);
+      c.el.style.transform = 'translateX(' + c.x + 'px) scale(' + (1 - 0.07 * f).toFixed(3) + ')';
+      c.el.style.opacity = Math.max(0.35, Math.min(1, 1 - 0.45 * Math.max(0, d - 0.55) / 0.45)).toFixed(2);
+      c.el.style.boxShadow = '0 0 ' + Math.round(26 * (1 - f)) + 'px currentColor';
+    });
+  });
+  requestAnimationFrame(ctbTick);
+}
+setTimeout(ctbPaint, 0);
+if (!window.__ctbLoop) { window.__ctbLoop = 1; requestAnimationFrame(ctbTick); }          // one animation loop only, so two can never double the speed and make the cards overlap
 function toggleFit() {
   fitScreen = !fitScreen;
   try { localStorage.setItem('fitScreen', String(fitScreen)); } catch (e) {}
@@ -7552,6 +7695,8 @@ async function refreshInner() {
   reapplySavedChartTimeframes();
   applyMtf();
   pfvgPaint();
+  ctbPaint();
+  ctbSync();
   restorePatternTabs();
   drawAllBm();                         // after the pull-downs are restored, so an open heat map is drawn
   applyMarketPick();
@@ -7568,6 +7713,7 @@ async function refreshInner() {
   checkWhaleAlerts();
   checkFlipRiskAlerts();
   checkHourWarn();
+  checkMarketWarn();
   checkNarrator();
   narPaint();
   checkWallAlerts();
@@ -7602,11 +7748,12 @@ window.onload = function() {
 };
 </script>
 </head><body>
-__USERBAR__<h1>The Dominator Live Dashboard - read only, never trades - refreshes every 1s__VERSION_TAG__</h1>
+__USERBAR__<h1 class="dom-banner"><span class="dom-logo"><svg viewBox="0 0 100 100" fill="none" stroke-linecap="round" stroke-linejoin="round"><g stroke="#ffd0d8" stroke-width="3.4"><path d="M14 92 L 86 20"/><path d="M86 92 L 14 20"/></g><g fill="#ffd0d8" stroke="#ffd0d8" stroke-width="1.5"><path d="M6 10 Q 28 8 26 30 L 17 22 Z"/><path d="M94 10 Q 72 8 74 30 L 83 22 Z"/></g><path d="M33 44 C 12 46, 8 26, 17 12 C 20 26, 28 32, 37 36 Z" fill="#ff4d6d" stroke="#ff4d6d" stroke-width="1.5"/><path d="M67 44 C 88 46, 92 26, 83 12 C 80 26, 72 32, 63 36 Z" fill="#ff4d6d" stroke="#ff4d6d" stroke-width="1.5"/><path d="M32 66 C 30 44, 40 32, 50 32 C 60 32, 70 44, 68 66 L 68 72 L 32 72 Z" fill="#1a0a0e" stroke="#ff4d6d" stroke-width="4.5"/><path d="M31 56 H 69" stroke="#ff4d6d" stroke-width="3.2"/><path d="M50 56 V 80" stroke="#ff4d6d" stroke-width="5"/><path d="M40 48 H 46 M54 48 H 60" stroke="#ff4d6d" stroke-width="2.6"/></svg></span><span class="dom-text"><span class="dom-title">THE DOMINATOR</span><span class="dom-sub">&#9876; THE HUNTER &middot; LIVE DASHBOARD &#9876;</span></span><span class="dom-logo dom-logo-r"><svg viewBox="0 0 100 100" fill="none" stroke-linecap="round" stroke-linejoin="round"><g stroke="#ffd0d8" stroke-width="3.4"><path d="M14 92 L 86 20"/><path d="M86 92 L 14 20"/></g><g fill="#ffd0d8" stroke="#ffd0d8" stroke-width="1.5"><path d="M6 10 Q 28 8 26 30 L 17 22 Z"/><path d="M94 10 Q 72 8 74 30 L 83 22 Z"/></g><path d="M33 44 C 12 46, 8 26, 17 12 C 20 26, 28 32, 37 36 Z" fill="#ff4d6d" stroke="#ff4d6d" stroke-width="1.5"/><path d="M67 44 C 88 46, 92 26, 83 12 C 80 26, 72 32, 63 36 Z" fill="#ff4d6d" stroke="#ff4d6d" stroke-width="1.5"/><path d="M32 66 C 30 44, 40 32, 50 32 C 60 32, 70 44, 68 66 L 68 72 L 32 72 Z" fill="#1a0a0e" stroke="#ff4d6d" stroke-width="4.5"/><path d="M31 56 H 69" stroke="#ff4d6d" stroke-width="3.2"/><path d="M50 56 V 80" stroke="#ff4d6d" stroke-width="5"/><path d="M40 48 H 46 M54 48 H 60" stroke="#ff4d6d" stroke-width="2.6"/></svg></span><span class="dom-note">read only, never trades - refreshes every 1s__VERSION_TAG__</span><span class="dom-shields"></span></h1>
 <div class="view-bar"><span class="hint">Show:</span>
   <button class="size-mode-btn" data-view="BTC" onclick="setAssetView('BTC')">BTC only</button>
   <button class="size-mode-btn" data-view="XRP" onclick="setAssetView('XRP')">XRP only</button>
   <button class="size-mode-btn" data-view="both" onclick="setAssetView('both')">Both</button>
+  <button class="size-mode-btn" id="ctb-btn" onclick="ctbToggle()" title="Show or hide the scrolling call banner (the early, mid and late calls). Off = the old 'The 3 calls' bar.">Call banner: ON</button>
   <button class="size-mode-btn" id="fit-btn" onclick="toggleFit()" title="Scales the page so everything from the top to the bottom of the chart fits the window, and keeps it that way after every reload - for streaming when nobody is touching the mouse">Fit to screen: ON</button></div>
 <div id="content">Loading...</div>
 <div class="sound-bar">
@@ -8741,6 +8888,115 @@ def _ct_agree_html(name, marks):
             f'<p class="hint">About 11 days of rounds so far, so a good read, not a promise. Information only.</p></div></details>')
 
 
+def _ctb_payload(name, d, tn, marks, res):
+    """The numbers for the scrolling call banner: the three calls as small chips (pinned along the bottom) and a list of full cards that roll across. Returns JSON text. Information only."""
+    dec = 4 if name == "XRP" else 2
+    fp = lambda x: fmt_price(x, dec)
+    left_now = tn["left"] if tn else None
+    rows = lambda rs: "".join(f'<div class="ctb-row"><span>{k}</span><b class="{c}">{v}</b></div>' for k, v, c in rs)
+    cards, chips = [], []
+    mid_side = None
+    for M, lab, mins in ((11, "EARLY", "4 min in"), (7, "MID", "8 min in"), (3, "LATE", "12 min in")):
+        real = M == 7
+        badge = '<span class="ctb-real">REAL END CALL</span>' if real else ""
+        head = f'<div class="ctb-hd"><span><span class="ctb-coin">{name}</span> <span class="ctb-which">{lab} CALL &middot; {mins}</span></span>{badge}</div>'
+        v = marks.get(str(M))
+        if v is None:
+            if left_now is not None and left_now > M * 60:
+                mm_, ss_ = divmod(int(left_now - M * 60), 60)
+                short, note = f"waiting {mm_}:{ss_:02d}", f"locks in {mm_}:{ss_:02d}"
+            else:
+                short, note = "not recorded", "dashboard was off then"
+            chips.append((lab, short, "warn", real))
+            cards.append({"key": lab.lower(), "cls": "warn", "html": head + f'<div class="ctb-call">WAITING<small>{note}</small></div><div class="ctb-bar"><i style="width:45%;background:var(--ctb-warn)"></i></div>'
+                          + rows([("Written down at", f"{M}:00 left", "t")])})
+            continue
+        side, lean = v[0], v[1]
+        s_ = v[3] if len(v) > 3 and isinstance(v[3], dict) else {}
+        if real:
+            mid_side = side
+        if side == "NONE":
+            cls, callh, short = "warn", "NO CALL", f"no call {lean:.0f}%"
+        elif side == "YES":
+            cls, callh, short = "up", "&#9650; UP", f"&#9650; UP {lean:.0f}%"
+        else:
+            cls, callh, short = "down", "&#9660; DOWN", f"&#9660; DOWN {lean:.0f}%"
+        chips.append((lab, short, cls, real))
+        rs = []
+        if s_.get("spot") is not None and s_.get("line"):
+            rs.append(("Price vs the line", f'{fp(s_["spot"])} vs {fp(s_["line"])}', "t"))
+        ky = s_.get("ky", v[2]) if (s_.get("ky") is not None or v[2] is not None) else None
+        if ky is not None:
+            rs.append(("Kalshi price", f'UP {ky * 100:.0f}c / DOWN {100 - ky * 100:.0f}c', "t"))
+        if s_.get("acc"):
+            rs.append(("Past accuracy", f'right {s_["acc"][0]}% ({s_["acc"][1]} rounds)', "up" if s_["acc"][0] >= 75 else "t"))
+        if s_.get("flip") is not None:
+            fr = s_["flip"]
+            rs.append(("Flip risk", f"{fr * 100:.0f}%", "down" if fr >= 0.55 else ("warn" if fr >= 0.30 else "up")))
+        if res in ("YES", "NO"):
+            if side == "NONE":
+                rs.append(("Result", f'no call - finished {"UP" if res == "YES" else "DOWN"}', "t"))
+            else:
+                rs.append(("Result", f'{"RIGHT" if res == side else "WRONG"} - finished {"UP" if res == "YES" else "DOWN"}', "up" if res == side else "down"))
+        elif tn and side in ("YES", "NO"):
+            holding = (tn["spot"] >= tn["line"]) == (side == "YES")
+            rs.append(("Right now", "holding the call side" if holding else "on the OTHER side", "up" if holding else "warn"))
+        bar_col = {"up": "var(--ctb-up)", "down": "var(--ctb-down)", "warn": "var(--ctb-warn)"}[cls]
+        cards.append({"key": lab.lower(), "cls": cls + (" gold" if real else ""), "html": head + f'<div class="ctb-call">{callh}<small>{lean:.0f}%</small></div>'
+                      f'<div class="ctb-bar"><i style="width:{min(100, lean):.0f}%;background:{bar_col}"></i></div>' + rows(rs)})
+    # the hunter card: where the END CALL stands
+    if mid_side in ("YES", "NO"):
+        hv = f'LOCKED &middot; {"UP" if mid_side == "YES" else "DOWN"}'
+    elif mid_side == "NONE":
+        hv = "NO CALL"
+    elif left_now is not None and left_now > 420:
+        mm_, ss_ = divmod(int(left_now - 420), 60)
+        hv = f"LOCKS IN {mm_}:{ss_:02d}"
+    else:
+        hv = "WATCHING"
+    cards.insert(0, {"key": "hunter", "cls": "down", "html": f'<div class="ctb-hd"><span class="ctb-which">THE HUNTER &middot; {name}</span><span class="ctb-real">HUNTING LIVE</span></div>'
+                     f'<div class="ctb-call" style="color:var(--ctb-down)">{hv}</div><div class="ctb-bar"><i style="width:100%;background:linear-gradient(90deg,var(--ctb-down),var(--ctb-warn))"></i></div>'
+                     + rows([("END CALL locks", "at the 8th minute (7:00 left)", "t"), ("After the lock", "it never changes", "warn"), ("The flip risk", "keeps watching the line", "warn"), ("Information only", "never trades", "t")])})
+    # flip risk now
+    try:
+        fl = None
+        if tn:
+            if mid_side in ("YES", "NO"):
+                fr_ = _flip_risk(name, mid_side, tn["spot"], tn["line"], tn["left"])
+                fl = (fr_[0], abs(fr_[1])) if fr_ else None
+            else:
+                pr_ = _flip_pre(name, tn["spot"], tn["line"], tn["left"])
+                fl = (pr_[0], pr_[1]) if pr_ else None
+        if fl:
+            r_, sd_ = fl
+            cl_ = "down" if r_ >= 0.45 else ("warn" if r_ >= 0.30 else "up")
+            cards.append({"key": "flip", "cls": cl_, "html": f'<div class="ctb-hd"><span><span class="ctb-coin">{name}</span> <span class="ctb-which">FLIP RISK NOW</span></span></div>'
+                          f'<div class="ctb-call">{r_ * 100:.0f}%<small>{"PREY IS TURNING" if r_ >= 0.45 else ("building" if r_ >= 0.30 else "low")}</small></div>'
+                          f'<div class="ctb-bar"><i style="width:{min(100, r_ * 100):.0f}%;background:var(--ctb-{cl_})"></i></div>'
+                          + rows([("Price", f'{sd_:.1f} candle-ranges from the line', "t"), ("History", f'{r_ * 100:.0f}% of rounds like this ended on the other side', "t")])})
+    except Exception:
+        pass
+    # when the calls agree
+    try:
+        ad = _ct_agreement()
+        if ad and ad.get("n"):
+            now_ = dt.datetime.now(dt.timezone.utc)
+            day0 = now_.astimezone(_viewtz.get()).replace(hour=0, minute=0, second=0, microsecond=0).astimezone(dt.timezone.utc)
+
+            def _wp(t0):
+                sel = [ok for (cl_, c_, same, ok) in ad["w"] if same and (t0 is None or cl_ >= t0)]
+                return (f"{sum(sel) / len(sel) * 100:.0f}% ({len(sel)})", "up" if sum(sel) / len(sel) >= 0.8 else "t") if sel else ("-", "t")
+            head_pct = ad["table"][1]["all"]
+            wl = [("Last hour", *_wp(now_ - dt.timedelta(hours=1))), ("Last 24 hours", *_wp(now_ - dt.timedelta(hours=24))), ("Today", *_wp(day0)), ("Overall", *_wp(None))]
+            cards.append({"key": "agree", "cls": "up", "html": '<div class="ctb-hd"><span class="ctb-which">WHEN THE CALLS AGREE</span><span class="ctb-which">all three the same</span></div>'
+                          f'<div class="ctb-call" style="color:var(--ctb-up)">{head_pct:.1f}%<small>ended as called</small></div>'
+                          f'<div class="ctb-bar"><i style="width:{min(100, head_pct):.0f}%;background:var(--ctb-up)"></i></div>' + rows([(a_, b_, c_) for a_, b_, c_ in wl])})
+    except Exception:
+        pass
+    strip = f'<span class="ctb-coin">{name}</span>' + "".join(f'<div class="ctb-chip {c}{" gold" if rl else ""}"><span class="k">{k}</span><span class="v">{v}</span></div>' for k, v, c, rl in chips)
+    return json.dumps({"cards": cards, "calls": strip}).replace("</", "<\\/")
+
+
 def build_call_timing_panel(name):
     """The 3 calls: one floating pull-down with three windows (EARLY / MID / LATE), each with the full picture of its call, plus a small 'Scoreboard & info' tab. Information only."""
     if name not in ("BTC", "XRP"):
@@ -8762,13 +9018,20 @@ def build_call_timing_panel(name):
                     for M, lab, mins in ((11, "EARLY", "4 minutes in"), (7, "MID", "8 minutes in"), (3, "LATE", "12 minutes in")))
     tables = "".join(f'<details class="ct-recdet" data-pat="CTREC|{name}|{M}"><summary><b>{lab}</b> <span class="hint">{mins}{" - the real END CALL" if M == 7 else ""}</span> &nbsp;{_ct_rec_line(allrecs[M], 24)} <span class="hint">last 24 hours</span></summary>{streak_windows_html(allrecs[M], name, show_pnl=False, plain=True)}</details>'
                      for M, lab, mins in ((11, "EARLY CALL", "4 minutes in (11:00 left)"), (7, "MID CALL", "8 minutes in (7:00 left)"), (3, "LATE CALL", "12 minutes in (3:00 left)")))
-    return (f'<details class="ct-drop" data-pat="CT|{name}"><summary><span class="dd-ic">&#9654;</span><b>The 3 calls</b> {chips} <span class="dd-hint">- click to open the three call windows</span></summary>'
+    try:
+        banner = f'<div class="ctb-slot" data-asset="{name}"><script type="application/json" class="ctb-json">{_ctb_payload(name, d, tn, marks, res)}</script></div>'
+    except Exception as _cbe:
+        banner = ""
+        print(f"[call banner] failed: {_cbe!r}")
+    return (banner + f'<details class="ct-drop" data-pat="CT|{name}"><summary><span class="dd-ic">&#9654;</span><b>The 3 calls</b> {chips} <span class="dd-hint">- click to open the three call windows</span></summary>'
             f'<div class="ct-body"><div class="ct-cards">{cards}</div><div class="ct-recs"><div class="ct-rec-h"><b>Track record</b> <span class="hint">- the same table for all three calls</span></div>{tables}{_ct_agree_html(name, marks)}</div>'
             f'<details class="ct-info" data-pat="CTI|{name}"><summary>Scoreboard &amp; info</summary><div class="ct-info-body">{board}</div></details>'
             f'<div class="hint ct-note">More information will be added to each window as we learn what matters. Nothing here changes the real END CALL or trades.</div></div></details>')
 
 
 
+FLIP_REVOKE_LEAN = 55.0          # a LEGIT FLIP is taken off again when the live read is back on the locked side at this strength or more ...
+FLIP_REVOKE_SECS = 8              # ... and has stayed there this long (so a one-second wobble does not remove it)
 END_FLIP_MIN_LEAN = 80.0          # a live read this strong, on the other side of the lock-time lean, is shown as a LEGIT FLIP (backtest: 80%+ reads are right ~90% of the time)
 _END_FLIP_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "bot_state", "end_call_flips.csv")
 
@@ -8783,7 +9046,24 @@ def end_call_flip(name, ticker, fair, left):
         if not lk or lk.get("side") == "LATE":
             return None
         if lk.get("flip"):
-            return lk["flip"]
+            fl_ = lk["flip"]
+            if fl_.get("kind") == "flip" and fair is not None and lk.get("side") in ("YES", "NO"):
+                # the LEGIT FLIP comes off again when the live read swings back to the locked side and HOLDS there (owner, 2026-10-27): at FLIP_REVOKE_LEAN or more for FLIP_REVOKE_SECS seconds
+                if ("YES" if fair >= 0.5 else "NO") == lk["side"] and max(fair, 1 - fair) * 100 >= FLIP_REVOKE_LEAN:
+                    t0_ = fl_.setdefault("back_since", time.time())
+                    if time.time() - t0_ >= FLIP_REVOKE_SECS:
+                        lk["flip_revoked"] = dict(fl_, revoked_ts=time.time(), revoked_left=int(left) if left is not None else None)
+                        lk["flip"] = None
+                        _save_end_locks()
+                        try:
+                            with open(_END_FLIP_LOG, "a", newline="", encoding="utf-8") as f:
+                                csv.writer(f).writerow([dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"), name, ticker, "flip_revoked", lk.get("side"), lk.get("side"), lk["side"], round(max(fair, 1 - fair) * 100, 1), int(left) if left is not None else ""])
+                        except OSError:
+                            pass
+                        return None
+                else:
+                    fl_.pop("back_since", None)
+            return lk.get("flip")
         if fair is None or left is None or left < 20 or left > END_CALL_LOCK_LEFT:
             return None
         lean = max(fair, 1 - fair) * 100
@@ -9536,8 +9816,8 @@ def _pre_risk_html(name, spot, line, left):
     if not fr:
         return _FLIP_WAIT_BAR
     r, sd, side = fr
-    cls = "down" if r >= 0.45 else ("warn" if r >= 0.30 else "ok")
-    txt = "price is right at the line - it can cross either way" if r >= 0.40 else ("price is near the line" if r >= 0.30 else "price is well clear of the line")
+    cls = "down" if r >= 0.38 else ("warn" if r >= 0.28 else "ok")                    # lowered 2026-10-27 (owner: the warning only popped up at 40-something percent)
+    txt = "price is right at the line - it can cross either way" if r >= 0.36 else ("price is near the line" if r >= 0.28 else "price is well clear of the line")
     return (f'<div class="flip-risk-bar {cls}"><span class="frb-l">FLIP RISK</span> <b>{r * 100:.0f}%</b> <span class="frb-t">{txt}</span>'
             f'<span class="frb-track"><i style="width:{min(100, r * 100):.0f}%"></i></span>'
             f'<span class="hint">no call yet &middot; price is {sd:.1f} candle-ranges {"above" if side == 1 else "below"} the line &middot; from the last 60 days of rounds: when price was this far from the line at this point, '
@@ -9761,7 +10041,7 @@ def _end_call_html(name, d, tn, fair, left, spot, line):
     risk_html = _FLIP_WAIT_BAR
     if _fr:
         _r, _sd = _fr
-        _cls = "down" if _r >= 0.55 else ("warn" if _r >= 0.30 else "ok")
+        _cls = "down" if _r >= 0.45 else ("warn" if _r >= 0.28 else "ok")
         _txt = ("FLIPPING - price is already on the other side of the line" if _sd < 0 else ("flip risk is building - price is close to the line" if _r >= 0.30 else "low"))
         risk_html = (f'<div class="flip-risk-bar {_cls}"><span class="frb-l">FLIP RISK</span> <b>{_r * 100:.0f}%</b> <span class="frb-t">{_txt}</span>'
                      f'<span class="frb-track"><i style="width:{min(100, _r * 100):.0f}%"></i></span>'
@@ -11159,7 +11439,7 @@ def build_pattern_window(asset_name):
         voice_bar = ('<div class="mtf-switch voice-bar"><button class="mtf-spk" onclick="narToggle(this)" title="AI narrator for this coin: speaks the alerts and the pressure"><span class="dd-ic">&#128266;</span><span class="nar-lab">Narrator OFF</span></button>'
                      '<button class="mtf-alv" onclick="alvToggle()" title="Switch each alert voice on or off, and hear it"><span class="dd-ic">&#127911;</span><span>Alert voices</span></button>'
                      '<label class="nar-volbox" title="Narrator volume"><span class="dd-ic">&#128266;</span><input type="range" class="nar-vol" min="0" max="100" step="5" value="100" oninput="narVolSet(this.value)"><span class="nar-volpct">100%</span></label></div>')
-    return (f'<div class="row pat-win" data-asset="{asset_name}">{flags}{build_call_timing_panel(asset_name)}{voice_bar}{mtf_part}{old_open}'
+    return (f'<div class="row pat-win" data-asset="{asset_name}">{flags}{voice_bar}{mtf_part}{old_open}'
             f'<div class="pat-old-grid">{head}{cpi_strip}'
             f"<div class=\"pat-chart-row\"><div class=\"pat-chart\" data-tf=\"{tf}\" onclick=\"expandPatternChart('{asset_name}')\" title=\"click to make it full-screen\">{svg}</div></div>"
             f'<div class="hint">click the chart to make it full-screen (Esc to close) &middot; <label class="pfvg-sw" title="Show or hide the fair value gaps on this chart"><input type="checkbox" class="pfvg-cb" checked onchange="pfvgSet(this.checked)"> <b>Fair value gaps</b></label> <span>light white box, green lines = BULL gap (left by a jump up), red lines = BEAR gap (left by a jump down); 8 nearest, bigger ones only</span></div>'
@@ -12879,6 +13159,11 @@ def render_html():
         except Exception as _fve:
             print(f"[fair value gaps] panel failed: {_fve!r}")
         try:
+            call_timing_html = build_call_timing_panel(name) if name in ("BTC", "XRP") else ""            # the call banner + the three call windows now sit at the TOP of the card (owner, 2026-10-27)
+        except Exception as _cte:
+            call_timing_html = ""
+            print(f"[call timing] panel failed: {_cte!r}")
+        try:
             market_hours_html = build_market_hours_panel(name) if name in ("BTC", "XRP") else ""
         except Exception as _mhe:
             market_hours_html = ""
@@ -12928,6 +13213,7 @@ def render_html():
               </div>
             </div>
           </div>
+          {call_timing_html}
           <div class="cwrow">{call_windows_html}</div>
           <details class="info-drop" data-pat="INFO|{name}"><summary>Whale trades, order-book walls and {name} 24h high / low</summary>
           {whale_row_html}
@@ -13395,7 +13681,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return
         if parsed.path == "/clip" and _voice_client(self.client_address[0]):
             fn = (urllib.parse.parse_qs(parsed.query).get("f") or [""])[0]
-            if re.fullmatch(r"\d{3}_clip\.mp3|(g_)?(coin_(BTC|XRP)_\d|lock_(UP_\d\d|DOWN_\d\d|NONE)|rev_up)\.(wav|mp3)|g_\d{3}\.(wav|mp3)|(g_)?(scalp|sweep_low|sweep_high|hunt_high|hour_(danger|good|great))_\d\.(wav|mp3)", fn) and _cp_has(fn):
+            if re.fullmatch(r"\d{3}_clip\.mp3|(g_)?(coin_(BTC|XRP)_\d|lock_(UP_\d\d|DOWN_\d\d|NONE)|rev_up)\.(wav|mp3)|g_\d{3}\.(wav|mp3)|(g_)?(scalp|sweep_low|sweep_high|hunt_high|hour_(danger|good|great)|mk_(bull|bear|neutral))_\d\.(wav|mp3)", fn) and _cp_has(fn):
                 audio = _cp_read(fn)
                 self.send_response(200); self.send_header("Content-Type", "audio/wav" if fn.endswith(".wav") else "audio/mpeg")
                 self.send_header("Content-Length", str(len(audio))); self.send_header("Cache-Control", "max-age=86400"); self.end_headers()
@@ -13936,7 +14222,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
         else:
-            body = PAGE_TEMPLATE.replace('__PATTERN_LIB_JSON__', pattern_lib_json()).replace('__VERSION_TAG__', _version_tag()).replace('__LEGAL__', _accp.legal_footer()).replace('__USERBAR__', _accp.userbar(*self._who) if (HOSTED_PASSWORD and self._who) else '').replace('</head>', _theme.page_css() + '</head>', 1)
+            body = PAGE_TEMPLATE.replace('__PATTERN_LIB_JSON__', pattern_lib_json()).replace('__VERSION_TAG__', _version_tag()).replace('__LEGAL__', _accp.legal_footer()).replace('__USERBAR__', _accp.userbar(*self._who) if (HOSTED_PASSWORD and self._who) else '').replace('__CTB_DEF__', 'false' if HOSTED_PASSWORD else 'true').replace('</head>', _theme.page_css() + '</head>', 1)
             body = _theme.apply(body).encode()
             self.send_response(200)
             self.send_header("Content-Type", "text/html")

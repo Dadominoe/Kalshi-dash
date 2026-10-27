@@ -843,9 +843,9 @@ def channel_svg(tun, t_now, sx, sy, t0, tmax):
     bot = lambda t: bp + bs_ * (t - ta)
     col = "#e3b341" if kind == "pinch" else ("#f85149" if kind == "down" else "#3fb950")
     pts_now = f"{sx(ts):.1f},{sy(top(ts)):.1f} {sx(t_now):.1f},{sy(top(t_now)):.1f} {sx(t_now):.1f},{sy(bot(t_now)):.1f} {sx(ts):.1f},{sy(bot(ts)):.1f}"
-    out = f'<polygon points="{pts_now}" fill="{col}" fill-opacity="0.08"/>'
+    out = f'<polygon points="{pts_now}" fill="#ffffff" fill-opacity="0.10"/>'
     if te > t_now:
-        out += f'<polygon points="{sx(t_now):.1f},{sy(top(t_now)):.1f} {sx(te):.1f},{sy(top(te)):.1f} {sx(te):.1f},{sy(bot(te)):.1f} {sx(t_now):.1f},{sy(bot(t_now)):.1f}" fill="{col}" fill-opacity="0.15"/>'
+        out += f'<polygon points="{sx(t_now):.1f},{sy(top(t_now)):.1f} {sx(te):.1f},{sy(top(te)):.1f} {sx(te):.1f},{sy(bot(te)):.1f} {sx(t_now):.1f},{sy(bot(t_now)):.1f}" fill="#ffffff" fill-opacity="0.16"/>'
     out += (f'<line x1="{sx(ts):.1f}" y1="{sy(top(ts)):.1f}" x2="{sx(te):.1f}" y2="{sy(top(te)):.1f}" stroke="{col}" stroke-width="1.1" stroke-opacity="0.8"/>'
             f'<line x1="{sx(ts):.1f}" y1="{sy(bot(ts)):.1f}" x2="{sx(te):.1f}" y2="{sy(bot(te)):.1f}" stroke="{col}" stroke-width="1.1" stroke-opacity="0.8"/>')
     if kind == "pinch" and _m and _m[0] <= tmax:
