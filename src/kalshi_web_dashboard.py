@@ -806,7 +806,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-27-flow92"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-27-fast97"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -1763,6 +1763,36 @@ def settle_live_position(ticker, actual_side):
         print(f"[LIVE] *** DAILY LOSS LIMIT HIT - ALL ASSETS AUTO-DISARMED *** {_live_last_error}")
 
 
+_lt_cache = {"sig": None, "rows": []}
+
+
+def _live_trade_rows():
+    """The settle / sell rows of the real-money trade log as (time, asset, strategy, payoff, cost), parsed once and again only when the file changes (it used to be re-read in full by every stat window on every page build).
+    A malformed row is skipped, never fatal."""
+    try:
+        st = os.stat(LIVE_TRADES_LOG)
+    except OSError:
+        return []
+    sig = (st.st_mtime_ns, st.st_size)
+    if _lt_cache["sig"] == sig:
+        return _lt_cache["rows"]
+    rows = []
+    try:
+        with open(LIVE_TRADES_LOG, newline="", encoding="utf-8") as f:
+            for row in csv.DictReader(f):
+                try:
+                    if row.get("event") not in ("settle", "sell"):
+                        continue
+                    rows.append((dt.datetime.fromisoformat(row["ts"]), row.get("asset"), row.get("strategy", "lock"),
+                                 float(row.get("payoff_dollars") or 0), float(row.get("cost_dollars") or 0)))
+                except (ValueError, KeyError, TypeError):
+                    continue
+    except OSError:
+        return []
+    _lt_cache["sig"], _lt_cache["rows"] = sig, rows
+    return rows
+
+
 def live_stats_since(cutoff_utc, asset_name=None, strategy=None):
     """Real-money up/down stat for the on-site switch - added 2026-09-15 per
     user request, filterable per asset added 2026-09-22, "sell" events (the
@@ -1782,29 +1812,18 @@ def live_stats_since(cutoff_utc, asset_name=None, strategy=None):
     staked = 0.0
     wins = 0
     n = 0
-    try:
-        with open(LIVE_TRADES_LOG, newline="", encoding="utf-8") as f:
-            for row in csv.DictReader(f):
-                try:
-                    if row.get("event") not in ("settle", "sell"):
-                        continue
-                    if asset_name is not None and row.get("asset") != asset_name:
-                        continue
-                    if strategy is not None and row.get("strategy", "lock") != strategy:
-                        continue
-                    ts = dt.datetime.fromisoformat(row["ts"])
-                    if ts < cutoff_utc:
-                        continue
-                    payoff = float(row.get("payoff_dollars") or 0)
-                    total += payoff
-                    staked += float(row.get("cost_dollars") or 0)
-                    if payoff > 0:
-                        wins += 1
-                    n += 1
-                except (ValueError, KeyError, TypeError):
-                    continue  # malformed row - skip it, don't let it take down the whole read
-    except FileNotFoundError:
-        pass
+    for ts, asset, strat, payoff, cost in _live_trade_rows():
+        if asset_name is not None and asset != asset_name:
+            continue
+        if strategy is not None and strat != strategy:
+            continue
+        if ts < cutoff_utc:
+            continue
+        total += payoff
+        staked += cost
+        if payoff > 0:
+            wins += 1
+        n += 1
     pct = (total / staked * 100) if staked else 0.0
     win_pct = (wins / n * 100) if n else 0.0
     return {"total": total, "n": n, "pct": pct, "volume": staked, "wins": wins, "win_pct": win_pct}
@@ -4731,8 +4750,8 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .callbox .lbl { font-size:11px; color:#8b949e; text-transform:uppercase; line-height:1.25; }
 .asset-label { font-weight:800; letter-spacing:0.5px; }
 .asset-BTC { color:#f7931a; } .asset-XRP { color:#4aa8ff; }
-.clock { display:flex; align-items:center; gap:5px; margin-top:4px; font-family:Consolas, 'Courier New', monospace; font-size:17px; font-weight:700; color:#e6edf3; }
-.clock svg { display:block; }
+.clock { display:flex; align-items:center; gap:8px; margin-top:4px; font-family:Consolas, 'Courier New', monospace; font-size:28px; font-weight:800; color:#ffffff; letter-spacing:.5px; }          /* bigger (owner, 2026-10-27: more noticeable) */
+.clock svg { display:block; width:34px; height:34px; }
 .clock.clock-warn { color:#d29922; } .clock.clock-hot { color:#f85149; }
 .callbox-locked { background:#2d2606; border:2px solid #d4b106; box-shadow:0 0 8px rgba(212,177,6,0.5); }
 .callbox-locked .lbl { color:#f0d040; }
@@ -4870,6 +4889,8 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .flip-risk-bar { margin:10px 0; padding:14px 18px; border-radius:12px; background:#101a14; border:3px solid #00e676; font-size:16px; box-shadow:0 0 16px rgba(0,230,118,.35); }
 .flip-risk-bar .frb-l { font-weight:900; font-size:17px; letter-spacing:1.5px; margin-right:12px; text-transform:uppercase; color:#fff; }
 .flip-risk-bar b { font-size:40px !important; font-weight:900; line-height:1; margin-right:12px; vertical-align:middle; color:#00e676; }
+.flip-wait-live { font-size:15px; font-weight:700; line-height:1.2; } .flip-wait-live b { font-size:24px; font-weight:900; margin-right:6px; }
+.flip-wait-live.ok b { color:#00e676; } .flip-wait-live.warn b { color:#ffb020; } .flip-wait-live.down b { color:#ff4d6d; }
 .flip-risk-bar .frb-sides { margin:2px 0 6px; font-size:16px; font-weight:800; }
 .flip-risk-bar .frb-side { padding:3px 10px; border-radius:8px; margin-right:10px; }
 .flip-risk-bar .frb-side.up { background:rgba(0,230,118,.18); color:#00e676; } .flip-risk-bar .frb-side.down { background:rgba(255,59,92,.2); color:#ff4d6d; }
@@ -4890,6 +4911,7 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .ct-drop { margin:4px 0; position:relative; }
 .pyp-t { width:100%; border-collapse:collapse; font-size:14px; } .pyp-t th { text-align:left; font-size:12px; letter-spacing:.8px; text-transform:uppercase; color:#8b949e; padding:4px 8px; border-bottom:2px solid #30363d; }
 .pyp-t td { padding:4px 8px; border-top:1px solid rgba(255,255,255,.07); white-space:nowrap; } .pyp-t td.pyp-best { box-shadow:inset 0 0 0 2px #ffd24a; background:rgba(255,210,74,.10); border-radius:6px; }
+.pyp-rowbest td { background:rgba(255,210,74,.16); } .pyp-now { background:#ffd24a; color:#0d1117; }
 .pyp-min { font-size:14px; } .pyp-tag { font-size:11px; letter-spacing:.8px; color:#ffd24a; border:1px solid #ffd24a; border-radius:999px; padding:0 7px; margin-left:6px; } .pyp-foot td { border-top:2px solid #30363d; } .pyp-note { margin-top:8px; }
 .pyp-body { overflow-x:auto; }
 .ct-body { position:absolute; left:0; top:calc(100% + 4px); width:100%; min-width:680px; max-width:min(1300px, 98vw); z-index:60; max-height:78vh; overflow:auto; background:#0d1117; border:2px solid #39d0d8; border-radius:12px; padding:12px; box-shadow:0 14px 44px rgba(0,0,0,.75); }
@@ -7515,6 +7537,18 @@ setInterval(() => {                                                             
     if (m && PAGE_VER && m[1] !== PAGE_VER && Date.now() - lastAutoReload > 300000) { lastAutoReload = Date.now(); location.reload(); }
   }).catch(() => {});
 }, 90000);
+const ctbKinds = {};
+function ctbKindOf(k) {
+  if (/^(early|mid|late|hunter)$/.test(k)) return 'burst';
+  if (/^pat:/.test(k)) return 'news';
+  if (/^ind-/.test(k)) return 'ind';
+  return (k === 'flip' || k === 'events' || k === 'member' || k === 'flowprice' || k === 'linebeh' || k === 'mk5') ? k : 'fact';
+}
+function ctbOk(kind, a) {                                                  // the other coin has not just shown this kind of card
+  const x = ctbKinds[kind];
+  return !x || x.coin === a || Date.now() - x.t > (kind === 'burst' ? 30000 : 40000);
+}
+function ctbNote(key, a) { const kd = ctbKindOf(key); if (kd !== 'fact') ctbKinds[kd] = {coin: a, t: Date.now()}; }
 function ctbTick(now, fromTimer) {
   Object.keys(CTB).forEach(a => {
     const o = CTB[a];
@@ -7531,23 +7565,24 @@ function ctbTick(now, fromTimer) {
         const calls = o.data.filter(x => x.locked).sort((a, b) => order[a.key] - order[b.key]);                         // the calls that have locked
         if (calls.length && !(o.burst && o.burst.length) && (calls.length > (o.lockedN || 0) || Date.now() - (o.lastBurst || 0) > 90000)) { o.burst = calls.map(x => x.key); o.lastBurst = Date.now(); }       // a new lock, or 90 seconds: roll the locked calls by
         o.lockedN = calls.length;
-        let d = (o.news && o.news.length) ? o.news.shift() : null; const evc = o.data.find(x => x.key === 'events');          // market-change cards go first
-        if (!d && o.mk5 && o.mid && o.mk5Round !== o.round) { d = o.mk5; o.mk5Round = o.round; }                    // the 5-minute market, once, in the middle of the round
-        if (!d && o.burst && o.burst.length) { const k = o.burst.shift(); d = o.data.find(x => x.key === k) || null; o.lastBurst = Date.now(); }
+        let d = (o.news && o.news.length && ctbOk('news', a)) ? o.news.shift() : null; const evc = o.data.find(x => x.key === 'events');          // market-change cards go first
+        if (!d && o.mk5 && o.mid && o.mk5Round !== o.round && ctbOk('mk5', a)) { d = o.mk5; o.mk5Round = o.round; }                    // the 5-minute market, once, in the middle of the round
+        if (!d && o.burst && o.burst.length && ctbOk('burst', a)) { const k = o.burst.shift(); d = o.data.find(x => x.key === k) || null; o.lastBurst = Date.now(); }
         const flc = o.data.find(x => x.key === 'flip');
-        if (!d && flc && (flc.cls === 'down' || flc.cls === 'warn') && Date.now() - (o.lastFlip || 0) > 60000) { d = flc; o.lastFlip = Date.now(); }          // what affects the trader comes first: a building flip risk is shown about once a minute
-        if (!d && evc && Date.now() - o.lastEv > 25 * 60000) { d = evc; o.lastEv = Date.now(); }
+        if (!d && flc && (flc.cls === 'down' || flc.cls === 'warn') && Date.now() - (o.lastFlip || 0) > 60000 && ctbOk('flip', a)) { d = flc; o.lastFlip = Date.now(); }          // what affects the trader comes first: a building flip risk is shown about once a minute
+        if (!d && evc && Date.now() - o.lastEv > 25 * 60000 && ctbOk('events', a)) { d = evc; o.lastEv = Date.now(); }
         const mbc = o.data.find(x => x.key === 'member'); if (!o.lastMember) o.lastMember = Date.now() - 16 * 60000;
-        if (!d && mbc && Date.now() - o.lastMember > 20 * 60000) { d = mbc; o.lastMember = Date.now(); }
+        if (!d && mbc && Date.now() - o.lastMember > 20 * 60000 && ctbOk('member', a)) { d = mbc; o.lastMember = Date.now(); }
         const fpc = o.data.find(x => x.key === 'flowprice'); if (!o.lastFP) o.lastFP = Date.now() - 6 * 60000;
-        if (!d && fpc && Date.now() - o.lastFP > 12 * 60000) { d = fpc; o.lastFP = Date.now(); }                              // flow vs price agree / disagree, every ~12 minutes
+        if (!d && fpc && Date.now() - o.lastFP > 12 * 60000 && ctbOk('flowprice', a)) { d = fpc; o.lastFP = Date.now(); }                              // flow vs price agree / disagree, every ~12 minutes
         const lbc = o.data.find(x => x.key === 'linebeh'); if (!o.lastLB) o.lastLB = Date.now() - 2 * 60000;
-        if (!d && lbc && Date.now() - o.lastLB > 15 * 60000) { d = lbc; o.lastLB = Date.now(); }                              // line behavior, every ~15 minutes                          // the MEMBERSHIP card (website only) every ~20 minutes                          // the COMING UP card every ~25 minutes
-        if (d) o.seen[d.key] = 1;
+        if (!d && lbc && Date.now() - o.lastLB > 15 * 60000 && ctbOk('linebeh', a)) { d = lbc; o.lastLB = Date.now(); }                              // line behavior, every ~15 minutes                          // the MEMBERSHIP card (website only) every ~20 minutes                          // the COMING UP card every ~25 minutes
+        if (d) { o.seen[d.key] = 1; ctbNote(d.key, a); }
         else if (o.info && o.info.length) {                                                                              // otherwise: a random fact (never one that has been shown, until all have)          // facts when decided / no calls yet / every third card                                  // the market is decided: random cool information instead of the calls
           if (!o.shown) { try { o.shown = JSON.parse(localStorage.getItem('ctbShown2:' + a) || '{}') || {}; } catch (e) { o.shown = {}; } }
           const nowT = Date.now(), HOLD = 5 * 3600 * 1000;                                                         // a fact that has gone by is not shown again for 5 hours (remembered across reloads)
           let pool = o.info.filter(it => !o.shown[it.key] || nowT - o.shown[it.key] > HOLD);
+          const poolOk = pool.filter(it => ctbOk(ctbKindOf(it.key), a)); if (poolOk.length) pool = poolOk;                 // not the same kind of card the other coin is showing
           if (!pool.length) pool = o.info.slice().sort((p, q) => (o.shown[p.key] || 0) - (o.shown[q.key] || 0)).slice(0, 5);   // nothing fresh left: the ones shown longest ago
           const pf = pool.filter(it => it.pct);                                                                    // the real measured percentage facts come first (4 in 5)
           const use = (pf.length && Math.random() < 0.8) ? pf : pool;
@@ -7555,10 +7590,10 @@ function ctbTick(now, fromTimer) {
           o.shown[d.key] = nowT;
           Object.keys(o.shown).forEach(kk => { if (nowT - o.shown[kk] > HOLD * 2) delete o.shown[kk]; });
           try { localStorage.setItem('ctbShown2:' + a, JSON.stringify(o.shown)); } catch (e) {}
-          o.lastInfo = d.key;
+          o.lastInfo = d.key; ctbNote(d.key, a);
         } else { const all = o.data; d = all[o.idx % all.length]; o.idx++; }
         const el = document.createElement('div'); el.className = 'ctb-card ' + d.cls; el.innerHTML = d.html; o.lane.appendChild(el);
-        const c = {el: el, x: o.started ? W + 6 : 30, w: el.offsetWidth, key: d.key, html: d.html}; o.started = true;
+        const c = {el: el, x: o.started ? W + 6 : (a === 'XRP' ? Math.round(W * 0.3) : 30), w: el.offsetWidth, key: d.key, html: d.html}; o.started = true;
         el.style.transform = 'translateX(' + c.x + 'px)'; o.live.push(c);          // (the very first card starts already on screen)
       }
     }
@@ -9290,6 +9325,10 @@ def _ctb_indicator_cards(name):
     return out
 
 
+_pool_memo = {}
+_factcards_memo = {}
+
+
 def _ctb_payload(name, d, tn, marks, res, allrecs=None):
     """The numbers for the scrolling call banner: the three calls as small chips (pinned along the bottom) and a list of full cards that roll across. Returns JSON text. Information only."""
     dec = 4 if name == "XRP" else 2
@@ -9420,18 +9459,32 @@ def _ctb_payload(name, d, tn, marks, res, allrecs=None):
         pass
     try:                                                              # 14 facts from the bank, a different handful every minute (and different for each coin)
         import random as _rnd
-        pool = sorted([f for f in _facts_bank() if f.get("c") in (None, name)], key=lambda f: f["k"])
-        _hasp = lambda f: "%" in (str(f["b"]) + str(f["s"]) + "".join(str(x_) for r_ in f["r"] for x_ in r_[:2]))
-        pp_ = [f for f in pool if _hasp(f)]
-        pl_ = [f for f in pool if not _hasp(f)]
-        _rnd.Random(f"{name}{dt.date.today().isoformat()}").shuffle(pp_)               # a different order every day
-        _rnd.Random(f"{name}{dt.date.today().isoformat()}b").shuffle(pl_)
+        _bank = _facts_bank()
+        _pk = (name, dt.date.today().isoformat(), _FACTS["mtime"], len(_bank))
+        _pm = _pool_memo.get(_pk)
+        if _pm is None:
+            pool = sorted([f for f in _bank if f.get("c") in (None, name)], key=lambda f: f["k"])
+            _hasp = lambda f: "%" in (str(f["b"]) + str(f["s"]) + "".join(str(x_) for r_ in f["r"] for x_ in r_[:2]))
+            pp_ = [f for f in pool if _hasp(f)]
+            pl_ = [f for f in pool if not _hasp(f)]
+            _rnd.Random(f"{name}{dt.date.today().isoformat()}").shuffle(pp_)               # a different order every day
+            _rnd.Random(f"{name}{dt.date.today().isoformat()}b").shuffle(pl_)
+            _pool_memo.clear() if len(_pool_memo) > 6 else None
+            _pool_memo[_pk] = _pm = (pp_, pl_)
+        pp_, pl_ = _pm
         mi_ = int(time.time() // 60)
         sp_ = (mi_ * 30) % max(1, len(pp_))                                            # each minute gets the NEXT 30 percentage facts and the NEXT 6 plain ones - no overlap until the whole bank has gone round
         sl_ = (mi_ * 6) % max(1, len(pl_))
         n_hand_ = len(info)
-        for f in (pp_ + pp_)[sp_:sp_ + 30] + (pl_ + pl_)[sl_:sl_ + 6]:
-            _ic(f["k"], escape(f["t"]), escape(str(f["b"])), escape(str(f["s"])), [(escape(str(a)), escape(str(b)), (c if c in ("up", "down", "warn") else "t")) for a, b, *cc in f["r"] for c in [cc[0] if cc else "t"]][:4])
+        _fm = _factcards_memo.get((name, mi_, _pk))
+        if _fm is None:
+            _n0 = len(info)
+            for f in (pp_ + pp_)[sp_:sp_ + 30] + (pl_ + pl_)[sl_:sl_ + 6]:
+                _ic(f["k"], escape(f["t"]), escape(str(f["b"])), escape(str(f["s"])), [(escape(str(a)), escape(str(b)), (c if c in ("up", "down", "warn") else "t")) for a, b, *cc in f["r"] for c in [cc[0] if cc else "t"]][:4])
+            _factcards_memo.clear() if len(_factcards_memo) > 6 else None
+            _factcards_memo[(name, mi_, _pk)] = list(info[_n0:])
+        else:
+            info.extend(_fm)
         if n_hand_ >= 4:                                                              # only two of the hand-written facts per minute, so they do not keep coming back
             hand_ = info[:n_hand_]
             off_ = 0 if name == "BTC" else 2                                          # BTC and XRP never get the same hand-written fact in the same minute
@@ -9522,6 +9575,37 @@ def _ctb_payload(name, d, tn, marks, res, allrecs=None):
 
 
 _pyp_cache = {}
+_pyp_pcache = {}
+
+
+def _pyp_profit_rows(name):
+    """{minutes_left: [(close time, net per contract)]}: what following that minute's call would have made per $1 contract after Kalshi's fee, at the Kalshi price recorded at that minute (an estimate - not a real fill)."""
+    c = _pyp_pcache.get(name)
+    if c and time.time() - c[0] < 20:
+        return c[1]
+    out = {M: [] for M in CT_MARKS}
+    with _ct_mu:
+        items = list(_ct[name].items())
+    for tk, rec in items:
+        res = rec.get("res")
+        if res not in ("YES", "NO"):
+            continue
+        t = _window_close_utc(tk)
+        if t is None:
+            continue
+        for m_s, m in (rec.get("m") or {}).items():
+            try:
+                M = int(m_s)
+            except ValueError:
+                continue
+            if M not in out or len(m) < 3 or m[2] is None or m[0] not in ("YES", "NO"):
+                continue
+            px = float(m[2]) if m[0] == "YES" else 1 - float(m[2])
+            if not 0.02 < px < 0.98:
+                continue
+            out[M].append((t, (1.0 if m[0] == res else 0.0) - px - 0.07 * px * (1 - px)))
+    _pyp_pcache[name] = (time.time(), out)
+    return out
 _PYP_WINS = (("Last hour", 1, 3), ("3 hours", 3, 6), ("6 hours", 6, 10), ("12 hours", 12, 20), ("24 hours", 24, 30), ("Today", "today", 20), ("Overall", None, 60))     # label, hours back, rounds needed before a column's 'best' is marked
 
 
@@ -9574,6 +9658,24 @@ def build_pick_poison(name, d, tn):
             top = max(c[0] for c in cand)
             best[lab] = {M for p, M in cand if p >= top - 1e-9}
     names = {11: "EARLY", 7: "MID (real END CALL)", 3: "LATE"}
+    prof = _pyp_profit_rows(name)
+    pstat = {}
+    for M in order:
+        for lab, cut in (("24h", now - dt.timedelta(hours=24)), ("all", None)):
+            v = [p for t, p in prof.get(M, []) if cut is None or t >= cut]
+            pstat[(M, lab)] = (sum(v) / len(v) * 100 if v else None, len(v))
+    bestnow, bkey = None, None
+    for M in order:                                                                # the best at the moment: best estimated profit over 24 hours (20+ rounds); if none has enough rounds, the best 3-hour record
+        p24, n24 = pstat[(M, "24h")]
+        if n24 >= 20 and p24 is not None and (bkey is None or (1, p24, M) > bkey):
+            bkey, bestnow = (1, p24, M), M
+    if bestnow is None:
+        for M in order:
+            w3, n3 = stat[(M, "3 hours")]
+            if n3 >= 6:
+                k_ = (0, w3 / n3, M)
+                if bkey is None or k_ > bkey:
+                    bkey, bestnow = k_, M
     body = []
     for M in order:
         m_in = 15 - M
@@ -9587,6 +9689,9 @@ def build_pick_poison(name, d, tn):
             css = "up" if pct >= 70 else ("down" if pct < 55 else "flat")
             star = " pyp-best" if M in best.get(lab, ()) else ""
             cells.append(f'<td class="{star.strip()}"><b class="{css}">{pct:.0f}%</b> <span class="hint">{w}-{n - w}</span></td>')
+        for lab_ in ("24h", "all"):
+            pv, pn = pstat[(M, lab_)]
+            cells.append(f'<td><b class="{"up" if pv > 0 else "down"}">{pv:+.1f}c</b> <span class="hint">{pn}</span></td>' if pv is not None else '<td class="flat">-</td>')
         mk = marks.get(str(M))
         if mk:
             side, lean = mk[0], mk[1]
@@ -9605,16 +9710,19 @@ def build_pick_poison(name, d, tn):
         else:
             now_c = '<span class="hint">-</span>'
         tag = f' <span class="pyp-tag">{names[M]}</span>' if M in names else ""
-        body.append(f'<tr><td class="pyp-min"><b>{m_in} min in</b> <span class="hint">{M}:00 left</span>{tag}</td><td>{now_c}</td>{"".join(cells)}</tr>')
+        if M == bestnow:
+            tag += ' <span class="pyp-tag pyp-now">BEST NOW</span>'
+        _rc = ' class="pyp-rowbest"' if M == bestnow else ""
+        body.append(f'<tr{_rc}><td class="pyp-min"><b>{m_in} min in</b> <span class="hint">{M}:00 left</span>{tag}</td><td>{now_c}</td>{"".join(cells)}</tr>')
     foot = []
     for lab, hrs, need in _PYP_WINS:
         bm = sorted(best.get(lab, ()), reverse=True)
         foot.append(f'<td class="pyp-best"><b>{", ".join(str(15 - M) for M in bm)} min in</b></td>' if bm else '<td class="flat">-</td>')
     return (f'<details class="ct-drop pyp-drop" data-pat="PYP|{name}"><summary><span class="dd-ic">&#9654;</span><b>Pick your poison</b>'
             f'<span class="dd-hint"> - a call at every minute, 2 to 14 minutes in, with its record - click to compare</span></summary>'
-            f'<div class="ct-body pyp-body"><table class="pyp-t"><tr><th>Call made at</th><th>This round</th>{"".join(f"<th>{l}</th>" for l, _h, _n in _PYP_WINS)}</tr>'
-            f'{"".join(body)}<tr class="pyp-foot"><td class="pyp-min"><b>Best minute</b></td><td></td>{"".join(foot)}</tr></table>'
-            '<div class="hint pyp-note">Every minute of the round gets its own call from the same price-vs-line rule, written down at that minute and scored from Kalshi\'s result. Gold-bordered = the best record in that column '
+            f'<div class="ct-body pyp-body"><table class="pyp-t"><tr><th>Call made at</th><th>This round</th>{"".join(f"<th>{l}</th>" for l, _h, _n in _PYP_WINS)}<th title="average cents per contract after the fee, following the call made at this minute, at the Kalshi price recorded then (an estimate)">Est. profit 24h</th><th>Est. profit overall</th></tr>'
+            f'{"".join(body)}<tr class="pyp-foot"><td class="pyp-min"><b>Best minute</b></td><td></td>{"".join(foot)}<td></td><td></td></tr></table>'
+            '<div class="hint pyp-note">Every minute of the round gets its own call from the same price-vs-line rule, written down at that minute and scored from Kalshi\'s result. Gold-bordered = the best record in that column; the shaded row is the best one at the moment (best estimated profit over 24 hours, following the call made at that minute, at the Kalshi price recorded then - an estimate, not a real fill) '
             '(only once it has enough rounds). A short window is noisy - give it time. A later call is almost always the more accurate one simply because less time is left for the round to change, so compare the coins and the markets minute by minute, not just later-is-better. Mid (8 min in) is the real END CALL. Nothing here changes a call or a trade. Information only.</div></div></details>')
 
 
@@ -12425,6 +12533,7 @@ def build_pattern_panel(asset_name):
 _TICKER_MONTHS = {m: i for i, m in enumerate(["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"], 1)}
 
 
+@_functools.lru_cache(maxsize=60000)
 def _window_close_utc(ticker):
     """Close time (UTC) of a 15-minute window from its ticker, e.g. KXXRP15M-26OCT041800-00
     = 18:00 ET on 2026-10-04. None if the ticker doesn't parse."""
@@ -12797,11 +12906,42 @@ def _keepwarm_loop():
         time.sleep(0.4 if 414 <= 900 - (time.time() % 900) <= 430 else 3)
 
 
+_prerender_tl = threading.local()
+_render_ctx = {}                       # variant key -> (time zone, chart choices, live-bar window, last time somebody asked for it)
+
+
+def _prerender_loop():
+    """Keeps the page copy for each variant somebody is watching fresh, rebuilt just before it would expire, so a page request is answered from a copy built a moment ago instead of waiting for a build (up to 4 variants)."""
+    time.sleep(25)
+    _prerender_tl.on = True
+    while True:
+        try:
+            now = time.time()
+            live = sorted([(c[3], k) for k, c in list(_render_ctx.items()) if now - c[3] < 25], reverse=True)[:4]
+            for k in [k for k, c in list(_render_ctx.items()) if now - c[3] >= 25]:
+                _render_ctx.pop(k, None)
+            for _t, k in live:
+                with _render_cache_lock:
+                    hit = _render_cache.get(k)
+                if hit and time.time() - hit[0] < 0.75:
+                    continue
+                tz, tfm, pw, _ts = _render_ctx[k]
+                _viewtz._local.tz = tz
+                _view_tf.m = tfm
+                _view_tf.pw = pw
+                render_html_cached(max_age=0.75)
+        except Exception as e:
+            print(f"[prerender] failed: {e!r}")
+        time.sleep(0.15)
+
+
 def render_html_cached(max_age=0.9):
     """The page for this viewer's variant (time zone + chart choices). Only ONE request builds a new copy at a time per variant; everyone else who arrives meanwhile
     is handed the copy that is a moment old, so 100 people refreshing together cost one build, not 100."""
     key = _render_key()
     now = time.time()
+    if not getattr(_prerender_tl, "on", False):                                   # remember this viewer's variant so the pre-renderer can keep it fresh
+        _render_ctx[key] = (_viewtz.get(), dict(getattr(_view_tf, "m", None) or {}), getattr(_view_tf, "pw", 10), now)
     with _render_cache_lock:
         hit = _render_cache.get(key)
         if hit and now - hit[0] < max_age:
@@ -12822,7 +12962,41 @@ def render_html_cached(max_age=0.9):
             hit = _render_cache.get(key)
         if hit and time.time() - hit[0] < max_age:
             return hit[1]
-        html = render_html()
+        _pf = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "bot_state", "profile_render.flag")
+        if os.path.exists(_pf):                                                    # research hook: profile ONE page build into bot_state/render_profile.txt
+            try:
+                os.remove(_pf)
+                import collections as _co
+                _cnt, _stop, _me = _co.Counter(), [False], threading.get_ident()
+
+                def _sampler():
+                    while not _stop[0]:
+                        _fr = __import__("sys")._current_frames().get(_me)
+                        _seen = set()
+                        while _fr is not None:
+                            _k = os.path.basename(_fr.f_code.co_filename) + ":" + _fr.f_code.co_name
+                            if _k not in _seen:
+                                _seen.add(_k); _cnt[_k] += 1
+                            _fr = _fr.f_back
+                        _cnt["__samples__"] += 1
+                        time.sleep(0.003)
+                threading.Thread(target=_sampler, daemon=True).start()
+                _t0 = time.time()
+                html = render_html()
+                _t1 = time.time() - _t0
+                for _i in range(4):
+                    render_html()
+                _stop[0] = True
+                _n = max(1, _cnt.pop("__samples__", 1))
+                with open(os.path.join(os.path.dirname(_pf), "render_profile.txt"), "w", encoding="utf-8") as _f:
+                    _f.write("first page build %.2f s; 5 builds took %.2f s; %d samples\n" % (_t1, time.time() - _t0, _n))
+                    for _k, _v in _cnt.most_common(90):
+                        _f.write("%5.1f%%  %s\n" % (_v * 100.0 / _n, _k))
+            except Exception as _pe:
+                print(f"[profile] failed: {_pe!r}")
+                html = render_html()
+        else:
+            html = render_html()
         _last_page_build[0] = time.time()
         with _render_cache_lock:
             _render_cache[key] = (time.time(), html)
@@ -13384,6 +13558,16 @@ def render_html():
             _msg = {"wait": "END CALL not locked yet - the flip meter starts at the 8th minute", "none": "no END CALL this round (too close to call) - nothing to flip",
                     "late": "no END CALL this round - nothing to flip", "locked": "flip meter waiting for the price model"}[_end_state]
             flip_meter_html = f'<div class="flip-wait">{_msg}</div>'
+            try:                                                                   # owner 2026-10-27: always show the flip percentage, whatever the call is
+                _tnw = tug_numbers(name, d)
+                _fpw = _flip_pre(name, _tnw["spot"], _tnw["line"], _tnw["left"]) if _tnw else None
+            except Exception:
+                _fpw = None
+            if _fpw:
+                _rw, _sdw, _sidw = _fpw
+                _cw = "down" if _rw >= 0.38 else ("warn" if _rw >= 0.28 else "ok")
+                flip_meter_html = (f'<div class="flip-wait flip-wait-live {_cw}"><b>FLIP RISK {_rw * 100:.0f}%</b> '
+                                   f'<span>price is {"UP" if _sidw == 1 else "DOWN"} of the line &middot; {"no call yet" if _end_state == "wait" else "no END CALL this round"}</span></div>')
         if flip_chance is not None:
             pct = flip_chance * 100
             flip_source = "price-vs-line model"
@@ -15043,6 +15227,7 @@ def main():
     threading.Thread(target=_local_tts_start, daemon=True, name="local-tts").start()
     threading.Thread(target=_local_tts_warm, daemon=True, name="local-tts-warm").start()
     threading.Thread(target=_keepwarm_loop, daemon=True, name="keep-warm").start()
+    threading.Thread(target=_prerender_loop, daemon=True, name="prerender").start()
     if _MTF_ON:
         threading.Thread(target=_mtf_loop, daemon=True, name="mtf-chart").start()
     threading.Thread(target=_win_flow_loop, daemon=True, name="last-windows-flow").start()
