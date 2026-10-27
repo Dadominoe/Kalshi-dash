@@ -806,7 +806,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-28-hourwarn103"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-28-calmblink104"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -5138,10 +5138,10 @@ details.pat > summary { cursor:pointer; }
 .mk { display:inline-flex; align-items:center; gap:8px; font-size:15px; font-weight:800; padding:6px 14px; border-radius:12px; border:2px solid; letter-spacing:0.3px; white-space:nowrap; color:#fff; }
 .mk::before { content:''; width:12px; height:12px; border-radius:50%; background:rgba(255,255,255,.85); box-shadow:0 0 0 4px rgba(255,255,255,.2); flex:none; }
 .mk small { font-weight:600; opacity:0.85; }
-.hr-warn { margin-top:6px; padding:5px 9px; border-radius:8px; border:2px solid #f85149; background:rgba(218,54,51,.22); color:#fff; font-weight:800; font-size:13px; animation:hrblink 1s steps(2,start) infinite; }
+.hr-warn { margin-top:6px; padding:5px 9px; border-radius:8px; border:2px solid #f85149; background:rgba(218,54,51,.22); color:#fff; font-weight:800; font-size:13px; animation:hrblink 3s ease-in-out infinite; }
 .hr-warn-ic { color:#ffd33d; font-size:16px; }
 .hr-ok { margin-top:6px; padding:4px 9px; border-radius:8px; font-weight:800; font-size:13px; color:#fff; } .hr-good { border:2px solid #d29922; background:rgba(210,153,34,.18); } .hr-great { border:2px solid #3fb950; background:rgba(35,134,54,.28); }
-@keyframes hrblink { 50% { opacity:.25; } }
+@keyframes hrblink { 50% { opacity:.72; } }                    /* a slow, gentle pulse (owner, 2026-10-28: it was blinking on/off every second - too much) */
 .mk-drop { position:relative; display:inline-block; }
 .mk-drop > summary { cursor:pointer; }
 .mk-now { font-size:13px; color:#a6b0bb; margin-left:8px; white-space:nowrap; }

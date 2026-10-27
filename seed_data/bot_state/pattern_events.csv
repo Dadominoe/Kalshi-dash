@@ -1,33 +1,4 @@
 ts_utc,event,asset,tf,name,bias,status,family,price,atr,result,move_atr,event_id
-2026-10-26T03:21:51+00:00,complete,BTC,1m,price in PREMIUM zone (73% of the swing range),neutral,formed,structure,79620.4002556334,60.48285714285885,,,1792984911078-1107
-2026-10-26T03:21:56+00:00,complete,XRP,1m,retesting a bullish order block 1.2799-1.2814,bullish,formed,smc,1.2805934499024116,0.0013785714285713877,,,1792984916380-1108
-2026-10-26T03:22:01+00:00,complete,XRP,1m,price at a bearish fair value gap 1.281-1.2812 (4 candles old),bearish,formed,smc,1.2805649033165962,0.0013785714285713877,,,1792984921601-1109
-2026-10-26T03:22:01+00:00,failed,XRP,1m,long lower shadow (buyers rejected the low),bullish,forming,candle,1.2805649033165962,0.0013785714285713877,,,1792984921601-1110
-2026-10-26T03:22:01+00:00,complete,XRP,5m,pullback at the 78.6% Fibonacci level of the last up-leg,neutral,formed,structure,1.2805649033165962,0.003614285714285697,,,1792984921603-1111
-2026-10-26T03:22:01+00:00,failed,XRP,5m,long-legged doji,neutral,forming,candle,1.2805649033165962,0.003614285714285697,,,1792984921603-1112
-2026-10-26T03:22:01+00:00,result,BTC,1m,tweezer top,bearish,formed,candle,79628.19447179098,57.11857142857168,flat,-0.031,1792984620000-1054
-2026-10-26T03:22:17+00:00,failed,XRP,1m,"LIQUIDITY SWEEP of the lows, closed back above (spring / stop run)",bullish,forming,smc,1.2805153390489832,0.0012785714285713829,,,1792984937766-1113
-2026-10-26T03:22:17+00:00,result,XRP,1m,retesting a bullish order block 1.2799-1.2814,bullish,formed,smc,1.2805153390489832,0.0013999999999999727,flat,-0.508,1792984636046-1055
-2026-10-26T03:22:23+00:00,failed,XRP,5m,inverted hammer,bullish,forming,candle,1.2806665815420568,0.003614285714285697,,,1792984943027-1114
-2026-10-26T03:22:44+00:00,failed,XRP,1m,3 falling candles in a row,bearish,forming,candle,1.2813403164775667,0.0012785714285713829,,,1792984964079-1115
-2026-10-26T03:22:54+00:00,failed,XRP,1m,spinning top,neutral,forming,candle,1.2813988746912004,0.0012785714285713829,,,1792984974755-1116
-2026-10-26T03:22:54+00:00,result,BTC,1m,price at a bullish fair value gap 79488.8-79568 (16 candles old),bullish,formed,smc,79657.79828844214,57.11857142857168,hit,1.964,1792984673087-1062
-2026-10-26T03:23:00+00:00,result,BTC,1m,"LIQUIDITY SWEEP of the highs, closed back below (upthrust / stop run)",bearish,formed,smc,79666.67661492259,62.321428571429614,miss,-1.564,1792984680000-1069
-2026-10-26T03:23:00+00:00,result,BTC,1m,three inside down,bearish,formed,candle,79666.67661492259,62.321428571429614,miss,-1.564,1792984680000-1070
-2026-10-26T03:23:05+00:00,failed,BTC,5m,white marubozu (all buyers),bullish,forming,candle,79666.25312353641,146.66999999999825,,,1792984985644-1117
-2026-10-26T03:23:05+00:00,failed,XRP,1m,creating a support ledge at 1.2798 (3 touches),neutral,forming,chart,1.2814945368938055,0.0012785714285713829,,,1792984985780-1118
-2026-10-26T03:23:00+00:00,complete,BTC,1m,rising window (gap up),bullish,formed,candle,79676.2405683766,58.24142857143098,,,1792984980000-1119
-2026-10-26T03:23:10+00:00,complete,BTC,15m,bounce at the 38.2% Fibonacci level of the last down-leg,neutral,formed,structure,79676.2405683766,322.95142857142804,,,1792984990912-1120
-2026-10-26T03:23:10+00:00,failed,BTC,15m,long-legged doji,neutral,forming,candle,79676.2405683766,322.95142857142804,,,1792984990912-1121
-2026-10-26T03:23:00+00:00,complete,XRP,1m,rising window (gap up),bullish,formed,candle,1.2818980758469773,0.001242857142857117,,,1792984980000-1122
-2026-10-26T03:23:26+00:00,result,XRP,1m,retesting a bullish order block 1.2799-1.2814,bullish,formed,smc,1.2814067876703747,0.0015428571428571316,hit,0.640,1792984704609-1073
-2026-10-26T03:23:42+00:00,failed,BTC,1m,gravestone doji,bearish,forming,candle,79656.22695378291,58.24142857143098,,,1792985022259-1123
-2026-10-26T03:23:42+00:00,failed,BTC,1m,shooting star,bearish,forming,candle,79656.22695378291,58.24142857143098,,,1792985022259-1124
-2026-10-26T03:23:47+00:00,failed,XRP,1m,shooting star,bearish,forming,candle,1.2817199886307147,0.001242857142857117,,,1792985027467-1125
-2026-10-26T03:24:03+00:00,result,BTC,1m,gravestone doji,bearish,formed,candle,79654.3985495234,59.7650000000015,miss,-1.974,1792984740000-1077
-2026-10-26T03:24:03+00:00,result,XRP,1m,bullish harami cross,bullish,formed,candle,1.2813,0.0014857142857142808,hit,0.586,1792984740000-1083
-2026-10-26T03:24:00+00:00,complete,BTC,1m,shooting star,bearish,formed,candle,79639.02261076051,58.19714285714456,,,1792985040000-1126
-2026-10-26T03:24:23+00:00,failed,XRP,1m,creating a support ledge at 1.2798 (3 touches),neutral,forming,chart,1.2811467501820484,0.0012428571428571328,,,1792985063998-1127
 2026-10-26T03:24:34+00:00,result,XRP,1m,price at a bearish fair value gap 1.281-1.2812 (2 candles old),bearish,formed,smc,1.281487512329012,0.0014857142857142808,flat,-0.441,1792984773762-1086
 2026-10-26T03:24:44+00:00,complete,BTC,1m,bounce at the 78.6% Fibonacci level of the last down-leg,neutral,formed,structure,79607.43047014302,58.19714285714456,,,1792985084938-1128
 2026-10-26T03:24:55+00:00,failed,XRP,1m,spinning top,neutral,forming,candle,1.281304512545766,0.0012428571428571328,,,1792985095490-1129
@@ -29999,3 +29970,32 @@ ts_utc,event,asset,tf,name,bias,status,family,price,atr,result,move_atr,event_id
 2026-10-27T20:11:00+00:00,complete,XRP,1m,spinning top,neutral,formed,candle,1.3231984944239885,0.0013142857142856965,,,1793131860000-41
 2026-10-27T20:11:19+00:00,complete,BTC,15m,bounce at the 78.6% Fibonacci level of the last down-leg,neutral,formed,structure,80653.86788413634,155.8321428571414,,,1793131879666-42
 2026-10-27T20:11:24+00:00,result,BTC,1m,up-channel - BROKE DOWN,bullish,confirmed,chart,80653.96252956554,33.647857142855564,flat,-0.058,1793131581951-441
+2026-10-27T20:11:46+00:00,result,BTC,1m,retesting a bearish order block 80675.1-80714.3,bearish,formed,smc,80682.50174306108,33.647857142855564,flat,-0.302,1793131603573-444
+2026-10-27T20:11:51+00:00,complete,BTC,1m,retesting a bearish order block 80675.1-80714.3,bearish,formed,smc,80682.61565217392,36.229999999999045,,,1793131911308-43
+2026-10-27T20:12:23+00:00,failed,XRP,1m,up-channel forming,bullish,forming,chart,1.3233499813479273,0.0012714285714285583,,,1793131943874-1
+2026-10-27T20:12:34+00:00,complete,BTC,1m,price in DISCOUNT zone (22% of the swing range),neutral,formed,structure,80658.599546617,36.16857142857043,,,1793131954669-2
+2026-10-27T20:12:34+00:00,complete,XRP,5m,pullback at the 38.2% Fibonacci level of the last up-leg,neutral,formed,structure,1.3231887053557037,0.0023428571428571543,,,1793131954785-3
+2026-10-27T20:12:34+00:00,result,BTC,1m,retesting a bearish order block 80675.1-80714.3,bearish,formed,smc,80658.599546617,35.97428571428463,flat,0.282,1793131652459-4
+2026-10-27T20:12:40+00:00,failed,XRP,1m,long upper shadow (sellers rejected the high),bearish,forming,candle,1.3229961822499086,0.0012714285714285583,,,1793131960086-4
+2026-10-27T20:12:45+00:00,failed,BTC,1m,creating a resistance ledge at 80719.4 (3 touches),neutral,forming,chart,80657.79917562623,36.16857142857043,,,1793131965184-5
+2026-10-27T20:12:45+00:00,failed,BTC,5m,hanging man,bearish,forming,candle,80657.79917562623,76.89857142857156,,,1793131965196-6
+2026-10-27T20:12:45+00:00,result,BTC,5m,triple bottom CONFIRMED (neckline broke),bullish,confirmed,chart,80657.79917562623,75.42142857142815,flat,-0.194,1793131663077-5
+2026-10-27T20:13:00+00:00,complete,BTC,5m,triple bottom CONFIRMED (neckline broke),bullish,confirmed,chart,80676.40004533745,76.89857142857156,,,1793131980948-7
+2026-10-27T20:13:01+00:00,result,XRP,1m,bullish engulfing,bullish,formed,candle,1.3229900000275001,0.0012285714285713884,flat,0.317,1793131680000-10
+2026-10-27T20:13:11+00:00,complete,BTC,1m,retesting a bearish order block 80675.1-80714.3,bearish,formed,smc,80676.4968700087,36.16857142857043,,,1793131991526-8
+2026-10-27T20:13:00+00:00,complete,BTC,1m,long lower shadow (buyers rejected the low),bullish,formed,candle,80666.40000049496,35.38499999999788,,,1793131980000-9
+2026-10-27T20:13:00+00:00,complete,BTC,1m,three outside up,bullish,formed,candle,80666.40000049496,35.38499999999788,,,1793131980000-10
+2026-10-27T20:13:27+00:00,complete,BTC,1m,bounce at the 38.2% Fibonacci level of the last down-leg,neutral,formed,structure,80666.30333841177,35.38499999999788,,,1793132007288-11
+2026-10-27T20:13:32+00:00,failed,BTC,5m,doji (indecision),neutral,forming,candle,80666.2042721519,76.89857142857156,,,1793132012435-12
+2026-10-27T20:13:43+00:00,failed,XRP,5m,long-legged doji,neutral,forming,candle,1.3229699999939866,0.0023428571428571543,,,1793132023124-13
+2026-10-27T20:13:53+00:00,complete,BTC,1m,price in DISCOUNT zone (31% of the swing range),neutral,formed,structure,80660.1704631494,35.38499999999788,,,1793132033333-14
+2026-10-27T20:14:04+00:00,result,BTC,1m,tweezer top,bearish,formed,candle,80658.60014380215,37.127142857141735,hit,0.695,1793131740000-21
+2026-10-27T20:14:04+00:00,result,XRP,1m,three outside up,bullish,formed,candle,1.322430000003767,0.0012928571428571115,miss,-0.807,1793131740000-22
+2026-10-27T20:14:14+00:00,complete,BTC,1m,downtrend structure (lower highs + lower lows),bearish,formed,structure,80669.40002982918,35.32571428571308,,,1793132054363-15
+2026-10-27T20:14:00+00:00,complete,BTC,1m,bearish engulfing,bearish,formed,candle,80669.40002982918,35.32571428571308,,,1793132040000-16
+2026-10-27T20:14:00+00:00,complete,BTC,1m,tweezer top,bearish,formed,candle,80669.40002982918,35.32571428571308,,,1793132040000-17
+2026-10-27T20:14:00+00:00,complete,BTC,1m,inside bar (compression),neutral,formed,candle,80669.40002982918,35.32571428571308,,,1793132040000-18
+2026-10-27T20:14:00+00:00,complete,XRP,1m,three outside down,bearish,formed,candle,1.322430000003767,0.0010142857142856978,,,1793132040000-19
+2026-10-27T20:14:24+00:00,failed,BTC,1m,triple top forming,bearish,forming,chart,80664.46884861452,35.32571428571308,,,1793132064668-20
+2026-10-27T20:14:24+00:00,complete,XRP,1m,price in PREMIUM zone (67% of the swing range),neutral,formed,structure,1.3225281896884133,0.0010142857142856978,,,1793132064753-21
+2026-10-27T20:14:24+00:00,result,BTC,1m,retesting a bearish order block 80675.1-80714.3,bearish,formed,smc,80664.46884861452,37.127142857141735,flat,0.413,1793131763002-24
