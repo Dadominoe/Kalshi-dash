@@ -806,7 +806,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-28-calmblink104"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-28-hourplay105"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -6657,7 +6657,7 @@ try {
 } catch (e) {}
 let narratorOn = narCoin.BTC || narCoin.XRP;                       // true when at least one coin is on
 const narQueue = [], narSeen = {}, narState = {};
-let narBusyUntil = 0, audioUnlocked = false, clipMap = {}, clipLast = {}, ttsReady = false, ttsAudio = null;
+let narNow = null, narBusyUntil = 0, audioUnlocked = false, clipMap = {}, clipLast = {}, ttsReady = false, ttsAudio = null;
 let compVoiceOn = false;                                              // the plain computer voice for lines that have no recording - OFF by default (those lines are then silent)
 try { compVoiceOn = localStorage.getItem('compVoice') === '1'; } catch (e) {}
 function compVoiceSet(on) { compVoiceOn = !!on; try { localStorage.setItem('compVoice', on ? '1' : '0'); } catch (e) {} }
@@ -6917,13 +6917,16 @@ function narPlayLocal(text, key, ttl, clip, file, urgent, rec) {
   const now = Date.now();
   if (key && narSeen[key] && now - narSeen[key] < (ttl || 20000)) return;
   if (key) narSeen[key] = now;
-  if (urgent) {                                                       // the flip alerts: stop whatever is talking, throw away everything waiting, and say it NOW
-    narQueue.length = 0;
+  let redo = null;
+  if (urgent) {                                                       // the flip alerts: stop whatever is talking, throw away everything waiting (except the last-hour alerts, which are kept), and say it NOW
+    try { if (narNow && narNow.keep && ttsAudio && !ttsAudio.ended && !ttsAudio.paused) redo = narNow; } catch (e) {}          // an important line that is cut off in the middle is played again right after
+    for (let i = narQueue.length - 1; i >= 0; i--) { if (!narQueue[i].keep) narQueue.splice(i, 1); }
     try { window.speechSynthesis.cancel(); } catch (e) {}
     try { if (ttsAudio) { ttsAudio.onended = null; ttsAudio.onerror = null; ttsAudio.pause(); } } catch (e) {}
     narBusyUntil = 0;
   }
-  narQueue.push({text: text, at: now, clip: clip || null, file: file || null, rec: rec || null});
+  narQueue.push({text: text, at: now, clip: clip || null, file: file || null, rec: rec || null, keep: /^hour_(danger|good|great)$/.test(clip || '')});          // the last-hour alerts are never thrown away for being slow
+  if (redo) narQueue.push({text: redo.text, at: Date.now(), clip: redo.clip, file: redo.file, rec: redo.rec, keep: true});
   narFlush();
 }
 function narFlush() {
@@ -6932,9 +6935,10 @@ function narFlush() {
   try { speaking = window.speechSynthesis.speaking || (ttsAudio && !ttsAudio.ended && !ttsAudio.paused); } catch (e) {}
   const now = Date.now();
   if (speaking || now < narBusyUntil) { setTimeout(narFlush, 700); return; }
-  while (narQueue.length && now - narQueue[0].at > 25000) narQueue.shift();       // anything older than 25 s is stale - skip it
+  while (narQueue.length && now - narQueue[0].at > (narQueue[0].keep ? 120000 : 25000)) narQueue.shift();       // anything older than 25 s is stale - skip it (the last-hour alerts wait up to 2 minutes)
   const it = narQueue.shift();
   if (!it) return;
+  narNow = it;
   const cm = /^(BTC|XRP)\b/.exec(it.text || '');
   const spoken = (it.text || '').replace(/^BTC\b/, 'Bitcoin').replace(/^XRP\b/, 'X R P');
   const vc = cm ? voiceBy[cm[1]] : voiceSet;                         // this coin's own narrator voice
@@ -7083,7 +7087,7 @@ function flipLadder(name, key, r, call, sd) {
       if (narCoin[name]) narSay(name + '. Scalp opportunity. Possible flip. ' + Math.round(r * 100) + ' percent.', 'early:' + key, 600000, 'flip_warn', null, true); else speakUrgent(name + '. Scalp opportunity. Possible flip. ' + Math.round(r * 100) + ' percent.');
     }
 }
-const hourTier = {};
+const hourTier = {}, hourSaid = {};
 const mktSeen = {};
 function ctbNews(coin, cls, html, key) {                                  // a card that goes to the front of the line on the call banner (shown once)
   const o = CTB[coin];
@@ -7155,6 +7159,10 @@ function checkHourWarn() {
     if (!name || !tier) return;
     const was = hourTier[name];
     hourTier[name] = tier;
+    if (tier === 'danger') {                                                  // a DANGEROUS last hour is said once at the start of EVERY window while it lasts (owner, 2026-10-27) - once per graded call, so a page opened mid-round says it once too
+      if (hourSaid[name] !== key) { hourSaid[name] = key; narSay(name + '. Danger. The calls have been under seventy five percent in the last hour.', 'hd:' + key, 600000, 'hour_danger'); }
+      return;
+    }
     if (was === tier || (was === undefined && tier !== 'danger')) return;      // no change: say nothing; a DANGEROUS hour is said even on the first look (owner, 2026-10-28), once per call (shared voice feed = once on every screen)
     if (tier === 'danger') narSay(name + '. Danger. The calls have been under seventy five percent in the last hour.', 'hd:' + key, 600000, 'hour_danger');
     else if (tier === 'good' && was === 'danger') narSay(name + '. Back on track. The calls are healthy again.', 'hg:' + key, 600000, 'hour_good');
