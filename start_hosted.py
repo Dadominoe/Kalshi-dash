@@ -11,7 +11,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 os.chdir(HERE)
 os.environ.setdefault("PYTHONUNBUFFERED", "1")
 
-SEED_FILES = {"pvl_backtest.json", "cpi_history_stats.json", "line_behavior_stats.json", "market_open_stats.json", "cpi_cache.json"}    # shipped with the code; refreshed on every update
+SEED_FILES = {"pvl_backtest.json", "cpi_history_stats.json", "line_behavior_stats.json", "market_open_stats.json", "cpi_cache.json", "flip_risk_table.json", "facts_bank.json", "facts_wiki.json", "facts_lore.json"}    # shipped with the code; refreshed on every update
 
 vol = os.environ.get("RAILWAY_VOLUME_MOUNT_PATH") or os.environ.get("DATA_VOLUME")
 if vol:
