@@ -806,7 +806,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-28-watchdog112"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-28-narauto113"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -6649,12 +6649,7 @@ function showWhaleCrossing(assetName, side, usd, venue) {
 }
 
 // ---- AI narrator (optional, information only) -------------------------------------------------------------------------------------------------------------------
-let narCoin = {BTC: false, XRP: false};                          // each coin's narrator is switched on / off by its own button
-try {
-  const nc = JSON.parse(localStorage.getItem('narCoin') || 'null');
-  if (nc) narCoin = {BTC: !!nc.BTC, XRP: !!nc.XRP};
-  else if (localStorage.getItem('narOn') === '1') narCoin = {BTC: true, XRP: true};
-} catch (e) {}
+let narCoin = {BTC: true, XRP: true};                            // each coin's narrator has its own button; BOTH come ON by themselves after every page load / reload (owner, 2026-10-28)
 let narratorOn = narCoin.BTC || narCoin.XRP;                       // true when at least one coin is on
 const narQueue = [], narSeen = {}, narState = {};
 let narNow = null, narBusyUntil = 0, audioUnlocked = false, clipMap = {}, clipLast = {}, ttsReady = false, ttsAudio = null;
@@ -6664,8 +6659,7 @@ function compVoiceSet(on) { compVoiceOn = !!on; try { localStorage.setItem('comp
 let oldSoundsOn = false;
 try { oldSoundsOn = localStorage.getItem('oldSounds') === '1'; } catch (e) {}
 function oldSoundsSet(on) { oldSoundsOn = !!on; try { localStorage.setItem('oldSounds', on ? '1' : '0'); } catch (e) {} }
-let narVol = 1;
-try { const nv = parseFloat(localStorage.getItem('narVol')); if (!isNaN(nv)) narVol = Math.max(0, Math.min(1, nv)); } catch (e) {}
+let narVol = 0.2;                                                    // the narrator volume starts at 20% after every page load / reload (owner, 2026-10-28); the slider changes it until the next reload
 let sliderHold = 0;
 document.addEventListener('pointerdown', e => { if (e.target && e.target.classList && e.target.classList.contains('nar-vol')) sliderHold = Infinity; }, true);
 ['pointerup', 'pointercancel'].forEach(ev => document.addEventListener(ev, () => { if (sliderHold === Infinity) sliderHold = Date.now() + 400; }, true));
@@ -8124,9 +8118,11 @@ async function refreshInner() {
 // WATCHDOG (owner, 2026-10-28: 'if it makes an error and I am gone, reload it for me'): if the page has not managed a fresh update for a while (a redeploy, a bad reply, a stuck script), it checks the server is back
 // and then reloads itself - never while the server is still down (a reload then would only show the browser's error page), and at most once every 2 minutes.
 let lastRefreshOk = Date.now();
+const jsErrs = [];                                                          // a storm of script errors (one every 2 seconds or faster for a minute) also means the page is broken: same rule - reload once the server answers
+['error', 'unhandledrejection'].forEach(ev => window.addEventListener(ev, () => { const t = Date.now(); jsErrs.push(t); while (jsErrs.length && t - jsErrs[0] > 60000) jsErrs.shift(); }));
 setInterval(() => {
   const stale = Date.now() - lastRefreshOk, limit = document.hidden ? 150000 : 45000;
-  if (stale < limit) return;
+  if (stale < limit && jsErrs.filter(t => Date.now() - t < 60000).length < 30) return;
   let last = 0;
   try { last = +sessionStorage.getItem('wdReload') || 0; } catch (e) {}
   if (Date.now() - last < 120000) return;
@@ -8147,7 +8143,9 @@ function nextRefreshMs() {
 }
 (function refreshLoop() { refresh(); setTimeout(refreshLoop, nextRefreshMs()); })();
 window.onload = function() {
-  updateAssetToggleButtons(); updateBuildingToggleButton(); updateVoiceToggleButton(); syncSweepButtons(); syncFitButton(); syncSoundButton();
+  updateAssetToggleButtons(); updateBuildingToggleButton(); updateVoiceToggleButton(); syncSweepButtons(); syncFitButton();
+  if (narratorOn) soundEnabled = true;                                   // the narrators come on by themselves, so the SOUND button shows ON too
+  syncSoundButton();
   let wantedSound = false;
   try { wantedSound = localStorage.getItem('soundWanted') === '1'; } catch (e) {}
   if (wantedSound && !soundEnabled) {
