@@ -806,7 +806,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-28-mkts111"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-28-watchdog112"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -8007,12 +8007,13 @@ async function refresh() {
   try { await refreshInner(); } finally { refreshBusySince = 0; }
 }
 async function refreshInner() {
-  if (Date.now() < sliderHold) return;                   // the narrator volume slider is being dragged: do not rebuild it under the finger
+  if (Date.now() < sliderHold) { lastRefreshOk = Date.now(); return; }                   // the narrator volume slider is being dragged: do not rebuild it under the finger
   const activeNow = document.activeElement;
   const typingNow = activeNow && activeNow.tagName === 'INPUT' &&
       LIVE_SETTINGS_INPUT_PREFIX.test(activeNow.id || '') &&
       (Date.now() - lastInputActivity) < 15000;
   if (typingNow) {
+    lastRefreshOk = Date.now();                          // a pause for typing is not a fault
     return;
   }
   const mySeq = ++refreshSeq;
@@ -8118,7 +8119,23 @@ async function refreshInner() {
   checkSweepStars();
   checkSweepAlerts();
   checkPatternAlerts();
+  lastRefreshOk = Date.now();
 }
+// WATCHDOG (owner, 2026-10-28: 'if it makes an error and I am gone, reload it for me'): if the page has not managed a fresh update for a while (a redeploy, a bad reply, a stuck script), it checks the server is back
+// and then reloads itself - never while the server is still down (a reload then would only show the browser's error page), and at most once every 2 minutes.
+let lastRefreshOk = Date.now();
+setInterval(() => {
+  const stale = Date.now() - lastRefreshOk, limit = document.hidden ? 150000 : 45000;
+  if (stale < limit) return;
+  let last = 0;
+  try { last = +sessionStorage.getItem('wdReload') || 0; } catch (e) {}
+  if (Date.now() - last < 120000) return;
+  fetch('/healthz', {cache: 'no-store'}).then(r => r.ok ? r.text() : Promise.reject(new Error('down'))).then(t => {
+    if (!/^ok /.test(t)) return;
+    try { sessionStorage.setItem('wdReload', String(Date.now())); } catch (e) {}
+    location.reload();
+  }).catch(() => {});
+}, 10000);
 // how often the page asks for fresh data. This PC and the home network keep 1 second. The public website (it pays for every byte it sends) asks every 3 seconds, and every 1 second only in the LAST MINUTE of a round
 // when price is close to the line (owner, 2026-10-28). The flip meter has its own fast lane (/flip_now, about twice a second) and keeps running the whole time either way.
 const LOCAL_PAGE = ['localhost', '127.', '192.168.', '10.'].some(x => location.hostname.indexOf(x) === 0) || /^172[.](1[6-9]|2[0-9]|3[01])[.]/.test(location.hostname);
