@@ -806,7 +806,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-28-fed110"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-28-mkts111"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -9720,6 +9720,38 @@ def _ctb_payload(name, d, tn, marks, res, allrecs=None):
             cards.append(ev_card)
     except Exception:
         pass
+    try:                                                              # WHICH MARKETS ARE OPEN right now, and WHAT KIND OF MARKET this coin is in (owner, 2026-10-28: 'throw into the facts what market we are in, what markets are open')
+        from src import market_hours as _mh
+        _now_ts = time.time()
+        _short = {"Bitcoin / XRP spot trading (Coinbase, Kraken ...)": "Crypto", "New York pre-market": "NY pre-market", "New York stock market (NYSE / Nasdaq)": "NYSE", "New York after-hours": "NY after-hours",
+                  "CME futures (Bitcoin, stock indexes)": "CME futures", "London stock exchange": "London", "Frankfurt (Xetra)": "Frankfurt", "Tokyo stock exchange": "Tokyo",
+                  "Hong Kong stock exchange": "Hong Kong", "Shanghai stock exchange": "Shanghai", "Sydney (ASX)": "Sydney"}
+        _mr = _mh.market_rows(_now_ts)
+        _open = [_short.get(r_["name"], r_["name"]) for r_ in _mr if r_["state"] == "OPEN"]
+        _shut = [_short.get(r_["name"], r_["name"]) for r_ in _mr if r_["state"] != "OPEN"]
+        _nx = sorted([r_ for r_ in _mr if r_["state"] != "OPEN" and r_["next_ts"]], key=lambda r_: r_["next_ts"])[:1]
+        _nxt_txt = ""
+        if _nx:
+            _mins = int((_nx[0]["next_ts"] - _now_ts) // 60)
+            _nxt_txt = f'{_short.get(_nx[0]["name"], _nx[0]["name"])} opens in {_mins // 60}h {_mins % 60:02d}m ({_viewtz.t12(dt.datetime.fromtimestamp(_nx[0]["next_ts"], _viewtz.get()))})'
+        info.insert(min(len(info), 1), {"key": f"mkopen|{int(_now_ts // 3600)}", "cls": "info", "pct": 1, "html":
+                    '<div class="ctb-hd"><span class="ctb-which">MARKETS OPEN NOW</span></div>'
+                    f'<div class="ctb-call" style="font-size:30px;white-space:normal;line-height:1.1">{len(_open)} of {len(_mr)}<small>markets are open</small></div>'
+                    f'<div class="ctb-bar"><i style="width:{len(_open) / max(1, len(_mr)) * 100:.0f}%;background:var(--ctb-gold)"></i></div>'
+                    + rows([("Open", escape(", ".join(_open)), "up"), ("Closed", escape(", ".join(_shut) or "none"), "t"), ("Next", escape(_nxt_txt or "-"), "warn")])})
+        _mt_ = market_trend(name)
+        if _mt_:
+            _lab = _mt_["label"]
+            _cl_m = "up" if _lab == "BULL" else ("down" if _lab == "BEAR" else "warn")
+            _pc = lambda v: "--" if v is None else f"{v:+.2f}%"
+            _cc = lambda v: "t" if v is None else ("up" if v > 0 else "down")
+            info.insert(min(len(info), 5), {"key": f"mkstate|{name}|{_lab}|{int(_now_ts // 7200)}", "cls": _cl_m, "pct": 1, "html":
+                        f'<div class="ctb-hd"><span><span class="ctb-coin">{name}</span> <span class="ctb-which">THE MARKET WE ARE IN</span></span></div>'
+                        f'<div class="ctb-call" style="font-size:30px;white-space:normal;line-height:1.1">{_lab} MARKET<small>judged over days, not hours</small></div>'
+                        f'<div class="ctb-bar"><i style="width:100%;background:var(--ctb-{_cl_m})"></i></div>'
+                        + rows([("Last 24 hours", _pc(_mt_.get("r24")), _cc(_mt_.get("r24"))), ("Last 3 days", _pc(_mt_.get("r72")), _cc(_mt_.get("r72"))), ("Last 7 days", _pc(_mt_.get("r168")), _cc(_mt_.get("r168")))])})
+    except Exception as _mke:
+        print(f"[call banner] market cards failed: {_mke!r}")
     try:                                                              # FLOW vs PRICE: do the money and the price point the same way (rolled by about every 12 minutes)
         if tn and tn.get("flow_up") is not None and tn.get("spot") and tn.get("line"):
             fu = tn["flow_up"] >= 0.5
