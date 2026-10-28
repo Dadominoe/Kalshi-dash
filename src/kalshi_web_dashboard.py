@@ -806,11 +806,12 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-28-board114"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-28-instant115"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
 _follow_wake = threading.Event()                                              # set when this copy is waiting for the shared END CALL: the follower fetches it NOW instead of at its next turn
+_sync_wake = threading.Event()                                                # set the moment a new END CALL is locked: the sync loop sends it to the website now
 _sync_last = [0.0]                                                            # when the owner's bot last sent its state (website copy)
 MIRROR_FRESH_SECONDS = 180                                                     # the owner's bot counts as "online" if it sent something within this long
 _FOLLOW_CONFIG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data_cache", "follow_config.json")
@@ -8092,6 +8093,7 @@ async function refreshInner() {
       }
     }
   }
+  endApply();
   renderDock();
   reapplySavedChartTimeframes();
   applyMtf();
@@ -8159,6 +8161,44 @@ function nextRefreshMs() {
   return fast ? 1000 : 3000;
 }
 (function refreshLoop() { refresh(); setTimeout(refreshLoop, nextRefreshMs()); })();
+// ---- INSTANT lane (owner, 2026-10-28: 'the call has to be instant, no delay on the call or the flip meter'): the END CALL box and the flip meter come from /end_now, worked out from the live price,
+// asked 4 times a second here and 2.5 times a second on the website; only pieces that changed are sent. They are put back after every full page refresh, so the slower refresh never shows older numbers.
+const ENDF = {};
+let endBusy = false;
+function endApply() {
+  const now = Date.now();
+  Object.keys(ENDF).forEach(n => {
+    const f = ENDF[n];
+    if (!f || f.e === undefined || now - f.t > 4000) return;
+    const card = document.querySelector('.card[data-asset="' + n + '"]');
+    if (!card) return;
+    let changed = false;
+    [['.tug > .tug-end', f.e], ['.flip-core', f.g]].forEach(p => {
+      const cur = card.querySelector(p[0]);
+      if (!cur || cur.getAttribute('data-fh') === String(f.h)) return;
+      const tmp = document.createElement('div'); tmp.innerHTML = p[1];
+      const nw = tmp.firstElementChild; if (!nw) return;
+      nw.setAttribute('data-fh', String(f.h)); cur.replaceWith(nw); changed = true;
+    });
+    if (changed && typeof flipTopSync === 'function') flipTopSync();
+  });
+}
+function endPoll() {
+  if (endBusy) return;
+  endBusy = true;
+  const hs = Object.keys(ENDF).map(n => n + ':' + ENDF[n].h).join(',');
+  fetch('/end_now?h=' + encodeURIComponent(hs), {cache: 'no-store'}).then(r => r.json()).then(j => {
+    const now = Date.now(); let lockNew = false;
+    Object.keys(j || {}).forEach(n => {
+      const v = j[n], o = ENDF[n];
+      if (v.e !== undefined) { if (o && o.k !== v.k) lockNew = true; ENDF[n] = {e: v.e, g: v.g, h: v.h, k: v.k, t: now}; }
+      else if (o) { if (o.k !== v.k) lockNew = true; o.k = v.k; o.t = now; }
+    });
+    endApply();
+    if (lockNew) refresh();                                  // a call just locked: pull the full page now so the call cards follow at once
+  }).catch(() => {}).then(() => { endBusy = false; });
+}
+setInterval(endPoll, LOCAL_PAGE ? 250 : 400);
 // ---- the all-coins 15-minute board: a small rolling banner between the alert window and the call banner. It is built once per slot and filled from /alts (its own tiny feed, not the page refresh).
 const ALT = {data: null, els: {}};
 function altBuild() {
@@ -10366,12 +10406,16 @@ def _apply_sync(pl, mode="replace"):
                 _end_hist.update(merged)
             _save_end_hist()
     lks = pl.get("end_locks")
+    locks_changed = False
     if isinstance(lks, dict) and lks:
         with _end_lock_mu:
             for k, v in lks.items():
                 if isinstance(v, dict) and v.get("side") in ("YES", "NO", "NONE", "LATE") and (mode != "fill" or k not in _end_locks):
-                    _end_locks[k] = v
-            _save_end_locks()
+                    if _end_locks.get(k) != v:
+                        _end_locks[k] = v
+                        locks_changed = True
+            if locks_changed:
+                _save_end_locks()
     rr = pl.get("round_results")
     if isinstance(rr, dict):
         _lc_results.update({k: v for k, v in rr.items() if v in ("YES", "NO")})
@@ -10381,6 +10425,13 @@ def _apply_sync(pl, mode="replace"):
             _history.clear()
             _history.update({k: v for k, v in hist.items() if isinstance(v, list)})
         _save_history()
+    if locks_changed or "end_hist" in pl:
+        try:
+            with _render_cache_lock:
+                _render_cache.clear()
+            _END_NOW["t"] = 0.0
+        except NameError:
+            pass
     if mode != "fill":
         _sync_last[0] = time.time()
 
@@ -10394,6 +10445,7 @@ def _sync_loop():
     time.sleep(40)
     n = 0
     last_ok = None
+    light = False
     while True:
         try:
             with open(_SYNC_CONFIG, "r", encoding="utf-8") as f:
@@ -10401,18 +10453,23 @@ def _sync_loop():
             url = cfg["url"].rstrip("/") + "/sync_state"
             import base64 as _b64
             auth = "Basic " + _b64.b64encode(("sync:" + cfg["password"]).encode("utf-8")).decode()
-            with _end_hist_mu:
-                eh = {k: list(v) for k, v in _end_hist.items()}
             with _end_lock_mu:
                 locks = dict(list(_end_locks.items())[-60:])
-            pl = {"end_hist": eh, "end_locks": locks, "round_results": dict(list(_lc_results.items())[-800:]), "ts": time.time()}
-            if n % 20 == 0:
-                pl["history"] = {k: list(v) for k, v in _history.items()}
+            if light:                                              # a fresh lock: send just the locks, immediately
+                pl = {"end_locks": locks, "ts": time.time()}
+            else:
+                with _end_hist_mu:
+                    eh = {k: list(v) for k, v in _end_hist.items()}
+                pl = {"end_hist": eh, "end_locks": locks, "round_results": dict(list(_lc_results.items())[-800:]), "ts": time.time()}
+                if n % 20 == 0:
+                    pl["history"] = {k: list(v) for k, v in _history.items()}
             body = json.dumps(pl).encode()
             req = urllib.request.Request(url, data=body, method="POST", headers={"Authorization": auth, "Content-Type": "application/json", "User-Agent": "kalshi-sync"})
             with urllib.request.urlopen(req, timeout=40) as r:
                 ok = r.status == 200
             try:
+                if light:
+                    raise RuntimeError("light push: nothing to take back")
                 greq = urllib.request.Request(cfg["url"].rstrip("/") + "/sync_state", headers={"Authorization": auth, "User-Agent": "kalshi-sync"})
                 with urllib.request.urlopen(greq, timeout=30) as gr:
                     _apply_sync(json.loads(gr.read().decode("utf-8")), mode="fill")           # rounds only the website has (PC was off) are added here; ours are never changed
@@ -10421,20 +10478,37 @@ def _sync_loop():
             if ok != last_ok:
                 print(f"[sync] website update {'working' if ok else 'FAILED'} ({url})")
                 last_ok = ok
-            n += 1
+            if not light:
+                n += 1
         except FileNotFoundError:
             pass                                                   # no sync_config.json = syncing is off
         except Exception as e:                                     # noqa: BLE001
             if last_ok is not False:
                 print(f"[sync] could not reach the website copy: {str(e)[:100]}")
             last_ok = False
-        time.sleep(45)
+        light = _sync_wake.wait(45)                                # every 45 s, or at once when a new END CALL has just locked
+        _sync_wake.clear()
+
+
+def _locks_missing():
+    """True while a coin's current round has no END CALL yet in this copy."""
+    with _lock:
+        tks = [(n, (d or {}).get("ticker")) for n, d in _state.items() if n in _flow.ASSETS]
+    return any(tk and f"{n}|{tk}" not in _end_locks for n, tk in tks)
+
+
+def _follow_light():
+    """Around the lock moment (7:00 left) a follower asks the website for just the locks, a quarter second apart, until they are in."""
+    left = 900 - (time.time() % 900)
+    return 355 <= left <= 480 and _locks_missing()
 
 
 def _follow_interval():
-    """Seconds between fetches of the shared calls: every second around the 8th minute (the lock), otherwise every 6 seconds."""
+    """Seconds between fetches of the shared calls: a quarter second right at the lock (locks only), a second in the minute before it, otherwise every 6 seconds."""
     left = 900 - (time.time() % 900)
-    return 1.0 if 360 <= left <= 480 else 6.0
+    if _follow_light():
+        return 0.25 if left <= 426 else 1.0
+    return 6.0
 
 
 def _follow_loop():
@@ -10448,7 +10522,7 @@ def _follow_loop():
                 cfg = json.load(f)
             import base64 as _b64
             auth = "Basic " + _b64.b64encode(((cfg.get("user") or "sync") + ":" + cfg["password"]).encode("utf-8")).decode()
-            req = urllib.request.Request(cfg["url"].rstrip("/") + "/sync_state", headers={"Authorization": auth, "User-Agent": "kalshi-follow"})
+            req = urllib.request.Request(cfg["url"].rstrip("/") + "/sync_state" + ("?locks=1" if _follow_light() else ""), headers={"Authorization": auth, "User-Agent": "kalshi-follow"})
             with urllib.request.urlopen(req, timeout=30) as r:
                 _apply_sync(json.loads(r.read().decode("utf-8")), mode="replace")
             if last_ok is not True:
@@ -10650,6 +10724,150 @@ def _hour_warning_html(name):
         return f'<div class="hr-ok hr-{tier}">LAST HOUR: {tier.upper()} - {k} of {n} calls right ({r * 100:.0f}%)</div>' + state
     except Exception:
         return ""
+
+
+def _flip_core_html(name, d):
+    """The flip gauge / flip percentage piece of the flip meter row, from one coin's state dict (the live copy in the fast lane, the 2-second snapshot in the page render)."""
+    # 2026-10-18: the flip meter now works off the END CALL (locked at the 8th minute), not the old live call: it is the chance that the END CALL ends up WRONG,
+    # i.e. the round finishes on the other side. From the price-vs-the-line model's current odds. Before the lock / on a NO CALL round there is nothing to flip.
+    flip_chance = None
+    _end_state = "wait"
+    _ek = f'{name}|{d.get("ticker", "")}'
+    with _end_lock_mu:
+        _elk = _end_locks.get(_ek)
+    _fy = d.get("fair_yes")
+    if _elk and _elk.get("side") in ("YES", "NO") and _fy is not None:
+        flip_chance = (1 - _fy) if _elk["side"] == "YES" else _fy
+        _end_state = "locked"
+    elif _elk and _elk.get("side") == "NONE":
+        _end_state = "none"
+    elif _elk and _elk.get("side") == "LATE":
+        _end_state = "late"
+    flip_meter_html = ""
+    if flip_chance is None:
+        _msg = {"wait": "END CALL not locked yet - the flip meter starts at the 8th minute", "none": "no END CALL this round (too close to call) - nothing to flip",
+                "late": "no END CALL this round - nothing to flip", "locked": "flip meter waiting for the price model"}[_end_state]
+        flip_meter_html = f'<div class="flip-wait">{_msg}</div>'
+        try:                                                                   # owner 2026-10-27: always show the flip percentage, whatever the call is
+            _tnw = tug_numbers(name, d)
+            _fpw = _flip_pre(name, _tnw["spot"], _tnw["line"], _tnw["left"]) if _tnw else None
+        except Exception:
+            _fpw = None
+        if _fpw:
+            _rw, _sdw, _sidw = _fpw
+            _cw = "down" if _rw >= 0.38 else ("warn" if _rw >= 0.28 else "ok")
+            flip_meter_html = (f'<div class="flip-wait flip-wait-live {_cw}"><b>FLIP RISK {_rw * 100:.0f}%</b> '
+                               f'<span>price is {"UP" if _sidw == 1 else "DOWN"} of the line &middot; {"no call yet" if _end_state == "wait" else "no END CALL this round"}</span></div>')
+    if flip_chance is not None:
+        pct = flip_chance * 100
+        flip_source = "price-vs-line model"
+        flip_window_key = f'{name}::{d.get("ticker", "")}'
+        gauge_svg = build_flip_gauge_svg(pct)
+        # user feedback 2026-09-02: the % alone was confusing - a flip
+        # FROM what TO what? Locked call is the thing that would flip
+        # (that's what "before close" means here - will the LOCKED call
+        # still hold), so show both sides plainly.
+        locked_call_for_flip = _elk["side"]
+        if locked_call_for_flip in ("YES", "NO"):
+            other_side = "NO" if locked_call_for_flip == "YES" else "YES"
+            flip_direction_html = (
+                f'would flip your END CALL '
+                f'<span class="{"up" if locked_call_for_flip == "YES" else "down"}">{locked_call_for_flip}</span> '
+                f'&rarr; <span class="{"up" if other_side == "YES" else "down"}">{other_side}</span>'
+            )
+        else:
+            flip_direction_html = 'no locked call yet this window'
+        flip_meter_html = (
+            f'<span class="flip-chance-value" data-flip-chance-key="{flip_window_key}" '
+            f'data-flip-chance-pct="{pct:.2f}" style="display:none;"></span>'
+            f'<div class="flip-gauge">{gauge_svg}</div>'
+            f'<div class="flip-cap">Chance the END CALL flips before close ({flip_source}) &middot; {flip_direction_html}</div>'
+        )
+    return '<div class="flip-core" style="display:contents">' + flip_meter_html + '</div>'
+
+
+def _live_d(name):
+    """One coin's state with the LIVE price, the exact seconds left and the fair price worked out from them (the stored snapshot is 2+ seconds old). None when not usable."""
+    a = next((x for x in DASHBOARD_ASSETS if x["name"] == name), None)
+    with _lock:
+        d = dict(_state.get(name) or {})
+    if not a or "error" in d or not d.get("ticker") or not d.get("target_price") or d.get("seconds_left") is None:
+        return None
+    now = time.time()
+    left = d["seconds_left"] - (now - d.get("_snap_ts", now))
+    ct = _window_close_utc(d["ticker"])                                  # the round's own close time is the exact clock (the snapshot's 'seconds left' can be a second or two old)
+    if ct is not None:
+        exact = (ct - dt.datetime.now(dt.timezone.utc)).total_seconds()
+        if abs(exact - left) < 30:
+            left = exact
+    if left <= 0:
+        return None
+    spot = get_live_price(a["symbol"]) or d.get("spot_price")
+    if not spot:
+        return None
+    fair, _sg = fair_yes_probability(a["symbol"], spot, d["target_price"], left)
+    if fair is None:
+        return None
+    d["spot_price"], d["seconds_left"], d["fair_yes"] = spot, left, round(fair, 4)
+    return d
+
+
+_END_NOW = {"t": 0.0, "v": {}}
+_END_NOW_MU = threading.Lock()
+
+
+def _end_now():
+    """{coin: {e: END CALL box html, g: flip gauge html, h: checksum, k: round + lock side}} from the live price, shared by everybody for 0.15 s. Information only."""
+    import zlib
+    with _END_NOW_MU:
+        if time.time() - _END_NOW["t"] < 0.15:
+            return _END_NOW["v"]
+        out = {}
+        for a in DASHBOARD_ASSETS:
+            name = a["name"]
+            if name not in _flow.ASSETS:
+                continue
+            try:
+                ld = _live_d(name)
+                tn = tug_numbers(name, ld) if ld else None
+                if tn is None:
+                    continue
+                e = _end_call_html(name, ld, tn, tn.get("fair"), tn["left"], tn["spot"], tn["line"])
+                g = _flip_core_html(name, ld)
+                ek = f"{name}|{ld.get('ticker')}"
+                out[name] = {"e": e, "g": g, "h": zlib.crc32((e + g).encode("utf-8")), "k": ek + "|" + str((_end_locks.get(ek) or {}).get("side", ""))}
+            except Exception as _ee:
+                print(f"[end_now] {name} failed: {_ee!r}")
+        _END_NOW["t"], _END_NOW["v"] = time.time(), out
+        return out
+
+
+def _lock_watch_loop():
+    """Makes the END CALL the moment the 7:00 mark passes: 4 times a second it looks at the live price, so the lock no longer waits for somebody's page to refresh. The lock is then
+    pushed to the website at once and the page cache is dropped. (The lock rule itself is unchanged: end_call_lock.) Never raises."""
+    time.sleep(20)
+    while True:
+        try:
+            if not _mirror_active():
+                for a in DASHBOARD_ASSETS:
+                    name = a["name"]
+                    if name not in _flow.ASSETS:
+                        continue
+                    ld = _live_d(name)
+                    if not ld or ld["seconds_left"] > END_CALL_LOCK_LEFT:
+                        continue
+                    key = f"{name}|{ld['ticker']}"
+                    if key in _end_locks:
+                        continue
+                    end_call_lock(name, ld["ticker"], ld["fair_yes"], ld["seconds_left"], ld["spot_price"], ld["target_price"])
+                    if key in _end_locks:
+                        with _render_cache_lock:
+                            _render_cache.clear()
+                        _END_NOW["t"] = 0.0
+                        _sync_wake.set()
+        except Exception as _le:
+            print(f"[lock_watch] {_le!r}")
+        time.sleep(0.25)
 
 
 def _flip_now():
@@ -14125,61 +14343,7 @@ def render_html():
             if flipped else ""
         )
 
-        # 2026-10-18: the flip meter now works off the END CALL (locked at the 8th minute), not the old live call: it is the chance that the END CALL ends up WRONG,
-        # i.e. the round finishes on the other side. From the price-vs-the-line model's current odds. Before the lock / on a NO CALL round there is nothing to flip.
-        flip_chance = None
-        _end_state = "wait"
-        _ek = f'{name}|{d.get("ticker", "")}'
-        with _end_lock_mu:
-            _elk = _end_locks.get(_ek)
-        _fy = d.get("fair_yes")
-        if _elk and _elk.get("side") in ("YES", "NO") and _fy is not None:
-            flip_chance = (1 - _fy) if _elk["side"] == "YES" else _fy
-            _end_state = "locked"
-        elif _elk and _elk.get("side") == "NONE":
-            _end_state = "none"
-        elif _elk and _elk.get("side") == "LATE":
-            _end_state = "late"
-        flip_meter_html = ""
-        if flip_chance is None:
-            _msg = {"wait": "END CALL not locked yet - the flip meter starts at the 8th minute", "none": "no END CALL this round (too close to call) - nothing to flip",
-                    "late": "no END CALL this round - nothing to flip", "locked": "flip meter waiting for the price model"}[_end_state]
-            flip_meter_html = f'<div class="flip-wait">{_msg}</div>'
-            try:                                                                   # owner 2026-10-27: always show the flip percentage, whatever the call is
-                _tnw = tug_numbers(name, d)
-                _fpw = _flip_pre(name, _tnw["spot"], _tnw["line"], _tnw["left"]) if _tnw else None
-            except Exception:
-                _fpw = None
-            if _fpw:
-                _rw, _sdw, _sidw = _fpw
-                _cw = "down" if _rw >= 0.38 else ("warn" if _rw >= 0.28 else "ok")
-                flip_meter_html = (f'<div class="flip-wait flip-wait-live {_cw}"><b>FLIP RISK {_rw * 100:.0f}%</b> '
-                                   f'<span>price is {"UP" if _sidw == 1 else "DOWN"} of the line &middot; {"no call yet" if _end_state == "wait" else "no END CALL this round"}</span></div>')
-        if flip_chance is not None:
-            pct = flip_chance * 100
-            flip_source = "price-vs-line model"
-            flip_window_key = f'{name}::{d.get("ticker", "")}'
-            gauge_svg = build_flip_gauge_svg(pct)
-            # user feedback 2026-09-02: the % alone was confusing - a flip
-            # FROM what TO what? Locked call is the thing that would flip
-            # (that's what "before close" means here - will the LOCKED call
-            # still hold), so show both sides plainly.
-            locked_call_for_flip = _elk["side"]
-            if locked_call_for_flip in ("YES", "NO"):
-                other_side = "NO" if locked_call_for_flip == "YES" else "YES"
-                flip_direction_html = (
-                    f'would flip your END CALL '
-                    f'<span class="{"up" if locked_call_for_flip == "YES" else "down"}">{locked_call_for_flip}</span> '
-                    f'&rarr; <span class="{"up" if other_side == "YES" else "down"}">{other_side}</span>'
-                )
-            else:
-                flip_direction_html = 'no locked call yet this window'
-            flip_meter_html = (
-                f'<span class="flip-chance-value" data-flip-chance-key="{flip_window_key}" '
-                f'data-flip-chance-pct="{pct:.2f}" style="display:none;"></span>'
-                f'<div class="flip-gauge">{gauge_svg}</div>'
-                f'<div class="flip-cap">Chance the END CALL flips before close ({flip_source}) &middot; {flip_direction_html}</div>'
-            )
+        flip_meter_html = _flip_core_html(name, d)
 
         try:
             tug_html = build_tug_panel(name, d)
@@ -15157,6 +15321,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if not (ACCEPT_SYNC and HOSTED_PASSWORD):
                 self.send_response(404); self.send_header("Content-Length", "0"); self.end_headers()
                 return
+            if (urllib.parse.parse_qs(parsed.query).get("locks") or [""])[0] == "1":          # locks only: what a follower asks for around the lock moment
+                with _end_lock_mu:
+                    lk_ = dict(list(_end_locks.items())[-12:])
+                body = json.dumps({"end_locks": lk_, "ts": time.time()}, separators=(",", ":")).encode()
+                self.send_response(200); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(body)))
+                self.send_header("Cache-Control", "no-store"); self.end_headers()
+                self.wfile.write(body)
+                return
             with _end_hist_mu:
                 eh = {k: list(v) for k, v in _end_hist.items()}
             with _end_lock_mu:
@@ -15241,6 +15413,25 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.wfile.write(audio)
             else:
                 self.send_response(404); self.send_header("Content-Length", "0"); self.end_headers()
+            return
+        if parsed.path == "/end_now" and _voice_client(self.client_address[0]):
+            try:
+                cur = _end_now()
+                have = {}
+                for part in (urllib.parse.parse_qs(parsed.query).get("h") or [""])[0].split(","):
+                    if ":" in part:
+                        k_, v_ = part.split(":", 1)
+                        have[k_] = v_
+                out_ = {n_: ({"h": v_["h"], "k": v_["k"]} if have.get(n_) == str(v_["h"]) else v_) for n_, v_ in cur.items()}
+                body = json.dumps(out_, separators=(",", ":")).encode()
+            except Exception as _ee:
+                body = b"{}"
+                print(f"[end_now] failed: {_ee!r}")
+            self.send_response(200); self.send_header("Content-Type", "application/json")
+            if len(body) > 400 and "gzip" in (self.headers.get("Accept-Encoding", "") or ""):
+                body = gzip.compress(body, 4); self.send_header("Content-Encoding", "gzip")
+            self.send_header("Content-Length", str(len(body))); self.send_header("Cache-Control", "no-store"); self.end_headers()
+            self.wfile.write(body)
             return
         if parsed.path == "/flip_now" and _voice_client(self.client_address[0]):
             try:
@@ -15863,6 +16054,7 @@ def main():
     if _MTF_ON:
         threading.Thread(target=_mtf_loop, daemon=True, name="mtf-chart").start()
     threading.Thread(target=_alts_loop, daemon=True, name="alts-board").start()
+    threading.Thread(target=_lock_watch_loop, daemon=True, name="lock-watch").start()
     threading.Thread(target=_win_flow_loop, daemon=True, name="last-windows-flow").start()
     _lc_load()
     threading.Thread(target=_lc_loop, daemon=True, name="line-cross").start()
