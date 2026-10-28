@@ -806,7 +806,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-28-narauto113"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-28-board114"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -4911,6 +4911,21 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .ct-drop { margin:4px 0; position:relative; }
 .pyp-t { width:100%; border-collapse:collapse; font-size:14px; } .pyp-t th { text-align:left; font-size:12px; letter-spacing:.8px; text-transform:uppercase; color:#8b949e; padding:4px 8px; border-bottom:2px solid #30363d; }
 .pyp-t td { padding:4px 8px; border-top:1px solid rgba(255,255,255,.07); white-space:nowrap; } .pyp-t td.pyp-best { box-shadow:inset 0 0 0 2px #ffd24a; background:rgba(255,210,74,.10); border-radius:6px; }
+.alt-slot { height:76px; margin:4px 0; overflow:hidden; contain:layout paint; }
+.alt-wrap { height:100%; border:1px solid #30363d; border-radius:8px; background:#0b1018; padding:3px 6px 0; box-sizing:border-box; overflow:hidden; }
+.alt-head { height:17px; display:flex; align-items:center; gap:8px; font-size:11px; letter-spacing:.8px; color:#8b949e; white-space:nowrap; overflow:hidden; } .alt-head b { color:#ffd24a; }
+.alt-lead { margin-left:auto; font-weight:800; letter-spacing:.3px; overflow:hidden; text-overflow:ellipsis; } .alt-lead.up { color:#3fb950; } .alt-lead.down { color:#ff5d5d; }
+.alt-roll { height:52px; overflow:hidden; position:relative; } .alt-roll:hover .alt-track { animation-play-state:paused; }
+.alt-track { display:flex; width:max-content; animation:altroll 30s linear infinite; }
+@keyframes altroll { from { transform:translateX(0); } to { transform:translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) { .alt-track { animation:none; } .alt-roll { overflow-x:auto; } }
+.alt-chip { flex:0 0 118px; height:48px; margin-right:6px; border:1px solid #30363d; border-radius:7px; padding:2px 7px; box-sizing:border-box; display:grid; grid-template-columns:auto 1fr; grid-template-rows:auto auto; column-gap:6px; align-items:center; background:#0d1117; }
+.alt-sym { font-size:12px; color:#c9d1d9; } .alt-pct { font-size:21px; font-weight:900; text-align:right; line-height:1; color:#e6edf3; }
+.alt-chip.up .alt-pct { color:#3fb950; } .alt-chip.down .alt-pct { color:#ff5d5d; }
+.alt-d { font-size:11px; font-weight:800; color:#8b949e; } .alt-d.up { color:#3fb950; } .alt-d.down { color:#ff5d5d; }
+.alt-sub { font-size:10px; color:#8b949e; text-align:right; white-space:nowrap; }
+.alt-chip.lag { border-color:#ffd24a; box-shadow:0 0 0 1px #ffd24a inset; } .alt-chip.lag .alt-sub { color:#ffd24a; font-weight:900; font-size:11px; }
+.alt-chip.stale { opacity:.45; }
 .pyp-rowbest td { background:rgba(255,210,74,.16); } .pyp-tag.pyp-now { background:#ffd24a; color:#0d1117; border-color:#ffd24a; font-weight:800; }
 .pyp-why-d { display:inline-block; vertical-align:middle; margin-left:6px; } .pyp-why-d summary { list-style:none; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:50%; border:1.5px solid #ffd24a; color:#ffd24a; font-size:12px; font-weight:800; font-style:italic; font-family:Georgia,serif; user-select:none; }
 .pyp-why-d summary::-webkit-details-marker { display:none; } .pyp-why-d[open] summary { background:#ffd24a; color:#0d1117; }
@@ -6649,7 +6664,8 @@ function showWhaleCrossing(assetName, side, usd, venue) {
 }
 
 // ---- AI narrator (optional, information only) -------------------------------------------------------------------------------------------------------------------
-let narCoin = {BTC: true, XRP: true};                            // each coin's narrator has its own button; BOTH come ON by themselves after every page load / reload (owner, 2026-10-28)
+const QUIET = location.search.indexOf('quiet=1') >= 0;                // ?quiet=1 = a test window that never speaks
+let narCoin = QUIET ? {BTC: false, XRP: false} : {BTC: true, XRP: true};                            // each coin's narrator has its own button; BOTH come ON by themselves after every page load / reload (owner, 2026-10-28)
 let narratorOn = narCoin.BTC || narCoin.XRP;                       // true when at least one coin is on
 const narQueue = [], narSeen = {}, narState = {};
 let narNow = null, narBusyUntil = 0, audioUnlocked = false, clipMap = {}, clipLast = {}, ttsReady = false, ttsAudio = null;
@@ -7346,17 +7362,17 @@ function mtfSyncAttrs(o, n) {
   Array.from(o.attributes).forEach(at => { if (!n.hasAttribute(at.name)) o.removeAttribute(at.name); });
   Array.from(n.attributes).forEach(at => { if (o.getAttribute(at.name) !== at.value) o.setAttribute(at.name, at.value); });
 }
-function mtfHolds(el) { return el.nodeType === 1 && (el.classList.contains('mtf-live') || el.classList.contains('ctb-slot') || !!el.querySelector('.mtf-live, .ctb-slot')); }
+function mtfHolds(el) { return el.nodeType === 1 && (el.classList.contains('mtf-live') || el.classList.contains('ctb-slot') || el.classList.contains('alt-slot') || !!el.querySelector('.mtf-live, .ctb-slot')); }
 function mtfSync(op, np) {
   const keep = new Set(), out = [];
   Array.from(np.childNodes).forEach(n => {
     let m = null;
     if (n.nodeType === 1 && mtfHolds(n)) {
-      m = Array.from(op.children).find(o => !keep.has(o) && o.tagName === n.tagName && (o.getAttribute('data-asset') || '') === (n.getAttribute('data-asset') || '') && mtfHolds(o));
+      m = Array.from(op.children).find(o => !keep.has(o) && o.tagName === n.tagName && (o.getAttribute('data-asset') || '') === (n.getAttribute('data-asset') || '') && o.classList.contains('alt-slot') === n.classList.contains('alt-slot') && mtfHolds(o));
     }
     if (m) {
       keep.add(m);
-      if (m.classList.contains('ctb-slot')) {                                   // the running call banner is NOT redrawn - only the numbers it reads are refreshed
+      if (m.classList.contains('alt-slot')) { /* the coin board stays exactly as it is */ } else if (m.classList.contains('ctb-slot')) {                                   // the running call banner is NOT redrawn - only the numbers it reads are refreshed
         const oj = m.querySelector('.ctb-json'), nj = n.querySelector('.ctb-json');
         if (oj && nj && oj.textContent !== nj.textContent) oj.textContent = nj.textContent;
       } else if (!m.classList.contains('mtf-live')) { mtfSyncAttrs(m, n); mtfSync(m, n); }
@@ -8082,6 +8098,7 @@ async function refreshInner() {
   pfvgPaint();
   ctbPaint();
   ctbSync();
+  altSync();
   evPaint();
   restorePatternTabs();
   drawAllBm();                         // after the pull-downs are restored, so an open heat map is drawn
@@ -8142,6 +8159,59 @@ function nextRefreshMs() {
   return fast ? 1000 : 3000;
 }
 (function refreshLoop() { refresh(); setTimeout(refreshLoop, nextRefreshMs()); })();
+// ---- the all-coins 15-minute board: a small rolling banner between the alert window and the call banner. It is built once per slot and filled from /alts (its own tiny feed, not the page refresh).
+const ALT = {data: null, els: {}};
+function altBuild() {
+  const el = document.createElement('div'); el.className = 'alt-wrap';
+  el.innerHTML = '<div class="alt-head"><b>15-MIN MARKETS</b><span>chance of UP</span><span class="alt-lead"></span></div><div class="alt-roll"><div class="alt-track"></div></div>';
+  const tr = el.querySelector('.alt-track');
+  for (let k = 0; k < 2; k++) ['BTC', 'ETH', 'SOL', 'XRP', 'DOGE', 'BNB', 'HYPE'].forEach(c => {          // two copies side by side, so the roll never has a gap
+    const ch = document.createElement('div'); ch.className = 'alt-chip stale'; ch.setAttribute('data-c', c);
+    ch.innerHTML = '<b class="alt-sym">' + c + '</b><span class="alt-pct">--</span><span class="alt-d">&middot;</span><span class="alt-sub">waiting</span>';
+    tr.appendChild(ch);
+  });
+  return el;
+}
+function altSet(node, txt, cls) { if (node.textContent !== txt) node.textContent = txt; if (cls !== undefined && node.getAttribute('data-k') !== cls) { node.setAttribute('data-k', cls); node.className = node.className.replace(/ ?(up|down)\b/g, '') + (cls ? ' ' + cls : ''); } }
+function altPaint() {
+  const j = ALT.data, fresh = j && j.ok && Date.now() / 1000 - j.t < 15;
+  const by = {}; ((j && j.coins) || []).forEach(c => { by[c.c] = c; });
+  Object.keys(ALT.els).forEach(a => {
+    const el = ALT.els[a];
+    el.querySelectorAll('.alt-chip').forEach(ch => {
+      const c = by[ch.getAttribute('data-c')];
+      const on = !!(c && fresh);
+      ch.classList.toggle('stale', !on);
+      if (!c) return;
+      const pc = ch.querySelector('.alt-pct'), dd = ch.querySelector('.alt-d'), sb = ch.querySelector('.alt-sub');
+      altSet(pc, Math.round(c.mid) + '%', null);
+      pc.className = 'alt-pct'; ch.classList.toggle('up', c.mid >= 60); ch.classList.toggle('down', c.mid <= 40);
+      const d = c.d60;
+      if (d === null || d === undefined || Math.abs(d) < 1) { altSet(dd, '\u00b7 flat', ''); dd.className = 'alt-d'; }
+      else { altSet(dd, (d > 0 ? '\u25b2+' : '\u25bc') + Math.round(d) + ' / 1m', d > 0 ? 'up' : 'down'); dd.className = 'alt-d ' + (d > 0 ? 'up' : 'down'); }
+      const vol = c.vol >= 1000 ? (c.vol / 1000).toFixed(1) + 'k' : String(c.vol);
+      ch.classList.toggle('lag', !!c.lag);
+      altSet(sb, c.lag ? 'LAG ' + (c.lag === 'up' ? '\u25b2' : '\u25bc') + (c.thin ? ' thin' : '') : ((c.spr !== null && c.spr !== undefined ? c.spr + 'c' : '-') + ' \u00b7 ' + vol + (c.thin ? ' thin' : '')));
+      ch.title = c.c + ': ' + Math.round(c.mid) + '% chance UP' + (c.tgt ? ' (target $' + c.tgt + ')' : '') + '. Buy ' + (c.bid === null ? '-' : c.bid) + 'c / sell ' + (c.ask === null ? '-' : c.ask) + 'c, ' + c.vol + ' contracts traded this round' + (c.lag ? '. LAG: the leader moved and this coin has not followed yet - information only, not advice.' : '.') + (c.thin ? ' Thin market: wide spread, may not fill.' : '');
+    });
+    const ld = el.querySelector('.alt-lead');
+    if (j && j.lead && fresh) {
+      const lag = ((j.coins || []).filter(c => c.lag).map(c => c.c)).join(', ');
+      altSet(ld, j.lead.coin + (j.lead.dir === 'up' ? ' PUMP +' : ' DUMP ') + Math.round(j.lead.move) + ' pts in 2 min' + (lag ? ' - behind: ' + lag : ' - the rest kept up'), j.lead.dir); ld.className = 'alt-lead ' + j.lead.dir;
+    } else altSet(ld, fresh ? 'no big move' : 'no data right now', ''), ld.className = 'alt-lead';
+  });
+}
+function altSync() {
+  document.querySelectorAll('.alt-slot').forEach(slot => {
+    const a = slot.getAttribute('data-asset');
+    const el = ALT.els[a] || (ALT.els[a] = altBuild());
+    if (el.parentNode !== slot) { slot.appendChild(el); altPaint(); }
+  });
+}
+function altPoll() { fetch('/alts', {cache: 'no-store'}).then(r => r.ok ? r.json() : null).then(j => { if (j) { ALT.data = j; altPaint(); } }).catch(() => {}); }
+setInterval(altPoll, LOCAL_PAGE ? 500 : 1000);
+setTimeout(altPoll, 400);
+
 window.onload = function() {
   updateAssetToggleButtons(); updateBuildingToggleButton(); updateVoiceToggleButton(); syncSweepButtons(); syncFitButton();
   if (narratorOn) soundEnabled = true;                                   // the narrators come on by themselves, so the SOUND button shows ON too
@@ -10002,6 +10072,130 @@ def build_pick_poison(name, d, tn):
             '(only once it has enough rounds). A short window is noisy - give it time. A later call is almost always the more accurate one simply because less time is left for the round to change, so compare the coins and the markets minute by minute, not just later-is-better. Mid (8 min in) is the real END CALL. Nothing here changes a call or a trade. Information only.</div></div></details>')
 
 
+
+# ---- All-coins 15-minute market board (owner, 2026-10-28): the chance-of-UP of every crypto 15-minute market Kalshi lists, so a coin that has NOT moved yet behind a BTC / XRP pump or dump is easy to spot. Information only.
+ALT_SERIES = (("BTC", "KXBTC15M"), ("ETH", "KXETH15M"), ("SOL", "KXSOL15M"), ("XRP", "KXXRP15M"), ("DOGE", "KXDOGE15M"), ("BNB", "KXBNB15M"), ("HYPE", "KXHYPE15M"))
+ALT_BASE = "https://api.elections.kalshi.com/trade-api/v2"
+ALT_PUMP = 10.0                      # BTC or XRP moving this many points (of the 0-100 chance) in 2 minutes counts as a pump / dump
+ALT_FOLLOW = 0.35                    # a coin that has moved less than this share of that, the same way, is 'behind'
+ALT_THIN = 30                        # fewer contracts than this traded in the round = a thin market (wide spread, hard fills)
+_ALTS = {"t": 0.0, "coins": [], "lead": None, "ok": False}
+_alts_tk = {}                        # coin -> {"ticker", "close"}
+_alts_hist = {}                      # coin -> {"ticker", "pts": [(time, mid)]}
+_alts_lock = threading.Lock()
+_alts_last_tk = [0.0]
+_alts_err = [0.0]
+
+
+def _alts_get(p):
+    req = urllib.request.Request(ALT_BASE + p, headers={"Accept": "application/json", "User-Agent": "dominator-board"})
+    with urllib.request.urlopen(req, timeout=6) as r:
+        return json.loads(r.read().decode("utf-8"))
+
+
+def _alts_find_tickers():
+    """The open 15-minute market of every coin (the one closing first)."""
+    for coin, ser in ALT_SERIES:
+        try:
+            ms = _alts_get(f"/markets?series_ticker={ser}&status=open&limit=5").get("markets") or []
+            ms = [m for m in ms if m.get("close_time")]
+            if not ms:
+                continue
+            m = min(ms, key=lambda x: x["close_time"])
+            close = dt.datetime.fromisoformat(m["close_time"].replace("Z", "+00:00")).timestamp()
+            _alts_tk[coin] = {"ticker": m["ticker"], "close": close}
+        except Exception:
+            continue
+
+
+def _alts_mid_at(pts, t):
+    """The mid price at or just before time t (None when the history does not reach back that far)."""
+    old = [p for p in pts if p[0] <= t]
+    if not old or t - old[-1][0] > 25:
+        return None
+    return old[-1][1]
+
+
+def _alts_step():
+    now = time.time()
+    stale = [c for c, _ in ALT_SERIES if c not in _alts_tk or now >= _alts_tk[c]["close"] + 0.5]
+    if stale and now - _alts_last_tk[0] >= 2.0:                                    # a new round: look the new tickers up (at most every 2 seconds)
+        _alts_last_tk[0] = now
+        _alts_find_tickers()
+    tks = {c: v["ticker"] for c, v in _alts_tk.items()}
+    if not tks:
+        return
+    j = _alts_get("/markets?tickers=" + ",".join(tks.values()))
+    by = {m["ticker"]: m for m in (j.get("markets") or [])}
+    coins = []
+    for coin, _ser in ALT_SERIES:
+        tk = tks.get(coin)
+        m = by.get(tk) if tk else None
+        if not m:
+            continue
+        f = lambda k: (float(m[k]) * 100.0 if m.get(k) not in (None, "", "0.0000") else None)
+        bid, ask, last = f("yes_bid_dollars"), f("yes_ask_dollars"), f("last_price_dollars")
+        mid = (bid + ask) / 2.0 if (bid is not None and ask is not None) else (last if last is not None else (bid if bid is not None else ask))
+        if mid is None:
+            continue
+        h = _alts_hist.get(coin)
+        if not h or h["ticker"] != tk:                                              # a new round: the history starts again
+            h = _alts_hist[coin] = {"ticker": tk, "pts": []}
+        h["pts"].append((now, mid))
+        h["pts"] = [p for p in h["pts"] if now - p[0] <= 240]
+        d60, d120 = _alts_mid_at(h["pts"], now - 60), _alts_mid_at(h["pts"], now - 120)
+        try:
+            vol = float(m.get("volume_fp") or 0)
+        except (TypeError, ValueError):
+            vol = 0.0
+        tgt = ""
+        sub = str(m.get("yes_sub_title") or "")
+        if "$" in sub:
+            tgt = sub.split("$", 1)[1].strip()
+        coins.append({"c": coin, "mid": round(mid, 1), "bid": bid, "ask": ask, "spr": (round(ask - bid, 1) if (bid is not None and ask is not None) else None), "vol": round(vol),
+                      "d60": (round(mid - d60, 1) if d60 is not None else None), "d120": (round(mid - d120, 1) if d120 is not None else None),
+                      "thin": vol < ALT_THIN, "lag": None})
+    lead = None
+    for c in coins:                                                                 # the leader: BTC or XRP, whichever moved more in 2 minutes
+        if c["c"] in ("BTC", "XRP") and c["d120"] is not None and abs(c["d120"]) >= ALT_PUMP and (lead is None or abs(c["d120"]) > abs(lead["move"])):
+            lead = {"coin": c["c"], "move": c["d120"], "dir": "up" if c["d120"] > 0 else "down"}
+    if lead:
+        sgn = 1 if lead["dir"] == "up" else -1
+        for c in coins:
+            if c["c"] == lead["coin"] or c["d120"] is None:
+                continue
+            followed = c["d120"] * sgn / abs(lead["move"])
+            decided = (c["mid"] >= 85 and sgn > 0) or (c["mid"] <= 15 and sgn < 0)      # already priced in: nothing left to fish for
+            if followed < ALT_FOLLOW and not decided:
+                c["lag"] = lead["dir"]
+    with _alts_lock:
+        _ALTS.update(t=now, coins=coins, lead=lead, ok=True, close=min([v["close"] for v in _alts_tk.values()] or [0]))
+
+
+def _alts_loop():
+    time.sleep(6)
+    while True:
+        try:
+            _alts_step()
+        except Exception as e:
+            if time.time() - _alts_err[0] > 60:
+                _alts_err[0] = time.time()
+                print(f"[alts] fetch failed: {e!r}")
+            with _alts_lock:
+                if time.time() - _ALTS["t"] > 10:
+                    _ALTS["ok"] = False
+        time.sleep(1.0 if HOSTED_PASSWORD else 0.5)
+
+
+def _alts_json():
+    with _alts_lock:
+        return json.dumps(dict(_ALTS), separators=(",", ":")).encode("utf-8")
+
+
+def _alt_slot_html(name):
+    return f'<div class="alt-slot" data-asset="{name}"></div>'
+
+
 def build_call_timing_panel(name):
     """The 3 calls: one floating pull-down with three windows (EARLY / MID / LATE), each with the full picture of its call, plus a small 'Scoreboard & info' tab. Information only."""
     if name not in ("BTC", "XRP"):
@@ -10033,7 +10227,7 @@ def build_call_timing_panel(name):
     except Exception as _pye:
         pyp = ""
         print(f"[pick your poison] failed: {_pye!r}")
-    return (banner + f'<details class="ct-drop" data-pat="CT|{name}"><summary><span class="dd-ic">&#9654;</span><b>The 3 calls</b><span class="ct-sumx"> {chips} <span class="dd-hint">- click to open the three call windows</span></span></summary>'
+    return (_alt_slot_html(name) + banner + f'<details class="ct-drop" data-pat="CT|{name}"><summary><span class="dd-ic">&#9654;</span><b>The 3 calls</b><span class="ct-sumx"> {chips} <span class="dd-hint">- click to open the three call windows</span></span></summary>'
             f'<div class="ct-body"><div class="ct-cards">{cards}</div><div class="ct-recs"><div class="ct-rec-h"><b>Track record</b> <span class="hint">- the same table for all three calls</span></div>{tables}{_ct_agree_html(name, marks)}</div>'
             f'<details class="ct-info" data-pat="CTI|{name}"><summary>Scoreboard &amp; info</summary><div class="ct-info-body">{board}</div></details>'
             f'<div class="hint ct-note">More information will be added to each window as we learn what matters. Nothing here changes the real END CALL or trades.</div></div></details>' + pyp)
@@ -14997,6 +15191,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_header("Cache-Control", "no-store"); self.end_headers()
             self.wfile.write(body)
             return
+        if parsed.path == "/alts":
+            _ab = _alts_json()
+            self.send_response(200); self.send_header("Content-Type", "application/json")
+            if "gzip" in (self.headers.get("Accept-Encoding", "") or ""):
+                _ab = gzip.compress(_ab, 5); self.send_header("Content-Encoding", "gzip")
+            self.send_header("Content-Length", str(len(_ab)))
+            self.send_header("Cache-Control", "no-store"); self.end_headers()
+            self.wfile.write(_ab)
+            return
         if parsed.path == "/pattern_pic":
             _pk = (urllib.parse.parse_qs(parsed.query).get("k") or [""])[0]
             _sv = _pat_big(_pk) if _pk in _PAT_INFO else None
@@ -15659,6 +15862,7 @@ def main():
     threading.Thread(target=_prerender_loop, daemon=True, name="prerender").start()
     if _MTF_ON:
         threading.Thread(target=_mtf_loop, daemon=True, name="mtf-chart").start()
+    threading.Thread(target=_alts_loop, daemon=True, name="alts-board").start()
     threading.Thread(target=_win_flow_loop, daemon=True, name="last-windows-flow").start()
     _lc_load()
     threading.Thread(target=_lc_loop, daemon=True, name="line-cross").start()
