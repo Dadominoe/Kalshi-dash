@@ -806,7 +806,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-28-cost109"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-28-fed110"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -6066,7 +6066,7 @@ function dkBuild(name) {
   return o;
 }
 function dkItemEl(name, x, extra) {
-  const d = document.createElement('div'); d.className = 'dock-item ' + x.cls + (extra || ''); d.title = x.head + ' - ' + x.detail + ' (click to dismiss)';
+  const d = document.createElement('div'); d.className = 'dock-item ' + x.cls + (extra || ''); d.title = x.head + ' - ' + (x.full || x.detail) + ' (click to dismiss)';
   d.onclick = () => dockDismiss(name, x.key);
   const h = document.createElement('b'); h.textContent = x.head;
   const t = document.createElement('span'); t.textContent = x.detail;
@@ -7642,6 +7642,9 @@ function ctbSync() {
     let j = null;
     try { j = JSON.parse(slot.querySelector('.ctb-json').textContent); } catch (e) { return; }
     o.data = j.cards; o.info = j.info || []; o.smoked = !!j.smoked; o.quiet = !!j.quiet; o.mk5 = j.mk5 || null; o.mid = !!j.mid; o.round = j.round || '';
+    const evKeep = {};                                                                                     // scheduled events (Fed decision ...) sit in this coin's alert window while they are close
+    (j.dock || []).forEach(x => { evKeep[x.key] = 1; dockPush(a, 'dock-lock', x.head, x.detail, 0, x.key); const it = (dockItems[a] || []).find(y => y.key === x.key); if (it) it.full = x.full; });
+    (dockItems[a] || []).filter(x => /^ev[|]/.test(x.key) && !evKeep[x.key]).forEach(x => dockClear(a, x.key));
     const nowMs = Date.now();
     o.alerts = [] /* notifications scroll in the top window, not in the banner */.filter(x => !x.until || x.until > nowMs)
       .map(x => ({key: 'al|' + x.key + '|' + (x.until || 0), cls: ({'dock-buy': 'up', 'dock-sell': 'down'})[x.cls] || 'warn', html: ctbAlertHtml(a, x)}));
@@ -7691,7 +7694,7 @@ function ctbTick(now, fromTimer) {
         if (!d && o.burst && o.burst.length && ctbOk('burst', a)) { const k = o.burst.shift(); d = o.data.find(x => x.key === k) || null; o.lastBurst = Date.now(); }
         const flc = o.data.find(x => x.key === 'flip');
         if (!d && flc && (flc.cls === 'down' || flc.cls === 'warn') && Date.now() - (o.lastFlip || 0) > 60000 && ctbOk('flip', a)) { d = flc; o.lastFlip = Date.now(); }          // what affects the trader comes first: a building flip risk is shown about once a minute
-        if (!d && evc && Date.now() - o.lastEv > 25 * 60000 && ctbOk('events', a)) { d = evc; o.lastEv = Date.now(); }
+        if (!d && evc && Date.now() - o.lastEv > (evc.cls === 'down' ? 6 : 25) * 60000 && ctbOk('events', a)) { d = evc; o.lastEv = Date.now(); }
         const mbc = o.data.find(x => x.key === 'member'); if (!o.lastMember) o.lastMember = Date.now() - 16 * 60000;
         if (!d && mbc && Date.now() - o.lastMember > 20 * 60000 && ctbOk('member', a)) { d = mbc; o.lastMember = Date.now(); }
         const fpc = o.data.find(x => x.key === 'flowprice'); if (!o.lastFP) o.lastFP = Date.now() - 6 * 60000;
@@ -9697,16 +9700,22 @@ def _ctb_payload(name, d, tn, marks, res, allrecs=None):
             info.insert(min(len(info), 2 + i_ * 6), c_)
     except Exception as _ie:
         print(f"[call banner] indicator cards failed: {_ie!r}")
+    dock_ev = []                                                      # scheduled events inside 6 hours (and for 30 minutes after) also go in the ALERT WINDOW, so nobody misses a Fed day
     try:                                                              # COMING UP: the next scheduled events that can move crypto
         from src import events_info as _evi
         evs = _evi.upcoming(3)
+        for e_ in evs:
+            if -0.5 <= e_["hours"] <= 12:
+                dock_ev.append({"key": "ev|" + e_["name"] + "|" + e_["when"].strftime("%Y%m%d%H%M"),
+                                "head": e_["name"].upper() + (" - " + e_["left"].upper() if e_["hours"] > 0 else " - JUST RELEASED"),
+                                "detail": (e_["brief"].get("short") or e_["why"]) + " Information only.", "full": (e_["brief"].get("full") or e_["why"]) + " Information only - not a forecast."})
         if evs:
             e0 = evs[0]
-            cl = "down" if e0["hours"] <= 3 else "warn"
-            ev_card = {"key": "events", "cls": cl, "html": f'<div class="ctb-hd"><span class="ctb-which">COMING UP &middot; {"HEADS UP" if e0["hours"] <= 3 else "ON THE CALENDAR"}</span></div>'
+            cl = "down" if e0["hours"] <= 12 else "warn"
+            ev_card = {"key": "events", "cls": cl, "html": f'<div class="ctb-hd"><span class="ctb-which">COMING UP &middot; {"HEADS UP" if e0["hours"] <= 12 else "ON THE CALENDAR"}</span></div>'
                        f'<div class="ctb-call" style="font-size:30px;white-space:normal;line-height:1.1">{escape(e0["name"])}<small>{escape(e0["left"])}</small></div>'
                        f'<div class="ctb-bar"><i style="width:{max(8, min(100, 100 - e0["hours"] / 1.68)):.0f}%;background:var(--ctb-{cl})"></i></div>'
-                       + rows([(escape(e["name"]), escape(e["left"]), "t") for e in evs] + [("Why it matters", escape(e0["why"]), "warn")])}
+                       + rows([(escape(e["name"]), escape(e["left"]), "t") for e in evs] + ([(escape(a_), escape(b_), "warn" if i_ == 2 else "t") for i_, (a_, b_) in enumerate(e0["brief"]["rows"])] if e0["brief"].get("rows") and e0["hours"] <= 12 else [("Why it matters", escape(e0["why"]), "warn")]))}
             info.append(ev_card)
             cards.append(ev_card)
     except Exception:
@@ -9772,7 +9781,7 @@ def _ctb_payload(name, d, tn, marks, res, allrecs=None):
     except Exception:
         smoked = False
     strip = f'<span class="ctb-coin">{name}</span>' + "".join(f'<div class="ctb-chip {c}{" gold" if rl else ""}"><span class="k">{k}</span><span class="v">{v}</span></div>' for k, v, c, rl in chips)
-    return json.dumps({"cards": cards, "calls": strip, "info": info, "mk5": mk5, "mid": bool(left_now is not None and 400 <= left_now <= 500), "round": d.get("ticker"), "smoked": smoked, "quiet": not any((marks.get(str(M)) or ["NONE"])[0] in ("YES", "NO") for M in (11, 7, 3))}).replace("</", "<\\/")
+    return json.dumps({"cards": cards, "calls": strip, "info": info, "mk5": mk5, "mid": bool(left_now is not None and 400 <= left_now <= 500), "round": d.get("ticker"), "smoked": smoked, "quiet": not any((marks.get(str(M)) or ["NONE"])[0] in ("YES", "NO") for M in (11, 7, 3)), "dock": dock_ev}).replace("</", "<\\/")
 
 
 _pyp_cache = {}

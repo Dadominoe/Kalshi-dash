@@ -7,7 +7,13 @@ from zoneinfo import ZoneInfo
 ET = ZoneInfo("America/New_York")
 # (when, short name, why it can move crypto)
 EVENTS = [
-    (dt.datetime(2026, 10, 28, 14, 0, tzinfo=ET), "Fed rate decision", "Rate decisions move every risk asset, crypto included (press conference 2:30 PM ET)"),
+    (dt.datetime(2026, 10, 28, 14, 0, tzinfo=ET), "Fed rate decision", "Rate decisions move every risk asset, crypto included (press conference 2:30 PM ET)",
+     {"short": "Crypto often jumps at 2:00, swings again at the 2:30 press talk, and the first move often reverses. Market expects a HOLD (about 9 in 10); a December hike is priced about 3 in 4. Choppy candles likely.",
+      "full": "WHAT IT DOES: rate news hits every risk asset. Crypto often jumps or drops within seconds of the 2:00 PM statement, then swings again at the 2:30 PM press conference, and the first move often reverses. "
+              "RECENTLY: reports say Bitcoin leaned bearish after several 2026 Fed meetings (January, March, June), but Fed-day moves are usually choppy, not one-way. "
+              "WHAT THE MARKET EXPECTS (news reports of CME FedWatch, morning of Oct 28): HOLD about 9 chances in 10, a hike about 1 in 10. A hike at the December meeting is priced at roughly 3 chances in 4, so the Fed chair's words at 2:30 matter as much as the decision. "
+              "Expect wide, fast candles and more flips around 2:00 and 2:30.",
+      "rows": [("What it does", "2:00 jump, 2:30 swing - first move often reverses"), ("Recently", "BTC leaned bearish after several 2026 Fed days"), ("Market expects", "HOLD ~9 in 10; Dec hike priced ~3 in 4")]}),
     (dt.datetime(2026, 10, 29, 8, 30, tzinfo=ET), "GDP + PCE inflation", "PCE is the Fed's favourite inflation gauge; GDP shows how strong the economy is"),
     (dt.datetime(2026, 11, 3, 0, 0, tzinfo=ET), "US midterm elections", "Congress decides what happens to crypto laws and policy"),
     (dt.datetime(2026, 11, 6, 8, 30, tzinfo=ET), "US jobs report (expected)", "Strong or weak jobs data shifts interest-rate expectations"),
@@ -43,4 +49,4 @@ def upcoming(n=4, now=None):
     """[{name, when (aware datetime), left ('in 18h 22m'), why, hours}] for the next n events."""
     now = now or dt.datetime.now(ET)
     ev = sorted([e for e in EVENTS + _cpi() if e[0] > now - dt.timedelta(minutes=30)], key=lambda e: e[0])[:n]
-    return [{"name": e[1], "when": e[0], "left": _left(e[0] - now), "why": e[2], "hours": (e[0] - now).total_seconds() / 3600} for e in ev]
+    return [{"name": e[1], "when": e[0], "left": _left(e[0] - now), "why": e[2], "hours": (e[0] - now).total_seconds() / 3600, "brief": (e[3] if len(e) > 3 and isinstance(e[3], dict) else {})} for e in ev]
