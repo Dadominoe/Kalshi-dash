@@ -39,6 +39,7 @@ import json
 import math
 import os
 import re
+import socket
 import socketserver
 import statistics
 import threading
@@ -806,7 +807,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-29-nofree118"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-29-tick119"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -2236,6 +2237,10 @@ def _update_blended(symbol):
     blended = sum(price * size for price, size in fresh.values()) / total_size
     _live_ticks[symbol] = blended
     _live_ticks_ts[symbol] = now
+    try:
+        _flow.HUB.tick_price(symbol.split("-")[0], blended)                      # the live trades chart's candles follow this same price
+    except Exception:
+        pass
     hist = _tick_history.setdefault(symbol, [])
     hist.append((now, blended))
     cutoff = now - TICK_HISTORY_SECONDS
@@ -4907,12 +4912,20 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
   body[data-view="BTC"] .card[data-asset="BTC"], body[data-view="XRP"] .card[data-asset="XRP"] { display:grid; grid-template-columns:minmax(440px,0.85fr) minmax(0,1.4fr); column-gap:16px; align-items:start; }
   body[data-view="BTC"] .card[data-asset="BTC"] > *, body[data-view="XRP"] .card[data-asset="XRP"] > * { grid-column:1 / -1; }
   body[data-view="BTC"] .card[data-asset="BTC"] > .tugrow, body[data-view="XRP"] .card[data-asset="XRP"] > .tugrow { grid-column:1; }
+  body[data-view="BTC"] .card[data-asset="BTC"] > .tk-slot, body[data-view="XRP"] .card[data-asset="XRP"] > .tk-slot { grid-column:1; }
   body[data-view="BTC"] .card[data-asset="BTC"] > .pat-win, body[data-view="XRP"] .card[data-asset="XRP"] > .pat-win { grid-column:2; margin-top:0; }
 }
 .ct-drop { margin:4px 0; position:relative; }
 .pyp-t { width:100%; border-collapse:collapse; font-size:14px; } .pyp-t th { text-align:left; font-size:12px; letter-spacing:.8px; text-transform:uppercase; color:#8b949e; padding:4px 8px; border-bottom:2px solid #30363d; }
 .pyp-t td { padding:4px 8px; border-top:1px solid rgba(255,255,255,.07); white-space:nowrap; } .pyp-t td.pyp-best { box-shadow:inset 0 0 0 2px #ffd24a; background:rgba(255,210,74,.10); border-radius:6px; }
 .alt-slot { height:76px; margin:4px 0; overflow:hidden; contain:layout paint; }
+.tk-slot { height:262px; margin:6px 0; overflow:hidden; contain:layout paint; }
+.tk-wrap { height:100%; background:#0d1117; border:1px solid #30363d; border-radius:10px; padding:6px 8px 4px; display:flex; flex-direction:column; box-sizing:border-box; }
+.tk-head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:13px; min-height:26px; } .tk-head b { letter-spacing:1px; font-size:12px; color:#e6edf3; } .tk-sub { color:#8b949e; font-size:12px; }
+.tk-px { margin-left:auto; font-weight:700; font-size:14px; } .tk-px .up { color:#3fb950; } .tk-px .down { color:#f85149; } .tk-px .ln { color:#ffd24a; }
+.tk-btns button { background:#21262d; border:1px solid #30363d; color:#8b949e; border-radius:6px; padding:2px 9px; margin-left:4px; font-size:12px; cursor:pointer; } .tk-btns button.on { background:#238636; border-color:#3fb950; color:#fff; }
+.tk-cv { flex:1 1 auto; width:100%; min-height:0; display:block; }
+.tk-foot { font-size:11px; color:#8b949e; padding-top:2px; }
 .alt-wrap { height:100%; border:1px solid #30363d; border-radius:8px; background:#0b1018; padding:3px 6px 0; box-sizing:border-box; overflow:hidden; }
 .alt-head { height:17px; display:flex; align-items:center; gap:8px; font-size:11px; letter-spacing:.8px; color:#8b949e; white-space:nowrap; overflow:hidden; } .alt-head b { color:#ffd24a; }
 .alt-lead { margin-left:auto; font-weight:800; letter-spacing:.3px; overflow:hidden; text-overflow:ellipsis; } .alt-lead.up { color:#3fb950; } .alt-lead.down { color:#ff5d5d; }
@@ -7363,17 +7376,17 @@ function mtfSyncAttrs(o, n) {
   Array.from(o.attributes).forEach(at => { if (!n.hasAttribute(at.name)) o.removeAttribute(at.name); });
   Array.from(n.attributes).forEach(at => { if (o.getAttribute(at.name) !== at.value) o.setAttribute(at.name, at.value); });
 }
-function mtfHolds(el) { return el.nodeType === 1 && (el.classList.contains('mtf-live') || el.classList.contains('ctb-slot') || el.classList.contains('alt-slot') || !!el.querySelector('.mtf-live, .ctb-slot')); }
+function mtfHolds(el) { return el.nodeType === 1 && (el.classList.contains('mtf-live') || el.classList.contains('ctb-slot') || el.classList.contains('alt-slot') || el.classList.contains('tk-slot') || !!el.querySelector('.mtf-live, .ctb-slot')); }
 function mtfSync(op, np) {
   const keep = new Set(), out = [];
   Array.from(np.childNodes).forEach(n => {
     let m = null;
     if (n.nodeType === 1 && mtfHolds(n)) {
-      m = Array.from(op.children).find(o => !keep.has(o) && o.tagName === n.tagName && (o.getAttribute('data-asset') || '') === (n.getAttribute('data-asset') || '') && o.classList.contains('alt-slot') === n.classList.contains('alt-slot') && mtfHolds(o));
+      m = Array.from(op.children).find(o => !keep.has(o) && o.tagName === n.tagName && (o.getAttribute('data-asset') || '') === (n.getAttribute('data-asset') || '') && o.classList.contains('alt-slot') === n.classList.contains('alt-slot') && o.classList.contains('tk-slot') === n.classList.contains('tk-slot') && mtfHolds(o));
     }
     if (m) {
       keep.add(m);
-      if (m.classList.contains('alt-slot')) { /* the coin board stays exactly as it is */ } else if (m.classList.contains('ctb-slot')) {                                   // the running call banner is NOT redrawn - only the numbers it reads are refreshed
+      if (m.classList.contains('alt-slot') || m.classList.contains('tk-slot')) { /* the coin board and the live trades chart stay exactly as they are */ } else if (m.classList.contains('ctb-slot')) {                                   // the running call banner is NOT redrawn - only the numbers it reads are refreshed
         const oj = m.querySelector('.ctb-json'), nj = n.querySelector('.ctb-json');
         if (oj && nj && oj.textContent !== nj.textContent) oj.textContent = nj.textContent;
       } else if (!m.classList.contains('mtf-live')) { mtfSyncAttrs(m, n); mtfSync(m, n); }
@@ -8112,6 +8125,7 @@ async function refreshInner() {
   ctbPaint();
   ctbSync();
   altSync();
+  tkSync();
   evPaint();
   restorePatternTabs();
   drawAllBm();                         // after the pull-downs are restored, so an open heat map is drawn
@@ -8211,6 +8225,114 @@ function endPoll() {
   }).catch(() => {}).then(() => { endBusy = false; });
 }
 setInterval(endPoll, LOCAL_PAGE ? 250 : 400);
+// ---- LIVE TRADES chart (owner, 2026-10-29: 'make the 5-second chart', like aggr.trade): 1 / 5 / 15 second candles built from the real trades (price from Coinbase + Kraken, the exchanges Kalshi's index follows; dollars
+// bought / sold from every exchange), with the Kalshi line, the round start and the END CALL lock marked. It polls /tick5 by itself (only the new bars after the first fetch), so the page refresh never redraws it. Information only.
+const TK = {els: {}, tf: 5, data: {}, busy: {}};
+try { const v0 = parseInt(localStorage.getItem('tkTf')); if (v0 === 1 || v0 === 5 || v0 === 15) TK.tf = v0; } catch (e) {}
+function tkBuild(a) {
+  const el = document.createElement('div'); el.className = 'tk-wrap'; el.setAttribute('data-asset', a);
+  el.innerHTML = '<div class="tk-head"><b>LIVE TRADES</b><span class="tk-px">waiting for trades...</span><span class="tk-btns"></span></div><canvas class="tk-cv"></canvas><div class="tk-foot"></div>';
+  const bt = el.querySelector('.tk-btns');
+  [1, 5, 15].forEach(t => {
+    const b = document.createElement('button'); b.textContent = t + 's'; b.setAttribute('data-tf', t);
+    b.onclick = () => { TK.tf = t; try { localStorage.setItem('tkTf', String(t)); } catch (e) {} Object.keys(TK.data).forEach(k => delete TK.data[k]); tkPoll(); };
+    bt.appendChild(b);
+  });
+  return el;
+}
+function tkSync() {
+  document.querySelectorAll('.tk-slot').forEach(slot => {
+    const a = slot.getAttribute('data-asset');
+    const el = TK.els[a] || (TK.els[a] = tkBuild(a));
+    if (el.parentNode !== slot) { slot.appendChild(el); tkDraw(a); }
+  });
+}
+function tkFmt(p, dec) { return p.toLocaleString('en-US', {minimumFractionDigits: dec, maximumFractionDigits: dec}); }
+function tkDraw(a) {
+  const el = TK.els[a], D = TK.data[a];
+  if (!el || !el.parentNode || el.offsetParent === null) return;
+  el.querySelectorAll('.tk-btns button').forEach(b => b.classList.toggle('on', Number(b.getAttribute('data-tf')) === TK.tf));
+  const cv = el.querySelector('canvas'), px = el.querySelector('.tk-px'), ft = el.querySelector('.tk-foot');
+  const cw = cv.clientWidth, ch = cv.clientHeight; if (cw < 50 || ch < 50) return;
+  const dpr = window.devicePixelRatio || 1;
+  if (cv.width !== Math.round(cw * dpr) || cv.height !== Math.round(ch * dpr)) { cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr); }
+  const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, cw, ch);
+  const fresh = D && D.bars && D.bars.length && (Date.now() / 1000 - D.at) < 6;
+  if (!D || !D.bars || !D.bars.length) { g.fillStyle = '#8b949e'; g.font = '14px sans-serif'; g.fillText('waiting for trades...', 12, 30); return; }
+  const AX = 74, TOP = 6, BOT = 18, VOLH = Math.min(46, ch * 0.2);
+  const plotW = cw - AX - 4, plotH = ch - TOP - BOT - VOLH - 4;
+  const vis = Math.min(D.bars.length, Math.max(20, Math.floor(plotW / 5)));
+  const bars = D.bars.slice(-vis), bw = plotW / vis, tf = D.tf;
+  let lo = Infinity, hi = -Infinity, vmax = 1;
+  bars.forEach(b => { if (b[3] < lo) lo = b[3]; if (b[2] > hi) hi = b[2]; vmax = Math.max(vmax, b[5] + b[6]); });
+  const last = bars[bars.length - 1][4], dec = last >= 1000 ? 1 : (last >= 10 ? 3 : 4);
+  const rg0 = Math.max(hi - lo, last * 0.00006);
+  const line = D.line;
+  if (line && line > lo - 3 * rg0 && line < hi + 3 * rg0) { lo = Math.min(lo, line); hi = Math.max(hi, line); }
+  const rg = Math.max(hi - lo, last * 0.00006), padv = rg * 0.07; lo -= padv; hi += padv;
+  const Y = p => TOP + (hi - p) / (hi - lo) * plotH;
+  g.font = '11px sans-serif'; g.textBaseline = 'middle';
+  for (let k = 0; k <= 4; k++) {                                              // price grid + labels on the right
+    const p = lo + (hi - lo) * k / 4, y = Y(p);
+    g.strokeStyle = 'rgba(255,255,255,0.07)'; g.beginPath(); g.moveTo(0, y); g.lineTo(plotW, y); g.stroke();
+    g.fillStyle = '#8b949e'; g.fillText(tkFmt(p, dec), plotW + 6, y);
+  }
+  const X = i => i * bw, tAt = t => (t - bars[0][0]) / tf * bw;
+  const vline = (t, col, label) => {                                          // a vertical marker (round start / call locked)
+    if (t === null || t === undefined || t < bars[0][0] || t > bars[bars.length - 1][0] + tf) return;
+    const x = tAt(t); g.strokeStyle = col; g.setLineDash([3, 4]); g.beginPath(); g.moveTo(x, TOP); g.lineTo(x, TOP + plotH + VOLH); g.stroke(); g.setLineDash([]);
+    g.fillStyle = col; g.textBaseline = 'top'; g.fillText(label, Math.min(x + 4, plotW - 90), TOP + 2); g.textBaseline = 'middle';
+  };
+  if (D.close) vline(D.close - 900, 'rgba(139,148,158,0.8)', 'round start');
+  if (D.lock && D.lock.ts) vline(D.lock.ts, '#39d0d8', 'CALL ' + (D.lock.side === 'YES' ? 'UP' : (D.lock.side === 'NO' ? 'DOWN' : D.lock.side)));
+  bars.forEach((b, i) => {                                                    // volume: bought (green) under sold (red)
+    const x = X(i), w = Math.max(1, bw * 0.7), bx = x + (bw - w) / 2;
+    const hb = b[5] / vmax * VOLH, hs = b[6] / vmax * VOLH, base = TOP + plotH + VOLH + 2;
+    g.fillStyle = 'rgba(63,185,80,0.55)'; g.fillRect(bx, base - hb, w, hb);
+    g.fillStyle = 'rgba(248,81,73,0.55)'; g.fillRect(bx, base - hb - hs, w, hs);
+  });
+  bars.forEach((b, i) => {                                                    // candles
+    const up = b[4] >= b[1], col = up ? '#3fb950' : '#f85149', x = X(i) + bw / 2, w = Math.max(1, bw * 0.7);
+    g.strokeStyle = col; g.fillStyle = col; g.beginPath(); g.moveTo(x, Y(b[2])); g.lineTo(x, Y(b[3])); g.stroke();
+    const y1 = Y(b[1]), y2 = Y(b[4]); g.fillRect(x - w / 2, Math.min(y1, y2), w, Math.max(1, Math.abs(y2 - y1)));
+  });
+  if (line && line >= lo && line <= hi) {                                     // the Kalshi line
+    const y = Y(line); g.strokeStyle = '#ffd24a'; g.setLineDash([6, 4]); g.beginPath(); g.moveTo(0, y); g.lineTo(plotW, y); g.stroke(); g.setLineDash([]);
+    g.fillStyle = '#ffd24a'; g.fillRect(plotW + 1, y - 8, AX - 2, 16); g.fillStyle = '#0d1117'; g.fillText('LINE ' + tkFmt(line, dec), plotW + 4, y);
+  }
+  const yl = Y(last), lc = bars[bars.length - 1][4] >= bars[bars.length - 1][1] ? '#3fb950' : '#f85149';
+  g.strokeStyle = lc; g.setLineDash([2, 3]); g.beginPath(); g.moveTo(0, yl); g.lineTo(plotW, yl); g.stroke(); g.setLineDash([]);
+  g.fillStyle = lc; g.fillRect(plotW + 1, yl - 8, AX - 2, 16); g.fillStyle = '#0d1117'; g.font = 'bold 11px sans-serif'; g.fillText(tkFmt(last, dec), plotW + 4, yl); g.font = '11px sans-serif';
+  g.fillStyle = '#8b949e'; g.textBaseline = 'alphabetic';                      // time labels along the bottom (this device's own clock)
+  const every = Math.max(1, Math.round(95 / bw));
+  bars.forEach((b, i) => { if (Math.round(b[0] / tf) % every === 0 && i > 2 && i < bars.length - 2) {
+    const d = new Date(b[0] * 1000); g.fillText(d.toLocaleTimeString('en-US', tf < 15 ? {hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true} : {hour: 'numeric', minute: '2-digit', hour12: true}), X(i) - 22, ch - 4); } });
+  let pxh = '<b>' + tkFmt(last, dec) + '</b>';
+  if (line) { const df = last - line; pxh += ' &nbsp;<span class="ln">line ' + tkFmt(line, dec) + '</span> &nbsp;<span class="' + (df >= 0 ? 'up' : 'down') + '">' + (df >= 0 ? 'ABOVE by ' : 'BELOW by ') + tkFmt(Math.abs(df), dec) + '</span>'; }
+  if (!fresh) pxh += ' &nbsp;<span class="down">no new trades for a few seconds</span>';
+  if (px.innerHTML !== pxh) px.innerHTML = pxh;
+  const ftx = tf + '-second candles. Price: Coinbase + Kraken blend (the same price as the line comparison). Volume: every exchange, green = bought, red = sold. Information only.';
+  if (ft.textContent !== ftx) ft.textContent = ftx;
+}
+function tkPoll() {
+  Object.keys(TK.els).forEach(a => {
+    const el = TK.els[a];
+    if (!el.parentNode || el.offsetParent === null || document.hidden || TK.busy[a]) return;
+    const D = TK.data[a], tf = TK.tf, have = D && D.tf === tf && D.bars.length;
+    const since = have ? D.bars[Math.max(0, D.bars.length - 3)][0] : null;
+    TK.busy[a] = true;
+    fetch('/tick5?asset=' + a + '&tf=' + tf + '&n=150' + (since ? '&since=' + since : ''), {cache: 'no-store'}).then(r => r.ok ? r.json() : null).then(j => {
+      if (!j || !j.b || j.tf !== TK.tf) return;
+      let bars = j.b;
+      if (!j.full && D && D.tf === j.tf) bars = D.bars.filter(b => b[0] < (j.b.length ? j.b[0][0] : 1e12)).concat(j.b);
+      TK.data[a] = {tf: j.tf, bars: bars.slice(-400), line: j.line, close: j.close, lock: j.lock, at: j.t};
+      tkDraw(a);
+    }).catch(() => {}).then(() => { TK.busy[a] = false; });
+  });
+}
+setInterval(tkPoll, LOCAL_PAGE ? 400 : 1000);
+setTimeout(tkPoll, 600);
+window.addEventListener('resize', () => Object.keys(TK.els).forEach(tkDraw));
 // ---- the all-coins 15-minute board: a small rolling banner between the alert window and the call banner. It is built once per slot and filled from /alts (its own tiny feed, not the page refresh).
 const ALT = {data: null, els: {}};
 function altBuild() {
@@ -10248,6 +10370,25 @@ def _alt_slot_html(name):
     return f'<div class="alt-slot" data-asset="{name}"></div>'
 
 
+def _tick_slot_html(name):
+    return f'<div class="tk-slot" data-asset="{name}"></div>' if name in _flow.ASSETS else ""
+
+
+def _tick5_json(asset, tf, n, since):
+    """/tick5: the live trades chart's bars (1 / 5 / 15 second candles from the real trades), the Kalshi line, the round's close time and the END CALL lock. Information only."""
+    if asset not in _flow.ASSETS:
+        return b"{}"
+    bars = _flow.HUB.tick_bars(asset, tf, n, since)
+    with _lock:
+        d = dict(_state.get(asset) or {})
+    tk = d.get("ticker")
+    ct = _window_close_utc(tk)
+    lk = _end_locks.get(f"{asset}|{tk}") if tk else None
+    out = {"t": round(time.time(), 2), "tf": tf if tf in (1, 5, 15) else 5, "b": bars, "line": d.get("target_price"), "close": ct.timestamp() if ct else None, "full": since is None,
+           "lock": ({"ts": lk.get("ts"), "side": lk.get("side")} if isinstance(lk, dict) else None)}
+    return json.dumps(out, separators=(",", ":")).encode("utf-8")
+
+
 def build_call_timing_panel(name):
     """The 3 calls: one floating pull-down with three windows (EARLY / MID / LATE), each with the full picture of its call, plus a small 'Scoreboard & info' tab. Information only."""
     if name not in ("BTC", "XRP"):
@@ -11581,6 +11722,18 @@ def _tts_write_template():
                 json.dump({"api_key": "PASTE-YOUR-ELEVENLABS-API-KEY-HERE", "voice_id": "PASTE-A-VOICE-ID-HERE", "model_id": "eleven_flash_v2_5", "monthly_char_cap": 8000}, f, indent=2)
     except Exception:
         pass
+
+
+_ALLOW_LAN_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data_cache", "allow_lan.txt")          # make this file to let phones / laptops on the home network VIEW the PC copy again
+_OWN_ADDRS = {"127.0.0.1", "::1", "::ffff:127.0.0.1"}
+try:
+    _OWN_ADDRS.update(socket.gethostbyname_ex(socket.gethostname())[2])            # this PC's own network addresses (the dashboard opened through its own LAN address still counts as this PC)
+except Exception:
+    pass
+
+
+def _this_pc(addr):
+    return addr in _OWN_ADDRS or (addr or "").replace("::ffff:", "") in _OWN_ADDRS
 
 
 def _private_client(addr):
@@ -14919,6 +15072,7 @@ def render_html():
           {call_timing_html}
           <div class="cwrow">{call_windows_html}</div>
           {daily_range_row_html}
+          {_tick_slot_html(name)}
           <div class="tugrow">
             <div class="tugcol">
               {tug_html}
@@ -15034,6 +15188,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 else:
                     self._send(402, b'{"error": "membership needed"}', "application/json")
                 return False
+        _ctl = path == "/arm_live" or (path.startswith("/set_") and path != "/set_pattern_tf") or path == "/bookmap_ingest"
+        if not HOSTED_PASSWORD and not ACCEPT_SYNC and not _this_pc(self.client_address[0]) and (_ctl or not os.path.exists(_ALLOW_LAN_FILE)):          # the PC copy answers to this PC only (the trading controls always do)
+            body = b'{"error": "private: this dashboard only opens on the PC the bot runs on"}'
+            self.send_response(403); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(body))); self.end_headers()
+            self.wfile.write(body)
+            print(f"[security] refused {path} from {self.client_address[0]} (not this PC)")
+            return False
+        if HOSTED_PASSWORD and self._who and self._who[0] != "admin" and path in ("/debug_poll", "/debug_profile", "/debug_threads", "/flow_debug"):          # internals are for the admin only
+            self._send(403, b'{"error": "admin only"}', "application/json")
+            return False
         if HOSTED_READ_ONLY and (path == "/arm_live" or (path.startswith("/set_") and path != "/set_pattern_tf")) or (HOSTED_READ_ONLY and path == "/bookmap_ingest"):
             body = b'{"error": "this copy is read-only"}'
             self.send_response(403); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(body))); self.end_headers()
@@ -15374,6 +15538,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_response(200); self.send_header("Content-Type", "application/json"); self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-store"); self.end_headers()
             self.wfile.write(body)
+            return
+        if parsed.path == "/tick5":
+            _q = urllib.parse.parse_qs(parsed.query)
+            try:
+                _tb = _tick5_json((_q.get("asset") or [""])[0], int((_q.get("tf") or ["5"])[0]), int((_q.get("n") or ["120"])[0]), int(_q["since"][0]) if _q.get("since") else None)
+            except Exception as _te:
+                _tb = b"{}"
+                print(f"[tick5] failed: {_te!r}")
+            self.send_response(200); self.send_header("Content-Type", "application/json")
+            if len(_tb) > 400 and "gzip" in (self.headers.get("Accept-Encoding", "") or ""):
+                _tb = gzip.compress(_tb, 4); self.send_header("Content-Encoding", "gzip")
+            self.send_header("Content-Length", str(len(_tb))); self.send_header("Cache-Control", "no-store"); self.end_headers()
+            self.wfile.write(_tb)
             return
         if parsed.path == "/alts":
             _ab = _alts_json()

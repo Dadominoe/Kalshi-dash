@@ -58,6 +58,7 @@ class FlowHub:
         self.line_vol = {}                          # asset -> {"ticker","above","below"} dollars traded on USD venues above / below the line
         self.on_trade = None                        # optional hook: fn(venue, asset, usd, side, price) for every trade
         self.bars = {a: {} for a in ASSETS}         # asset -> venue -> {minute: [open, close, usd_volume]} (for the composite RSI)
+        self.tbars = {a: {} for a in ASSETS}        # asset -> {second: [open, high, low, close, buy_usd, sell_usd]}: price from Coinbase + Kraken trades, dollars from every exchange (the live trades chart)
         self.deriv = {a: {} for a in ASSETS}        # asset -> funding / open interest / premium / liquidations (perp markets)
         self.oi_hist = {a: [] for a in ASSETS}      # asset -> [(ts, total open interest usd)]
 
@@ -72,6 +73,10 @@ class FlowHub:
             row = b.setdefault(sec, {}).setdefault(venue, [0.0, 0.0, 0])
             row[0 if side == "buy" else 1] += usd
             row[2] += 1
+            tb = self.tbars[asset].get(sec)
+            if tb is None:
+                tb = self.tbars[asset][sec] = [None, None, None, None, 0.0, 0.0]
+            tb[4 if side == "buy" else 5] += usd
             self.last_seen[(venue, asset)] = now
             ln = self.line.get(asset)
             if ln and price and venue in ("coinbase", "kraken", "bitstamp", "gemini", "bitfinex", "cryptocom"):
@@ -92,6 +97,8 @@ class FlowHub:
                 for a in self.buckets:
                     for k in [k for k in self.buckets[a] if k < cutoff]:
                         del self.buckets[a][k]
+                    for k in [k for k in self.tbars[a] if k < sec - 7200]:
+                        del self.tbars[a][k]
                     for vb in self.bars[a].values():
                         for k in [k for k in vb if k < sec // 60 - 200]:
                             del vb[k]
@@ -101,6 +108,67 @@ class FlowHub:
                 cb(venue, asset, usd, side, price)
             except Exception:
                 pass
+
+    def tick_price(self, asset, price):
+        """The page's blended live price (Coinbase + Kraken), fed in every time it moves: it makes the open / high / low / close of the live trades chart."""
+        if asset not in self.tbars or not price:
+            return
+        sec = int(time.time())
+        with self.lock:
+            tb = self.tbars[asset].get(sec)
+            if tb is None:
+                tb = self.tbars[asset][sec] = [None, None, None, None, 0.0, 0.0]
+            if tb[0] is None:
+                tb[0] = tb[1] = tb[2] = price
+            tb[3] = price
+            if price > tb[1]:
+                tb[1] = price
+            if price < tb[2]:
+                tb[2] = price
+
+    def tick_bars(self, asset, tf, n, since=None):
+        """The live trades chart: [[bar_start, open, high, low, close, buy_usd, sell_usd], ...] oldest first, tf seconds per bar (1, 5 or 15), the bar still forming included. Gaps are flat bars at the last price.
+        With since = a bar start, only bars from there on (the page keeps the older ones)."""
+        tf = tf if tf in (1, 5, 15) else 5
+        now = int(time.time())
+        end = now // tf * tf
+        start = end - (max(10, min(int(n), 400)) - 1) * tf
+        if since is not None:
+            start = max(start, int(since) // tf * tf)
+        with self.lock:
+            items = sorted((s, tuple(v)) for s, v in self.tbars.get(asset, {}).items() if s <= now)
+        prev = None
+        agg = {}
+        for s, v in items:
+            k = s // tf * tf
+            if v[0] is not None and k < start:
+                prev = v[3]
+            if k < start:
+                continue
+            a = agg.get(k)
+            if a is None:
+                a = agg[k] = [None, None, None, None, 0.0, 0.0]
+            if v[0] is not None:
+                if a[0] is None:
+                    a[0], a[1], a[2] = v[0], v[1], v[2]
+                else:
+                    a[1] = max(a[1], v[1]); a[2] = min(a[2], v[2])
+                a[3] = v[3]
+            a[4] += v[4]; a[5] += v[5]
+        out = []
+        for k in range(start, end + tf, tf):
+            a = agg.get(k)
+            if a is not None and a[0] is not None:
+                o, h, l, c = a[0], a[1], a[2], a[3]
+                bu, se = a[4], a[5]
+            else:
+                if prev is None:
+                    continue
+                o = h = l = c = prev
+                bu, se = (a[4], a[5]) if a is not None else (0.0, 0.0)
+            prev = c
+            out.append([k, round(o, 5), round(h, 5), round(l, 5), round(c, 5), int(bu), int(se)])
+        return out
 
     def set_book(self, venue, asset, bid_usd, ask_usd):
         with self.lock:
