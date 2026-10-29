@@ -806,7 +806,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-28-instant115"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-28-pypscroll116"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -7993,6 +7993,12 @@ let lastInputActivity = 0;
 ['focusin', 'input', 'keydown'].forEach(ev =>
   document.addEventListener(ev, () => { lastInputActivity = Date.now(); }));
 let pageBuild = null;
+// Pick your poison scrolls sideways on a phone. The page swaps its whole content every few seconds, which made the table brand new and snapped it back to the left:
+// keep the scroll position across the swap, and do not swap at all while a finger / the wheel is on the table.
+let pypHold = 0;
+['touchstart', 'touchmove', 'wheel'].forEach(ev => document.addEventListener(ev, e => { if (e.target && e.target.closest && e.target.closest('.pyp-body')) pypHold = Date.now() + 2500; }, {passive: true, capture: true}));
+document.addEventListener('touchend', e => { if (e.target && e.target.closest && e.target.closest('.pyp-body')) pypHold = Date.now() + 1800; }, {passive: true, capture: true});
+function pypKey(el) { const d = el.closest('details[data-pat]'); return d ? d.getAttribute('data-pat') : null; }
 
 function scrollKey(el) {
   if (el.classList.contains('ct-body')) { const w0 = el.closest('.pat-win'); return w0 ? 'ct|' + w0.getAttribute('data-asset') : null; }
@@ -8018,6 +8024,7 @@ async function refresh() {
   try { await refreshInner(); } finally { refreshBusySince = 0; }
 }
 async function refreshInner() {
+  if (Date.now() < pypHold) { lastRefreshOk = Date.now(); return; }
   if (Date.now() < sliderHold) { lastRefreshOk = Date.now(); return; }                   // the narrator volume slider is being dragged: do not rebuild it under the finger
   const activeNow = document.activeElement;
   const typingNow = activeNow && activeNow.tagName === 'INPUT' &&
@@ -8064,6 +8071,8 @@ async function refreshInner() {
     if (ch && ch.querySelector('svg') && fastLive[a] && Date.now() - fastLive[a] < 3000)
       keepChart[a] = {tf: ch.getAttribute('data-tf'), svg: ch.innerHTML, vol: vb ? vb.outerHTML : null};
   });
+  const keepPyp = {};
+  contentEl.querySelectorAll('.pyp-body').forEach(el => { const k = pypKey(el); if (k && (el.scrollLeft || el.scrollTop)) keepPyp[k] = [el.scrollLeft, el.scrollTop]; });
   const keepScroll = {};                 // scroll position of the pattern list and the alert box (the swap below would snap them back to the top = the "twitch")
   contentEl.querySelectorAll('.pat-win-legend, .alert-dock[data-dock], .ct-body').forEach(el => { const k = scrollKey(el); if (k && el.scrollTop) keepScroll[k] = el.scrollTop; });
   if (contentEl.querySelector('.mtf-live')) {
@@ -8108,6 +8117,7 @@ async function refreshInner() {
   applyFit();
   syncLegendHeights();
   contentEl.querySelectorAll('.pat-win-legend, .alert-dock[data-dock], .ct-body').forEach(el => { const k = scrollKey(el); if (k && keepScroll[k]) el.scrollTop = keepScroll[k]; });
+  contentEl.querySelectorAll('.pyp-body').forEach(el => { const k = pypKey(el), v = k && keepPyp[k]; if (v) { el.scrollLeft = v[0]; el.scrollTop = v[1]; } });
   syncKalshiArrows();
   renderExpanded();
   checkFlipAlerts();
