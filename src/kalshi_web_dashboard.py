@@ -807,7 +807,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-29-tick119"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-29-tick120"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -4912,7 +4912,6 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
   body[data-view="BTC"] .card[data-asset="BTC"], body[data-view="XRP"] .card[data-asset="XRP"] { display:grid; grid-template-columns:minmax(440px,0.85fr) minmax(0,1.4fr); column-gap:16px; align-items:start; }
   body[data-view="BTC"] .card[data-asset="BTC"] > *, body[data-view="XRP"] .card[data-asset="XRP"] > * { grid-column:1 / -1; }
   body[data-view="BTC"] .card[data-asset="BTC"] > .tugrow, body[data-view="XRP"] .card[data-asset="XRP"] > .tugrow { grid-column:1; }
-  body[data-view="BTC"] .card[data-asset="BTC"] > .tk-slot, body[data-view="XRP"] .card[data-asset="XRP"] > .tk-slot { grid-column:1; }
   body[data-view="BTC"] .card[data-asset="BTC"] > .pat-win, body[data-view="XRP"] .card[data-asset="XRP"] > .pat-win { grid-column:2; margin-top:0; }
 }
 .ct-drop { margin:4px 0; position:relative; }
@@ -7376,17 +7375,17 @@ function mtfSyncAttrs(o, n) {
   Array.from(o.attributes).forEach(at => { if (!n.hasAttribute(at.name)) o.removeAttribute(at.name); });
   Array.from(n.attributes).forEach(at => { if (o.getAttribute(at.name) !== at.value) o.setAttribute(at.name, at.value); });
 }
-function mtfHolds(el) { return el.nodeType === 1 && (el.classList.contains('mtf-live') || el.classList.contains('ctb-slot') || el.classList.contains('alt-slot') || el.classList.contains('tk-slot') || !!el.querySelector('.mtf-live, .ctb-slot')); }
+function mtfHolds(el) { return el.nodeType === 1 && (el.classList.contains('mtf-live') || el.classList.contains('ctb-slot') || el.classList.contains('alt-slot') || el.classList.contains('tk-slot') || el.classList.contains('tk-drop') || !!el.querySelector('.mtf-live, .ctb-slot')); }
 function mtfSync(op, np) {
   const keep = new Set(), out = [];
   Array.from(np.childNodes).forEach(n => {
     let m = null;
     if (n.nodeType === 1 && mtfHolds(n)) {
-      m = Array.from(op.children).find(o => !keep.has(o) && o.tagName === n.tagName && (o.getAttribute('data-asset') || '') === (n.getAttribute('data-asset') || '') && o.classList.contains('alt-slot') === n.classList.contains('alt-slot') && o.classList.contains('tk-slot') === n.classList.contains('tk-slot') && mtfHolds(o));
+      m = Array.from(op.children).find(o => !keep.has(o) && o.tagName === n.tagName && (o.getAttribute('data-asset') || '') === (n.getAttribute('data-asset') || '') && o.classList.contains('alt-slot') === n.classList.contains('alt-slot') && o.classList.contains('tk-slot') === n.classList.contains('tk-slot') && o.classList.contains('tk-drop') === n.classList.contains('tk-drop') && mtfHolds(o));
     }
     if (m) {
       keep.add(m);
-      if (m.classList.contains('alt-slot') || m.classList.contains('tk-slot')) { /* the coin board and the live trades chart stay exactly as they are */ } else if (m.classList.contains('ctb-slot')) {                                   // the running call banner is NOT redrawn - only the numbers it reads are refreshed
+      if (m.classList.contains('alt-slot') || m.classList.contains('tk-slot') || m.classList.contains('tk-drop')) { /* the coin board and the live trades pull-down stay exactly as they are */ } else if (m.classList.contains('ctb-slot')) {                                   // the running call banner is NOT redrawn - only the numbers it reads are refreshed
         const oj = m.querySelector('.ctb-json'), nj = n.querySelector('.ctb-json');
         if (oj && nj && oj.textContent !== nj.textContent) oj.textContent = nj.textContent;
       } else if (!m.classList.contains('mtf-live')) { mtfSyncAttrs(m, n); mtfSync(m, n); }
@@ -8317,7 +8316,7 @@ function tkDraw(a) {
 function tkPoll() {
   Object.keys(TK.els).forEach(a => {
     const el = TK.els[a];
-    if (!el.parentNode || el.offsetParent === null || document.hidden || TK.busy[a]) return;
+    if (!el.parentNode || el.offsetParent === null || document.hidden || TK.busy[a]) return;                    // closed pull-down = nothing is fetched
     const D = TK.data[a], tf = TK.tf, have = D && D.tf === tf && D.bars.length;
     const since = have ? D.bars[Math.max(0, D.bars.length - 3)][0] : null;
     TK.busy[a] = true;
@@ -8330,6 +8329,7 @@ function tkPoll() {
     }).catch(() => {}).then(() => { TK.busy[a] = false; });
   });
 }
+document.addEventListener('toggle', e => { const t = e.target; if (t && t.classList && t.classList.contains('tk-drop') && t.open) { tkSync(); tkPoll(); setTimeout(tkPoll, 300); } }, true);
 setInterval(tkPoll, LOCAL_PAGE ? 400 : 1000);
 setTimeout(tkPoll, 600);
 window.addEventListener('resize', () => Object.keys(TK.els).forEach(tkDraw));
@@ -10371,7 +10371,10 @@ def _alt_slot_html(name):
 
 
 def _tick_slot_html(name):
-    return f'<div class="tk-slot" data-asset="{name}"></div>' if name in _flow.ASSETS else ""
+    if name not in _flow.ASSETS:
+        return ""
+    return (f'<details class="lc-drop tk-drop" data-asset="{name}" data-pat="TK|{name}"><summary><b>Live trades</b> <span class="hint">- 1 / 5 / 15 second candles from the real trades, with the line and the call - click to open</span></summary>'
+            f'<div class="tk-slot" data-asset="{name}"></div></details>')
 
 
 def _tick5_json(asset, tf, n, since):
@@ -15072,7 +15075,6 @@ def render_html():
           {call_timing_html}
           <div class="cwrow">{call_windows_html}</div>
           {daily_range_row_html}
-          {_tick_slot_html(name)}
           <div class="tugrow">
             <div class="tugcol">
               {tug_html}
@@ -15081,6 +15083,7 @@ def render_html():
             <div class="tugvol">{vol_side_html}</div>
           </div>
           {pattern_window_html}
+          {_tick_slot_html(name)}
           {bookmap_panel_html}
           {line_cross_html}
           {last_windows_html}
