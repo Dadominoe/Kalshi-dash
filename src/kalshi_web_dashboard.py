@@ -807,7 +807,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-29-tick120"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-29-mid121"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -11188,10 +11188,6 @@ def _sig_scan_round(coin):
         if d.get("confidence") is not None and d.get("leaning") in ("YES", "NO"):
             ky = d["confidence"] if d["leaning"] == "YES" else 1 - d["confidence"]
             p = ky if yes else 1 - ky
-        with _ct_mu:
-            _cm = (_ct[coin].get(ticker) or {}).get("m") or {}
-            early, late = _cm.get("11"), _cm.get("3")
-        two_agree = (bool(early) and early[0] == lk["side"]) or (bool(late) and late[0] == lk["side"])        # early + mid agree, or mid + late agree
         km = tn.get("k_up")                                                  # the share of Kalshi money on YES; for the called side:
         k_side = None if km is None else (km if yes else 1 - km)
         if holding and p is not None and p >= 0.94 and left > 20 and "cash" not in fired:
@@ -11207,10 +11203,10 @@ def _sig_scan_round(coin):
                 what = "trap" if hit[0].endswith("trap") else "stop hunt"
                 _sig_emit(coin, "hold", f"{coin}. Diamond hands. That {'drop' if yes else 'pump'} was a fake, a {what}. The {'up' if yes else 'down'} call stands.", spot, f"th:{coin}:{ticker}", 60)
         if holding and fr and "cash" not in fired:
-            if (60 < left <= 300 and two_agree and fr[0] < 0.30 and p is not None and 0.70 <= p < 0.94
+            if (60 < left <= 300 and fr[0] < 0.30 and p is not None and 0.70 <= p < 0.94
                     and (k_side is None or k_side >= 0.75) and "hold" not in fired):
-                fired.add("hold")                                            # hold only when it all looks decent: two calls agree, Kalshi price 70-94%, Kalshi money 75%+, low flip risk, price on the right side
-                _sig_emit(coin, "hold", f"{coin}. Hold the line. Two calls agree, Kalshi has it at {p * 100:.0f} percent and the call is holding.", spot, f"hd:{coin}:{ticker}", 60)
+                fired.add("hold")                                            # hold only when it all looks decent: Kalshi price 70-94%, Kalshi money 75%+, low flip risk, price on the right side (owner 2026-10-29: the narrator goes by the locked mid call only - no early / late call)
+                _sig_emit(coin, "hold", f"{coin}. Hold the line. Kalshi has it at {p * 100:.0f} percent and the call is holding.", spot, f"hd:{coin}:{ticker}", 60)
             if left <= 120 and fr[0] < 0.10 and (p is None or p < 0.94) and "safe" not in fired:
                 fired.add("safe")
                 _sig_emit(coin, "stop_up", f"{coin}. The call looks safe. Flip risk is only {fr[0] * 100:.0f} percent.", spot, f"su:{coin}:{ticker}", 60)
