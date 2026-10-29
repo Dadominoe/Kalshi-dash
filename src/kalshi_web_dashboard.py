@@ -806,7 +806,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-29-bothfit117"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-29-nofree118"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -7753,14 +7753,14 @@ function toggleFit() {
 function bothScale() {
   // dual screen on a laptop: BTC and XRP each need about 990 px, so shrink the page just enough that they sit SIDE BY SIDE instead of one under the other (steps of 2%)
   if (document.body.getAttribute('data-view') !== 'both' || window.innerWidth < 900) return false;      // phones stay stacked
-  document.body.style.zoom = String(Math.round(Math.min(1, Math.max(0.5, window.innerWidth / 2000)) * 50) / 50);
+  document.body.style.zoom = String(Math.round(Math.min(0.8, Math.max(0.5, window.innerWidth / 2000)) * 50) / 50);
   return true;
 }
 function applyFit(force) {
   const bothOn = document.body.getAttribute('data-view') === 'both' && window.innerWidth >= 900;
   if (bothOn && !fitScreen) { bothScale(); return; }                  // Fit to screen OFF: width rule only
   if (!fitScreen) { document.body.style.zoom = ''; return; }
-  if (!force && (fitDone || Date.now() - userScrollAt < 10000)) { if (bothOn && lastFit) document.body.style.zoom = String(Math.min(lastFit, Math.round(Math.min(1, Math.max(0.5, window.innerWidth / 2000)) * 50) / 50)); return; }
+  if (!force && (fitDone || Date.now() - userScrollAt < 10000)) { if (bothOn && lastFit) document.body.style.zoom = String(Math.min(lastFit, Math.round(Math.min(0.8, Math.max(0.5, window.innerWidth / 2000)) * 50) / 50)); return; }
   const rows = Array.from(document.querySelectorAll('.pat-chart-row, .pat-win, .tugrow')).filter(r => r.offsetParent !== null);       // the chart is now the live pattern window (.pat-win), no longer a .pat-chart-row: fit to the chart, or to the price-vs-line block when the chart is closed
   if (!rows.length) return;
   fitDone = true;
@@ -7771,7 +7771,7 @@ function applyFit(force) {
   let z = Math.round(Math.min(1, Math.max(0.6, vh / H)) * 50) / 50;      // steps of 2% so it never jitters
   if (!force && Math.abs(z - lastFit) < 0.021) z = lastFit;
   lastFit = z;
-  if (bothOn) z = Math.min(z, Math.round(Math.min(1, Math.max(0.5, window.innerWidth / 2000)) * 50) / 50);       // both coins side by side: the smaller of the width rule and the height fit
+  if (bothOn) z = Math.min(z, Math.round(Math.min(0.8, Math.max(0.5, window.innerWidth / 2000)) * 50) / 50);       // both coins side by side: the smaller of the width rule and the height fit
   document.body.style.zoom = String(z);
   const total = H * z;
   if (document.body.getAttribute('data-view') === 'both') window.scrollTo(0, 0);       // dual screen: shrink so both coins sit side by side, and stay at the top

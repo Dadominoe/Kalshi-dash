@@ -22,6 +22,7 @@ from src import accounts as _acc
 MEMBERSHIP_ON = os.environ.get("MEMBERSHIP_ON", "") == "1"
 WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 TRIAL_HOURS = 3
+FREE_PASS_ON = False                                   # owner 2026-10-29: no free pass for now (True brings it back)
 _DATA = _acc._DATA
 TRIALS_FILE = os.path.join(_DATA, "trials.json")
 EVENTS_FILE = os.path.join(_DATA, "stripe_events.json")
@@ -168,6 +169,8 @@ def grant_days(name, days, plan="", customer=""):
 
 # ---- the one free pass
 def trial_available(name, ip):
+    if not FREE_PASS_ON:
+        return False, "The free pass is not offered at the moment."
     u = _acc.list_users().get(name) or {}
     if u.get("trial_used"):
         return False, "You already used your free pass."
@@ -320,7 +323,7 @@ def join_page(name, ip, msg="", err=False):
     else:
         head = '<div class="msg err">Your access has ended. Pick a plan to keep going.</div>'
     trial = ""
-    if st == "expired":
+    if st == "expired" and FREE_PASS_ON:
         trial = (f'<h2>Try it first</h2><p>One free {TRIAL_HOURS}-hour pass per person.</p><form method="post" action="/trial"><button type="submit">Start my free {TRIAL_HOURS}-hour pass</button></form>'
                  if ok else f'<h2>Try it first</h2><p style="color:#8b949e">{html.escape(why)}</p>')
     portal = (f'<p style="font-size:14px"><a href="{html.escape(pl["portal_url"])}">Manage or cancel a membership</a></p>' if (pl.get("portal_url") and not man) else "")

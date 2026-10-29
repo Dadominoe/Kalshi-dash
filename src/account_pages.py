@@ -56,7 +56,7 @@ def terms_page():
     ]
     if MEMBERSHIP_ON:
         sections = [(t, x) for t, x in sections if t not in ("Fees", "Your access", "Your information")] + [
-            ("Memberships and fees", "Access is by paid membership: 10 days for $65, 30 days for $165, or 3.5 months for $379. Every new account gets one free 3-hour pass (one per person). Each plan renews automatically at the same price when its time is up, until you cancel; you keep what you already paid for after you cancel. Payments are handled by Stripe, so we never see or store your card details. Members who paid the original flat $300 are lifetime members: they keep access for life and never pay again. The fee is only for access to the information. It is never a share of, a payment for, or a promise about any trading result."),
+            ("Memberships and fees", "Access is by paid membership: 10 days for $65, 30 days for $165, or 3.5 months for $379. Each plan renews automatically at the same price when its time is up, until you cancel; you keep what you already paid for after you cancel. Payments are handled by Stripe, so we never see or store your card details. Members who paid the original flat $300 are lifetime members: they keep access for life and never pay again. The fee is only for access to the information. It is never a share of, a payment for, or a promise about any trading result."),
             ("Your access", "Access lasts for the time you have paid for and can be changed or removed at any time. Do not share your login. Do not copy, redistribute or republish the content without the owner's written permission. The owner may change these terms; using the site after a change means you accept it."),
             ("Your information", "We keep the user name you choose, your e-mail address, a scrambled (hashed) version of your password, when you agreed to these terms, and when your membership starts and ends. Your chart choices are kept in your own browser. Card payments are taken by Stripe, not by us. We do not sell or share your information. We never ask for, and you should never type here, any exchange keys or bank details."),
         ]
@@ -100,7 +100,7 @@ def login_page(msg="", err=True):
         return _page("The Dominator", '<div style="text-align:center"><div style="font-size:13px;letter-spacing:3px;color:#8b949e">LIVE MARKET INTELLIGENCE</div>'
                      '<h1 style="font-size:34px;margin:6px 0 4px">THE DOMINATOR</h1><div style="color:#9da7b3;margin-bottom:18px">Live calls, flip warnings, order flow and charts for the 15-minute BTC and XRP rounds.</div></div>'
                      f'<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px">{cards}</div>'
-                     '<div class="msg" style="text-align:center">Try it free: <b>one 3-hour pass</b> for every new account. ' + ('Pay by Cash App, Venmo or PayPal - no card needed.' if _manual() else 'Plans renew automatically until you cancel.') + '</div>'
+                     '<div class="msg" style="text-align:center">Plans from <b>$65</b>. ' + ('Pay by Cash App, Venmo or PayPal - no card needed.' if _manual() else 'Plans renew automatically until you cancel.') + '</div>'
                      '<a href="/signup"><button type="button" style="width:100%;margin-top:4px;font-size:19px">Create an account</button></a>'
                      f'<h2 style="margin-top:26px">Already a member? Sign in</h2>{_msg(msg, err)}'
                      '<form method="post" action="/login"><label>User name</label><input name="u" autocomplete="username" required>'
@@ -116,7 +116,7 @@ def login_page(msg="", err=True):
 
 def signup_page(msg="", err=True, done=False):
     if MEMBERSHIP_ON:
-        return _page("Create an account", f'<h1>Create an account</h1>{_msg(msg, err)}<div class="msg" style="font-size:16px">Free: one <b>3-hour pass</b> per person to try it. Then plans from <b>$65</b>. ' + ('You pay the owner by Cash App, Venmo or PayPal.' if _manual() else 'Payment is handled by Stripe.') + '</div>'
+        return _page("Create an account", f'<h1>Create an account</h1>{_msg(msg, err)}<div class="msg" style="font-size:16px">Plans from <b>$65</b>. ' + ('You pay the owner by Cash App, Venmo or PayPal.' if _manual() else 'Payment is handled by Stripe.') + '</div>'
                      '<form method="post" action="/signup"><label>Pick a user name (letters, numbers, dot, dash, underscore)</label><input name="u" autocomplete="username" required>'
                      '<label>Your e-mail address</label><input name="e" type="email" autocomplete="email" required>'
                      '<label>Pick a password (at least 8 characters)</label><input name="p" type="password" autocomplete="new-password" minlength="8" required>'
