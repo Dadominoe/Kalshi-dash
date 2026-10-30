@@ -807,7 +807,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-29-mid121"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-30-tick122"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -4918,7 +4918,7 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .pyp-t { width:100%; border-collapse:collapse; font-size:14px; } .pyp-t th { text-align:left; font-size:12px; letter-spacing:.8px; text-transform:uppercase; color:#8b949e; padding:4px 8px; border-bottom:2px solid #30363d; }
 .pyp-t td { padding:4px 8px; border-top:1px solid rgba(255,255,255,.07); white-space:nowrap; } .pyp-t td.pyp-best { box-shadow:inset 0 0 0 2px #ffd24a; background:rgba(255,210,74,.10); border-radius:6px; }
 .alt-slot { height:76px; margin:4px 0; overflow:hidden; contain:layout paint; }
-.tk-slot { height:262px; margin:6px 0; overflow:hidden; contain:layout paint; }
+.tk-slot { height:262px; margin:6px 0; overflow:hidden; contain:layout paint; } .pat-tick-box .tk-slot { height:560px; margin:0; }
 .tk-wrap { height:100%; background:#0d1117; border:1px solid #30363d; border-radius:10px; padding:6px 8px 4px; display:flex; flex-direction:column; box-sizing:border-box; }
 .tk-head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:13px; min-height:26px; } .tk-head b { letter-spacing:1px; font-size:12px; color:#e6edf3; } .tk-sub { color:#8b949e; font-size:12px; }
 .tk-px { margin-left:auto; font-weight:700; font-size:14px; } .tk-px .up { color:#3fb950; } .tk-px .down { color:#f85149; } .tk-px .ln { color:#ffd24a; }
@@ -7321,8 +7321,10 @@ function applyMtf() {
     const win = document.querySelector('.pat-win[data-asset="' + a + '"]');
     if (!win) return;
     const live = win.querySelector('.mtf-live');
-    if (!live) return;
     let v = mtfView[a] || 'pat';
+    const tkb = win.querySelector('.pat-tick-box');                       // the 5-second chart option: shown only while it is the chosen one
+    if (tkb) { const sh = v === 'tick' ? 'block' : 'none'; if (tkb.style.display !== sh) { tkb.style.display = sh; if (sh === 'block') setTimeout(tkPoll, 50); } }
+    if (!live) { win.querySelectorAll('.mtf-vs').forEach(b => { b.classList.toggle('on', b.getAttribute('data-v') === v); }); return; }
     if (v === 'tun') v = 'pat';                                          // the separate tunnel screen was removed at the owner's request
     const old = win.querySelector('.pat-old-box');
     const showLive = (v === 'pat' || v === 'tun');
@@ -7375,7 +7377,7 @@ function mtfSyncAttrs(o, n) {
   Array.from(o.attributes).forEach(at => { if (!n.hasAttribute(at.name)) o.removeAttribute(at.name); });
   Array.from(n.attributes).forEach(at => { if (o.getAttribute(at.name) !== at.value) o.setAttribute(at.name, at.value); });
 }
-function mtfHolds(el) { return el.nodeType === 1 && (el.classList.contains('mtf-live') || el.classList.contains('ctb-slot') || el.classList.contains('alt-slot') || el.classList.contains('tk-slot') || el.classList.contains('tk-drop') || !!el.querySelector('.mtf-live, .ctb-slot')); }
+function mtfHolds(el) { return el.nodeType === 1 && (el.classList.contains('mtf-live') || el.classList.contains('ctb-slot') || el.classList.contains('alt-slot') || el.classList.contains('tk-slot') || el.classList.contains('tk-drop') || !!el.querySelector('.mtf-live, .ctb-slot, .tk-drop')); }
 function mtfSync(op, np) {
   const keep = new Set(), out = [];
   Array.from(np.childNodes).forEach(n => {
@@ -8329,7 +8331,6 @@ function tkPoll() {
     }).catch(() => {}).then(() => { TK.busy[a] = false; });
   });
 }
-document.addEventListener('toggle', e => { const t = e.target; if (t && t.classList && t.classList.contains('tk-drop') && t.open) { tkSync(); tkPoll(); setTimeout(tkPoll, 300); } }, true);
 setInterval(tkPoll, LOCAL_PAGE ? 400 : 1000);
 setTimeout(tkPoll, 600);
 window.addEventListener('resize', () => Object.keys(TK.els).forEach(tkDraw));
@@ -10370,11 +10371,11 @@ def _alt_slot_html(name):
     return f'<div class="alt-slot" data-asset="{name}"></div>'
 
 
-def _tick_slot_html(name):
+def _tick_box_html(name):
+    """The '5-second chart' option of the chart area: a box (hidden until its button is clicked) holding the persistent live trades chart."""
     if name not in _flow.ASSETS:
         return ""
-    return (f'<details class="lc-drop tk-drop" data-asset="{name}" data-pat="TK|{name}"><summary><b>Live trades</b> <span class="hint">- 1 / 5 / 15 second candles from the real trades, with the line and the call - click to open</span></summary>'
-            f'<div class="tk-slot" data-asset="{name}"></div></details>')
+    return f'<div class="pat-tick-box tk-drop" data-asset="{name}" style="display:none"><div class="tk-slot" data-asset="{name}"></div></div>'
 
 
 def _tick5_json(asset, tf, n, since):
@@ -13254,14 +13255,15 @@ def build_pattern_window(asset_name):
     mtf_part, old_open, old_close = "", "", ""
     if _MTF_ON and asset_name in ("BTC", "XRP"):
         _vb = lambda v, cls, label: (f'<button class="mtf-vs {cls}" data-v="{v}" onclick="mtfSetView(\'{asset_name}\',\'{v}\')"><span class="dd-ic">&#9654;</span>{label}</button>')
-        mtf_part = (f'<div class="mtf-switch">' + _vb("pat", "mtf-vs-pat", "Tunnel chart") + _vb("old", "mtf-vs-old", "Live pattern window") + '<button class="mtf-spk" onclick="narToggle(this)" title="AI narrator for this coin: talks about what is happening on its chart and pressure"><span class="dd-ic">&#128266;</span><span class="nar-lab">Narrator OFF</span></button><button class="mtf-alv" onclick="alvToggle()" title="Switch each alert voice on or off, and hear it"><span class="dd-ic">&#127911;</span><span>Alert voices</span></button><label class="nar-volbox" title="Narrator volume"><span class="dd-ic">&#128266;</span><input type="range" class="nar-vol" min="0" max="100" step="5" value="100" oninput="narVolSet(this.value)"><span class="nar-volpct">100%</span></label>'
-                    + f'</div><div class="mtf-live" data-asset="{asset_name}"><div class="mtf-holder"></div></div>')
+        mtf_part = (f'<div class="mtf-switch">' + _vb("pat", "mtf-vs-pat", "Tunnel chart") + _vb("old", "mtf-vs-old", "Live pattern window") + _vb("tick", "mtf-vs-tick", "5-second chart") + '<button class="mtf-spk" onclick="narToggle(this)" title="AI narrator for this coin: talks about what is happening on its chart and pressure"><span class="dd-ic">&#128266;</span><span class="nar-lab">Narrator OFF</span></button><button class="mtf-alv" onclick="alvToggle()" title="Switch each alert voice on or off, and hear it"><span class="dd-ic">&#127911;</span><span>Alert voices</span></button><label class="nar-volbox" title="Narrator volume"><span class="dd-ic">&#128266;</span><input type="range" class="nar-vol" min="0" max="100" step="5" value="100" oninput="narVolSet(this.value)"><span class="nar-volpct">100%</span></label>'
+                    + f'</div><div class="mtf-live" data-asset="{asset_name}"><div class="mtf-holder"></div></div>' + _tick_box_html(asset_name))
         old_open, old_close = '<div class="pat-old-box" style="display:none">', '</div>'
     voice_bar = ""
     if not _MTF_ON and _VOICE_ON and asset_name in ("BTC", "XRP"):          # the website has no chart builder, but it does get the narrator, the Alert voices panel and the volume slider
-        voice_bar = ('<div class="mtf-switch voice-bar"><button class="mtf-spk" onclick="narToggle(this)" title="AI narrator for this coin: speaks the alerts and the pressure"><span class="dd-ic">&#128266;</span><span class="nar-lab">Narrator OFF</span></button>'
+        voice_bar = (f'<div class="mtf-switch voice-bar"><button class="mtf-vs mtf-vs-tick" data-v="tick" onclick="mtfSetView(\'{asset_name}\',\'tick\')"><span class="dd-ic">&#9654;</span>5-second chart</button>'
+                     '<button class="mtf-spk" onclick="narToggle(this)" title="AI narrator for this coin: speaks the alerts and the pressure"><span class="dd-ic">&#128266;</span><span class="nar-lab">Narrator OFF</span></button>'
                      '<button class="mtf-alv" onclick="alvToggle()" title="Switch each alert voice on or off, and hear it"><span class="dd-ic">&#127911;</span><span>Alert voices</span></button>'
-                     '<label class="nar-volbox" title="Narrator volume"><span class="dd-ic">&#128266;</span><input type="range" class="nar-vol" min="0" max="100" step="5" value="100" oninput="narVolSet(this.value)"><span class="nar-volpct">100%</span></label></div>')
+                     '<label class="nar-volbox" title="Narrator volume"><span class="dd-ic">&#128266;</span><input type="range" class="nar-vol" min="0" max="100" step="5" value="100" oninput="narVolSet(this.value)"><span class="nar-volpct">100%</span></label></div>' + _tick_box_html(asset_name))
     return (f'<div class="row pat-win" data-asset="{asset_name}">{flags}{voice_bar}{mtf_part}{old_open}'
             f'<div class="pat-old-grid">{head}{cpi_strip}'
             f"<div class=\"pat-chart-row\"><div class=\"pat-chart\" data-tf=\"{tf}\" onclick=\"expandPatternChart('{asset_name}')\" title=\"click to make it full-screen\">{svg}</div></div>"
@@ -15079,7 +15081,6 @@ def render_html():
             <div class="tugvol">{vol_side_html}</div>
           </div>
           {pattern_window_html}
-          {_tick_slot_html(name)}
           {bookmap_panel_html}
           {line_cross_html}
           {last_windows_html}
