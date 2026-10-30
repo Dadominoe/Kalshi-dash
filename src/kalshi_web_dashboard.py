@@ -807,7 +807,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-30-tick125"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-30-upd126"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -7312,6 +7312,7 @@ function mtfSetView(a, v) {
   if (document.body.getAttribute('data-view') === 'both') mtfView[a === 'BTC' ? 'XRP' : 'BTC'] = mtfView[a];   // side by side: both coins always show the same chart, so the two screens match
   try { localStorage.setItem('mtfViews', JSON.stringify(mtfView)); } catch (e) {}
   applyMtf();
+  if (v === 'tick' && mtfView[a] === 'tick') setTimeout(() => { const t = document.querySelector('.pat-win[data-asset="' + a + '"] .pat-tick-box'); if (t && t.offsetParent !== null) t.scrollIntoView({block: 'nearest'}); }, 120);      // the button was just clicked: bring the chart into the window
 }
 function applyMtf() {
   if (document.body.getAttribute('data-view') === 'both' && (mtfView.XRP || 'pat') !== (mtfView.BTC || 'pat')) {   // side by side: XRP follows BTC so the two charts are always the same kind and size
@@ -7692,7 +7693,7 @@ function ctbKindOf(k) {
   if (/^(early|mid|late|hunter)$/.test(k)) return 'burst';
   if (/^pat:/.test(k)) return 'news';
   if (/^ind-/.test(k)) return 'ind';
-  return (k === 'flip' || k === 'events' || k === 'member' || k === 'flowprice' || k === 'linebeh' || k === 'mk5') ? k : 'fact';
+  return (k === 'flip' || k === 'events' || k === 'member' || k === 'flowprice' || k === 'linebeh' || k === 'mk5' || k === 'updates') ? k : 'fact';
 }
 function ctbOk(kind, a) {                                                  // the other coin has not just shown this kind of card
   const x = ctbKinds[kind];
@@ -7727,6 +7728,9 @@ function ctbTick(now, fromTimer) {
         if (!d && fpc && Date.now() - o.lastFP > 12 * 60000 && ctbOk('flowprice', a)) { d = fpc; o.lastFP = Date.now(); }                              // flow vs price agree / disagree, every ~12 minutes
         const lbc = o.data.find(x => x.key === 'linebeh'); if (!o.lastLB) o.lastLB = Date.now() - 2 * 60000;
         if (!d && lbc && Date.now() - o.lastLB > 15 * 60000 && ctbOk('linebeh', a)) { d = lbc; o.lastLB = Date.now(); }                              // line behavior, every ~15 minutes                          // the MEMBERSHIP card (website only) every ~20 minutes                          // the COMING UP card every ~25 minutes
+        const upc = o.data.find(x => x.key === 'updates'); if (!o.lastUpd) o.lastUpd = Date.now() - 50 * 60000;                                  // the UPDATES card (owner: once an hour for the first day): at once when there is something new to this browser, otherwise once an hour
+        let updSeen = ''; try { updSeen = localStorage.getItem('updSeen') || ''; } catch (e) {}
+        if (!d && upc && (upc.id !== updSeen || Date.now() - o.lastUpd > 60 * 60000) && ctbOk('updates', a)) { d = upc; o.lastUpd = Date.now(); try { localStorage.setItem('updSeen', upc.id); } catch (e) {} }
         if (d) { o.seen[d.key] = 1; ctbNote(d.key, a); }
         else if (o.info && o.info.length) {                                                                              // otherwise: a random fact (never one that has been shown, until all have)          // facts when decided / no calls yet / every third card                                  // the market is decided: random cool information instead of the calls
           if (!o.shown) { try { o.shown = JSON.parse(localStorage.getItem('ctbShown2:' + a) || '{}') || {}; } catch (e) { o.shown = {}; } }
@@ -7791,6 +7795,8 @@ function applyFit(force) {
   const total = H * z;
   if (document.body.getAttribute('data-view') === 'both') window.scrollTo(0, 0);       // dual screen: shrink so both coins sit side by side, and stay at the top
   else window.scrollTo(0, total > vh ? total - vh : 0);
+  const _tkv = Array.from(document.querySelectorAll('.pat-tick-box')).find(e => e.offsetParent !== null);       // the 5-second chart is showing: keep IT in the window (its bottom edge at the bottom of the window)
+  if (_tkv) _tkv.scrollIntoView({block: 'end'});
 }
 window.addEventListener('resize', () => applyFit(true));
 function setAssetView(v) {
@@ -9794,6 +9800,33 @@ def _ctb_indicator_cards(name):
     return out
 
 
+# What has been updated, newest first - the UPDATES card in the scrolling banner shows the top ones. Add a line here every time something ships (date, NEW or FIX, a short name, one plain line).
+SITE_UPDATES = [
+    (1793351700, "FIX", "Laptop screens", "the 5-second chart now stays inside the window"),
+    (1793350395, "NEW", "5-second chart", "live candles from the real trades - the button is next to the Tunnel chart"),
+    (1793308453, "FIX", "Narrator", "now only speaks for the locked mid call"),
+    (1793273019, "FIX", "Fit to screen", "both coins side by side, sized to your window"),
+    (1793237325, "FIX", "Pick your poison", "keeps its place when you scroll sideways on a phone"),
+    (1793220091, "NEW", "Instant call + flip meter", "the call locks the moment 7:00 hits and the numbers move live"),
+]
+UPDATES_SHOW_HOURS = 24                    # an update stays on the banner for its first day, then drops off by itself
+
+
+def _updates_card():
+    """The UPDATES card of the scrolling banner: what was updated in the last 24 hours (nothing older). No recent update = no card. Information only."""
+    now = time.time()
+    fresh = [u for u in SITE_UPDATES if now - u[0] < UPDATES_SHOW_HOURS * 3600]
+    if not fresh:
+        return None
+    top = fresh[0]
+    ago = lambda t: ("just now" if now - t < 3600 else f"{int((now - t) // 3600)} h ago")
+    rws = "".join(f'<div class="ctb-row"><span>{ago(t[0])} &middot; {escape(t[2])}</span><b class="{"up" if t[1] == "NEW" else "t"}">{escape(t[3])}</b></div>' for t in fresh[:4])
+    return {"key": "updates", "id": f"{top[0]}", "cls": "info", "html":
+            '<div class="ctb-hd"><span class="ctb-which">WHAT\'S NEW &middot; UPDATES</span><span class="ctb-real">UPDATED</span></div>'
+            f'<div class="ctb-call" style="font-size:30px;white-space:normal;line-height:1.1">{escape(top[2])}<small>{"new" if top[1] == "NEW" else "fixed"} &middot; {ago(top[0])}</small></div>'
+            '<div class="ctb-bar"><i style="width:100%;background:var(--ctb-up)"></i></div>' + rws}
+
+
 _pool_memo = {}
 _factcards_memo = {}
 
@@ -10059,6 +10092,12 @@ def _ctb_payload(name, d, tn, marks, res, allrecs=None):
                           '<div class="ctb-call" style="font-size:30px;white-space:normal;line-height:1.1">Get your membership<small>full access, every call, every alert</small></div>'
                           '<div class="ctb-bar"><i style="width:100%;background:var(--ctb-warn)"></i></div>'
                           + rows([("How to get it", "send the owner a PRIVATE MESSAGE", "warn"), ("Why message", "so it is set up properly", "t"), ("Already a member?", "thank you - nothing to do", "up")])})
+    except Exception:
+        pass
+    try:
+        _uc = _updates_card()
+        if _uc:
+            cards.append(_uc)
     except Exception:
         pass
     mk5 = None
