@@ -109,6 +109,34 @@ class FlowHub:
             except Exception:
                 pass
 
+    def dump_tbars(self, path, keep=7200):
+        """Save the last `keep` seconds of live-chart bars (atomic), so a restart does not wipe the chart."""
+        cut = int(time.time()) - keep
+        with self.lock:
+            snap = {a: [[s] + list(v) for s, v in self.tbars[a].items() if s >= cut and v[0] is not None] for a in self.tbars}
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(snap, f, separators=(",", ":"))
+        os.replace(tmp, path)
+
+    def load_tbars(self, path, keep=7200):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                snap = json.load(f)
+        except Exception:
+            return 0
+        cut = int(time.time()) - keep
+        n = 0
+        with self.lock:
+            for a, rows in snap.items():
+                if a not in self.tbars:
+                    continue
+                for r in rows:
+                    if r[0] >= cut and r[0] not in self.tbars[a]:
+                        self.tbars[a][r[0]] = [r[1], r[2], r[3], r[4], r[5], r[6]]
+                        n += 1
+        return n
+
     def tick_price(self, asset, price):
         """The page's blended live price (Coinbase + Kraken), fed in every time it moves: it makes the open / high / low / close of the live trades chart."""
         if asset not in self.tbars or not price:
@@ -132,7 +160,7 @@ class FlowHub:
         tf = tf if tf in (1, 5, 15) else 5
         now = int(time.time())
         end = now // tf * tf
-        start = end - (max(10, min(int(n), 400)) - 1) * tf
+        start = end - (max(10, min(int(n), 700)) - 1) * tf
         if since is not None:
             start = max(start, int(since) // tf * tf)
         with self.lock:
@@ -156,13 +184,15 @@ class FlowHub:
                 a[3] = v[3]
             a[4] += v[4]; a[5] += v[5]
         out = []
+        last_real = start
         for k in range(start, end + tf, tf):
             a = agg.get(k)
             if a is not None and a[0] is not None:
                 o, h, l, c = a[0], a[1], a[2], a[3]
                 bu, se = a[4], a[5]
+                last_real = k
             else:
-                if prev is None:
+                if prev is None or k - last_real > 60:              # a short quiet spell is a flat bar; a long gap (the bot was off) stays a gap
                     continue
                 o = h = l = c = prev
                 bu, se = (a[4], a[5]) if a is not None else (0.0, 0.0)

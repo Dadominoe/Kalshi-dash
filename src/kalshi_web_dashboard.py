@@ -807,7 +807,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-30-tick122"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-30-tick125"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -4863,6 +4863,7 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .mtf-vs-pat { background:linear-gradient(90deg,#1f6feb,#238636); border-color:#58a6ff; }
 .mtf-vs-tun { background:linear-gradient(90deg,#0e7c86,#d29922); border-color:#39d0d8; }
 .mtf-vs-old { background:linear-gradient(90deg,#8957e5,#bf4b8a); border-color:#d2a8ff; }
+.mtf-vs-tick { background:linear-gradient(90deg,#c2410c,#d97706); border-color:#ffb454; text-shadow:0 1px 2px rgba(0,0,0,.45); }
 .mtf-vs.on { opacity:1; box-shadow:0 0 0 3px rgba(255,255,255,.35); }
 .mtf-vs .dd-ic { display:inline-flex; width:30px; height:30px; flex:none; align-items:center; justify-content:center; border-radius:50%; background:rgba(255,255,255,.25); font-size:14px; transition:transform .15s; }
 .mtf-vs.on .dd-ic { transform:rotate(90deg); }
@@ -8228,12 +8229,18 @@ function endPoll() {
 setInterval(endPoll, LOCAL_PAGE ? 250 : 400);
 // ---- LIVE TRADES chart (owner, 2026-10-29: 'make the 5-second chart', like aggr.trade): 1 / 5 / 15 second candles built from the real trades (price from Coinbase + Kraken, the exchanges Kalshi's index follows; dollars
 // bought / sold from every exchange), with the Kalshi line, the round start and the END CALL lock marked. It polls /tick5 by itself (only the new bars after the first fetch), so the page refresh never redraws it. Information only.
-const TK = {els: {}, tf: 5, data: {}, busy: {}};
+const TK = {els: {}, tf: 5, data: {}, busy: {}, px: 2.6};                       // px = screen pixels per candle (smaller = zoomed out)
+try { const p0 = parseFloat(localStorage.getItem('tkPx')); if (p0 >= 1 && p0 <= 14) TK.px = p0; } catch (e) {}
 try { const v0 = parseInt(localStorage.getItem('tkTf')); if (v0 === 1 || v0 === 5 || v0 === 15) TK.tf = v0; } catch (e) {}
 function tkBuild(a) {
   const el = document.createElement('div'); el.className = 'tk-wrap'; el.setAttribute('data-asset', a);
   el.innerHTML = '<div class="tk-head"><b>LIVE TRADES</b><span class="tk-px">waiting for trades...</span><span class="tk-btns"></span></div><canvas class="tk-cv"></canvas><div class="tk-foot"></div>';
   const bt = el.querySelector('.tk-btns');
+  [['−', 1 / 1.4, 'Zoom out: more candles'], ['+', 1.4, 'Zoom in: fewer, bigger candles']].forEach(z => {
+    const b = document.createElement('button'); b.textContent = z[0]; b.title = z[2];
+    b.onclick = () => { TK.px = Math.max(1, Math.min(14, TK.px * z[1])); try { localStorage.setItem('tkPx', String(TK.px)); } catch (e) {} Object.keys(TK.els).forEach(tkDraw); };
+    bt.appendChild(b);
+  });
   [1, 5, 15].forEach(t => {
     const b = document.createElement('button'); b.textContent = t + 's'; b.setAttribute('data-tf', t);
     b.onclick = () => { TK.tf = t; try { localStorage.setItem('tkTf', String(t)); } catch (e) {} Object.keys(TK.data).forEach(k => delete TK.data[k]); tkPoll(); };
@@ -8252,7 +8259,7 @@ function tkFmt(p, dec) { return p.toLocaleString('en-US', {minimumFractionDigits
 function tkDraw(a) {
   const el = TK.els[a], D = TK.data[a];
   if (!el || !el.parentNode || el.offsetParent === null) return;
-  el.querySelectorAll('.tk-btns button').forEach(b => b.classList.toggle('on', Number(b.getAttribute('data-tf')) === TK.tf));
+  el.querySelectorAll('.tk-btns button[data-tf]').forEach(b => b.classList.toggle('on', Number(b.getAttribute('data-tf')) === TK.tf));
   const cv = el.querySelector('canvas'), px = el.querySelector('.tk-px'), ft = el.querySelector('.tk-foot');
   const cw = cv.clientWidth, ch = cv.clientHeight; if (cw < 50 || ch < 50) return;
   const dpr = window.devicePixelRatio || 1;
@@ -8262,8 +8269,9 @@ function tkDraw(a) {
   if (!D || !D.bars || !D.bars.length) { g.fillStyle = '#8b949e'; g.font = '14px sans-serif'; g.fillText('waiting for trades...', 12, 30); return; }
   const AX = 74, TOP = 6, BOT = 18, VOLH = Math.min(46, ch * 0.2);
   const plotW = cw - AX - 4, plotH = ch - TOP - BOT - VOLH - 4;
-  const vis = Math.min(D.bars.length, Math.max(20, Math.floor(plotW / 5)));
-  const bars = D.bars.slice(-vis), bw = plotW / vis, tf = D.tf;
+  const tf = D.tf, slots = Math.max(30, Math.floor(plotW / TK.px)), bw = plotW / slots;           // a fixed candle width (about twice as many candles as before); the newest sits at the right edge
+  const tEnd = D.bars[D.bars.length - 1][0] + tf, t0 = tEnd - slots * tf;
+  const bars = D.bars.filter(b => b[0] >= t0);
   let lo = Infinity, hi = -Infinity, vmax = 1;
   bars.forEach(b => { if (b[3] < lo) lo = b[3]; if (b[2] > hi) hi = b[2]; vmax = Math.max(vmax, b[5] + b[6]); });
   const last = bars[bars.length - 1][4], dec = last >= 1000 ? 1 : (last >= 10 ? 3 : 4);
@@ -8278,9 +8286,9 @@ function tkDraw(a) {
     g.strokeStyle = 'rgba(255,255,255,0.07)'; g.beginPath(); g.moveTo(0, y); g.lineTo(plotW, y); g.stroke();
     g.fillStyle = '#8b949e'; g.fillText(tkFmt(p, dec), plotW + 6, y);
   }
-  const X = i => i * bw, tAt = t => (t - bars[0][0]) / tf * bw;
+  const X = i => (bars[i][0] - t0) / tf * bw, tAt = t => (t - t0) / tf * bw;
   const vline = (t, col, label) => {                                          // a vertical marker (round start / call locked)
-    if (t === null || t === undefined || t < bars[0][0] || t > bars[bars.length - 1][0] + tf) return;
+    if (t === null || t === undefined || t < t0 || t > tEnd) return;
     const x = tAt(t); g.strokeStyle = col; g.setLineDash([3, 4]); g.beginPath(); g.moveTo(x, TOP); g.lineTo(x, TOP + plotH + VOLH); g.stroke(); g.setLineDash([]);
     g.fillStyle = col; g.textBaseline = 'top'; g.fillText(label, Math.min(x + 4, plotW - 90), TOP + 2); g.textBaseline = 'middle';
   };
@@ -8322,11 +8330,11 @@ function tkPoll() {
     const D = TK.data[a], tf = TK.tf, have = D && D.tf === tf && D.bars.length;
     const since = have ? D.bars[Math.max(0, D.bars.length - 3)][0] : null;
     TK.busy[a] = true;
-    fetch('/tick5?asset=' + a + '&tf=' + tf + '&n=150' + (since ? '&since=' + since : ''), {cache: 'no-store'}).then(r => r.ok ? r.json() : null).then(j => {
+    fetch('/tick5?asset=' + a + '&tf=' + tf + '&n=600' + (since ? '&since=' + since : ''), {cache: 'no-store'}).then(r => r.ok ? r.json() : null).then(j => {
       if (!j || !j.b || j.tf !== TK.tf) return;
       let bars = j.b;
       if (!j.full && D && D.tf === j.tf) bars = D.bars.filter(b => b[0] < (j.b.length ? j.b[0][0] : 1e12)).concat(j.b);
-      TK.data[a] = {tf: j.tf, bars: bars.slice(-400), line: j.line, close: j.close, lock: j.lock, at: j.t};
+      TK.data[a] = {tf: j.tf, bars: bars.slice(-700), line: j.line, close: j.close, lock: j.lock, at: j.t};
       tkDraw(a);
     }).catch(() => {}).then(() => { TK.busy[a] = false; });
   });
@@ -10369,6 +10377,23 @@ def _alts_json():
 
 def _alt_slot_html(name):
     return f'<div class="alt-slot" data-asset="{name}"></div>'
+
+
+_TBARS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data_cache", "tick_bars.json")
+try:
+    print(f"[tick chart] loaded {_flow.HUB.load_tbars(_TBARS_FILE)} saved seconds of bars")
+except Exception as _tle:
+    print(f"[tick chart] could not load saved bars: {_tle!r}")
+
+
+def _tbars_save_loop():
+    time.sleep(30)
+    while True:
+        try:
+            _flow.HUB.dump_tbars(_TBARS_FILE)
+        except Exception as _tse:
+            print(f"[tick chart] save failed: {_tse!r}")
+        time.sleep(20)
 
 
 def _tick_box_html(name):
@@ -16243,6 +16268,7 @@ def main():
     if _MTF_ON:
         threading.Thread(target=_mtf_loop, daemon=True, name="mtf-chart").start()
     threading.Thread(target=_alts_loop, daemon=True, name="alts-board").start()
+    threading.Thread(target=_tbars_save_loop, daemon=True, name="tbars-save").start()
     threading.Thread(target=_lock_watch_loop, daemon=True, name="lock-watch").start()
     threading.Thread(target=_win_flow_loop, daemon=True, name="last-windows-flow").start()
     _lc_load()
