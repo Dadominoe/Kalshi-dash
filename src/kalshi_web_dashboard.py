@@ -807,7 +807,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-30-upd126"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-30-tick127"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -2237,10 +2237,6 @@ def _update_blended(symbol):
     blended = sum(price * size for price, size in fresh.values()) / total_size
     _live_ticks[symbol] = blended
     _live_ticks_ts[symbol] = now
-    try:
-        _flow.HUB.tick_price(symbol.split("-")[0], blended)                      # the live trades chart's candles follow this same price
-    except Exception:
-        pass
     hist = _tick_history.setdefault(symbol, [])
     hist.append((now, blended))
     cutoff = now - TICK_HISTORY_SECONDS
@@ -2564,6 +2560,10 @@ def _coinbase_on_message(ws, message):
         with _ticks_lock:
             _exchange_last.setdefault(product_id, {})["coinbase"] = (float(price), float(size), time.time())
             _update_blended(product_id)
+            try:
+                _flow.HUB.tick_venue(product_id.split("-")[0], "coinbase", float(price))     # the live trades chart's steady price
+            except Exception:
+                pass
             _record_trade_notional(product_id, float(price) * float(size))
             _record_whale_trade(product_id, float(price), float(size), aggressor, venue="coinbase")
             _record_trade_volume(product_id, float(price), float(size), aggressor)
@@ -2585,6 +2585,10 @@ def _kraken_on_message(ws, message):
         with _ticks_lock:
             _exchange_last.setdefault(canonical, {})["kraken"] = (float(last_price), float(last_qty), time.time())
             _update_blended(canonical)
+            try:
+                _flow.HUB.tick_venue(canonical.split("-")[0], "kraken", float(last_price))
+            except Exception:
+                pass
             for tr in trades:
                 # kraken trade: [price, volume, time, side ("b"/"s"), ...] - side IS the taker/aggressor side
                 aggressor = "buy" if len(tr) > 3 and tr[3] == "b" else "sell"
@@ -8326,7 +8330,7 @@ function tkDraw(a) {
   if (line) { const df = last - line; pxh += ' &nbsp;<span class="ln">line ' + tkFmt(line, dec) + '</span> &nbsp;<span class="' + (df >= 0 ? 'up' : 'down') + '">' + (df >= 0 ? 'ABOVE by ' : 'BELOW by ') + tkFmt(Math.abs(df), dec) + '</span>'; }
   if (!fresh) pxh += ' &nbsp;<span class="down">no new trades for a few seconds</span>';
   if (px.innerHTML !== pxh) px.innerHTML = pxh;
-  const ftx = tf + '-second candles. Price: Coinbase + Kraken blend (the same price as the line comparison). Volume: every exchange, green = bought, red = sold. Information only.';
+  const ftx = tf + '-second candles. Price: Coinbase trades (Kraken, gap-adjusted, fills quiet spells). Volume: every exchange, green = bought, red = sold. Information only.';
   if (ft.textContent !== ftx) ft.textContent = ftx;
 }
 function tkPoll() {

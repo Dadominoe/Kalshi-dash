@@ -58,6 +58,7 @@ class FlowHub:
         self.line_vol = {}                          # asset -> {"ticker","above","below"} dollars traded on USD venues above / below the line
         self.on_trade = None                        # optional hook: fn(venue, asset, usd, side, price) for every trade
         self.bars = {a: {} for a in ASSETS}         # asset -> venue -> {minute: [open, close, usd_volume]} (for the composite RSI)
+        self._tv = {}                               # asset -> {"coinbase": (price, ts), "kraken": (price, ts), "off": kraken - coinbase gap} for the live trades chart's steady price
         self.tbars = {a: {} for a in ASSETS}        # asset -> {second: [open, high, low, close, buy_usd, sell_usd]}: price from Coinbase + Kraken trades, dollars from every exchange (the live trades chart)
         self.deriv = {a: {} for a in ASSETS}        # asset -> funding / open interest / premium / liquidations (perp markets)
         self.oi_hist = {a: [] for a in ASSETS}      # asset -> [(ts, total open interest usd)]
@@ -136,6 +137,24 @@ class FlowHub:
                         self.tbars[a][r[0]] = [r[1], r[2], r[3], r[4], r[5], r[6]]
                         n += 1
         return n
+
+    def tick_venue(self, asset, venue, price):
+        """Feed one Coinbase / Kraken trade price to the live trades chart as ONE steady series: Coinbase's own prices, and while Coinbase has been quiet for 10+ s, Kraken's price minus the slowly-learned
+        Kraken-minus-Coinbase gap - so the candles never jump between the two venues' price levels."""
+        if asset not in self.tbars or not price or venue not in ("coinbase", "kraken"):
+            return
+        now = time.time()
+        st = self._tv.setdefault(asset, {"coinbase": None, "kraken": None, "off": None})
+        st[venue] = (price, now)
+        cb, kr = st["coinbase"], st["kraken"]
+        if cb and kr and now - cb[1] <= 20 and now - kr[1] <= 20:
+            gap = kr[0] - cb[0]
+            if abs(gap) < cb[0] * 0.005:
+                st["off"] = gap if st["off"] is None else 0.97 * st["off"] + 0.03 * gap
+        if venue == "coinbase":
+            self.tick_price(asset, price)
+        elif cb is None or now - cb[1] > 10:
+            self.tick_price(asset, price - (st["off"] or 0.0))
 
     def tick_price(self, asset, price):
         """The page's blended live price (Coinbase + Kraken), fed in every time it moves: it makes the open / high / low / close of the live trades chart."""
