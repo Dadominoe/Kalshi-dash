@@ -807,7 +807,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-30-one128"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-30-steady129"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -4925,6 +4925,10 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
   body[data-view="BTC"] .leftcol .tb-right .flip-combo, body[data-view="XRP"] .leftcol .tb-right .flip-combo { flex-wrap:wrap; }
   body[data-view="BTC"] .leftcol .tb-right .streak-pull-wrap, body[data-view="XRP"] .leftcol .tb-right .streak-pull-wrap { right:auto; left:0; width:min(480px,92%); }
 }
+@media (min-width:1900px) {                                                   /* a big monitor: use the whole width - a left column of normal size and a much wider chart */
+  body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:none; }
+  body[data-view="BTC"] .card[data-asset="BTC"], body[data-view="XRP"] .card[data-asset="XRP"] { grid-template-columns:minmax(560px,700px) minmax(0,1fr); }
+}
 .tug-drop > summary { display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px; } .tug-drop[open] > summary { margin-bottom:2px; } .tug-drop > .tug { margin-top:2px; }
 .tug-sum { margin-left:auto; font-size:16px; } .tug-sum.up { color:#3fb950; } .tug-sum.down { color:#ff5d5d; }
 .alt-drop > .alt-slot { margin:2px 0 4px; }
@@ -4932,7 +4936,7 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .pyp-t { width:100%; border-collapse:collapse; font-size:14px; } .pyp-t th { text-align:left; font-size:12px; letter-spacing:.8px; text-transform:uppercase; color:#8b949e; padding:4px 8px; border-bottom:2px solid #30363d; }
 .pyp-t td { padding:4px 8px; border-top:1px solid rgba(255,255,255,.07); white-space:nowrap; } .pyp-t td.pyp-best { box-shadow:inset 0 0 0 2px #ffd24a; background:rgba(255,210,74,.10); border-radius:6px; }
 .alt-slot { height:76px; margin:4px 0; overflow:hidden; contain:layout paint; }
-.tk-slot { height:262px; margin:6px 0; overflow:hidden; contain:layout paint; } .pat-tick-box .tk-slot { height:560px; margin:0; }
+.tk-slot { height:262px; margin:6px 0; overflow:hidden; contain:layout paint; } .pat-tick-box .tk-slot { height:clamp(340px, calc(100vh - 385px), 900px); margin:0; }
 .tk-wrap { height:100%; background:#0d1117; border:1px solid #30363d; border-radius:10px; padding:6px 8px 4px; display:flex; flex-direction:column; box-sizing:border-box; }
 .tk-head { display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:13px; min-height:26px; } .tk-head b { letter-spacing:1px; font-size:12px; color:#e6edf3; } .tk-sub { color:#8b949e; font-size:12px; }
 .tk-px { margin-left:auto; font-weight:700; font-size:14px; } .tk-px .up { color:#3fb950; } .tk-px .down { color:#f85149; } .tk-px .ln { color:#ffd24a; }
@@ -8250,7 +8254,7 @@ function endPoll() {
 setInterval(endPoll, LOCAL_PAGE ? 250 : 400);
 // ---- LIVE TRADES chart (owner, 2026-10-29: 'make the 5-second chart', like aggr.trade): 1 / 5 / 15 second candles built from the real trades (price from Coinbase + Kraken, the exchanges Kalshi's index follows; dollars
 // bought / sold from every exchange), with the Kalshi line, the round start and the END CALL lock marked. It polls /tick5 by itself (only the new bars after the first fetch), so the page refresh never redraws it. Information only.
-const TK = {els: {}, tf: 5, data: {}, busy: {}, px: 2.6};                       // px = screen pixels per candle (smaller = zoomed out)
+const TK = {els: {}, tf: 5, data: {}, busy: {}, sc: {}, px: 2.6};                       // px = screen pixels per candle (smaller = zoomed out)
 try { const p0 = parseFloat(localStorage.getItem('tkPx')); if (p0 >= 1 && p0 <= 14) TK.px = p0; } catch (e) {}
 try { const v0 = parseInt(localStorage.getItem('tkTf')); if (v0 === 1 || v0 === 5 || v0 === 15) TK.tf = v0; } catch (e) {}
 function tkBuild(a) {
@@ -8298,12 +8302,24 @@ function tkDraw(a) {
   const last = bars[bars.length - 1][4], dec = last >= 1000 ? 1 : (last >= 10 ? 3 : 4);
   const rg0 = Math.max(hi - lo, last * 0.00006);
   const line = D.line;
-  if (line && line > lo - 3 * rg0 && line < hi + 3 * rg0) { lo = Math.min(lo, line); hi = Math.max(hi, line); }
-  const rg = Math.max(hi - lo, last * 0.00006), padv = rg * 0.07; lo -= padv; hi += padv;
+  // a STEADY scale (owner: 'the chart's glitching, it's not staying still'): the price range only grows at once when a candle would not fit, and otherwise eases back slowly; the volume scale does the same;
+  // the Kalshi line is pulled into the range with a wide hysteresis (so it cannot flip in and out); the grid sits on round prices
+  const S = TK.sc[a] || (TK.sc[a] = {}), nowT = Date.now() / 1000, dt = Math.min(5, Math.max(0, nowT - (S.t || nowT)));
+  if (S.key !== tf + '|' + TK.px) { S.key = tf + '|' + TK.px; S.lo = S.hi = S.vm = null; S.ln = false; }
+  S.t = nowT;
+  const ldist = line ? (line < lo ? lo - line : (line > hi ? line - hi : 0)) : 1e18;
+  S.ln = !!line && ldist < (S.ln ? 5 : 3) * rg0;
+  if (S.ln) { lo = Math.min(lo, line); hi = Math.max(hi, line); }
+  const rg = Math.max(hi - lo, last * 0.00006), padv = rg * 0.1, tlo = lo - padv, thi = hi + padv, ease = 1 - Math.exp(-dt / 9);
+  S.lo = S.lo === null || S.lo === undefined ? tlo : (tlo < S.lo ? tlo : S.lo + (tlo - S.lo) * ease);
+  S.hi = S.hi === null || S.hi === undefined ? thi : (thi > S.hi ? thi : S.hi + (thi - S.hi) * ease);
+  S.vm = S.vm === null || S.vm === undefined ? vmax : (vmax > S.vm ? vmax : S.vm + (vmax - S.vm) * (1 - Math.exp(-dt / 12)));
+  lo = S.lo; hi = S.hi; vmax = S.vm;
   const Y = p => TOP + (hi - p) / (hi - lo) * plotH;
   g.font = '11px sans-serif'; g.textBaseline = 'middle';
-  for (let k = 0; k <= 4; k++) {                                              // price grid + labels on the right
-    const p = lo + (hi - lo) * k / 4, y = Y(p);
+  const rawStep = (hi - lo) / 5, mag = Math.pow(10, Math.floor(Math.log10(rawStep))), stepK = [1, 2, 2.5, 5, 10].find(m => m * mag >= rawStep) || 10, step = stepK * mag;
+  for (let p = Math.ceil(lo / step) * step; p <= hi; p += step) {              // price grid + labels on the right, on round prices
+    const y = Y(p);
     g.strokeStyle = 'rgba(255,255,255,0.07)'; g.beginPath(); g.moveTo(0, y); g.lineTo(plotW, y); g.stroke();
     g.fillStyle = '#8b949e'; g.fillText(tkFmt(p, dec), plotW + 6, y);
   }
@@ -9817,6 +9833,7 @@ def _ctb_indicator_cards(name):
 
 # What has been updated, newest first - the UPDATES card in the scrolling banner shows the top ones. Add a line here every time something ships (date, NEW or FIX, a short name, one plain line).
 SITE_UPDATES = [
+    (1793415300, "FIX", "5-second chart", "steady price scale (no more jumping) and it now fits your screen height"),
     (1793413500, "NEW", "One-screen layout", "the chart sits beside everything again; 15-minute markets and the price box are drop-downs"),
     (1793409450, "FIX", "5-second candles", "one steady price, so the candles no longer jump between exchanges"),
     (1793351700, "FIX", "Laptop screens", "the 5-second chart now stays inside the window"),
