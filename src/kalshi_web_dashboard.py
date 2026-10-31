@@ -807,7 +807,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-30-tick127b"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-10-30-one128"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -4914,11 +4914,20 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 @keyframes frbpulse { 50% { box-shadow:0 0 34px rgba(255,59,92,.95); } }
 /* ONE coin on screen, wide window: the chart sits BESIDE the top information (price vs the line, END CALL, pressure) so it all fits on one screen */
 @media (min-width:1300px) {
-  body[data-view="BTC"] .card[data-asset="BTC"], body[data-view="XRP"] .card[data-asset="XRP"] { display:grid; grid-template-columns:minmax(440px,0.85fr) minmax(0,1.4fr); column-gap:16px; align-items:start; }
+  body[data-view="BTC"] .card[data-asset="BTC"], body[data-view="XRP"] .card[data-asset="XRP"] { display:grid; grid-template-columns:minmax(470px,0.8fr) minmax(0,1.5fr); column-gap:16px; align-items:start; }
   body[data-view="BTC"] .card[data-asset="BTC"] > *, body[data-view="XRP"] .card[data-asset="XRP"] > * { grid-column:1 / -1; }
-  body[data-view="BTC"] .card[data-asset="BTC"] > .tugrow, body[data-view="XRP"] .card[data-asset="XRP"] > .tugrow { grid-column:1; }
-  body[data-view="BTC"] .card[data-asset="BTC"] > .pat-win, body[data-view="XRP"] .card[data-asset="XRP"] > .pat-win { grid-column:2; margin-top:0; }
+  body[data-view="BTC"] .card[data-asset="BTC"] > .leftcol, body[data-view="XRP"] .card[data-asset="XRP"] > .leftcol { grid-column:1; min-width:0; }
+  body[data-view="BTC"] .card[data-asset="BTC"] > .pat-win, body[data-view="XRP"] .card[data-asset="XRP"] > .pat-win { grid-column:2; margin-top:0; position:sticky; top:8px; align-self:start; max-height:calc(100vh - 16px); overflow-y:auto; }
 }
+@media (min-width:1300px) {
+  body[data-view="BTC"] .leftcol .topbar .tb-main .alert-dock, body[data-view="XRP"] .leftcol .topbar .tb-main .alert-dock { flex:1 1 100%; width:auto; height:120px; min-height:120px; max-height:120px; }
+  body[data-view="BTC"] .leftcol .tb-right, body[data-view="XRP"] .leftcol .tb-right { margin-left:0; max-width:100%; flex-wrap:wrap; }
+  body[data-view="BTC"] .leftcol .tb-right .flip-combo, body[data-view="XRP"] .leftcol .tb-right .flip-combo { flex-wrap:wrap; }
+  body[data-view="BTC"] .leftcol .tb-right .streak-pull-wrap, body[data-view="XRP"] .leftcol .tb-right .streak-pull-wrap { right:auto; left:0; width:min(480px,92%); }
+}
+.tug-drop > summary { display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px; } .tug-drop[open] > summary { margin-bottom:2px; } .tug-drop > .tug { margin-top:2px; }
+.tug-sum { margin-left:auto; font-size:16px; } .tug-sum.up { color:#3fb950; } .tug-sum.down { color:#ff5d5d; }
+.alt-drop > .alt-slot { margin:2px 0 4px; }
 .ct-drop { margin:4px 0; position:relative; }
 .pyp-t { width:100%; border-collapse:collapse; font-size:14px; } .pyp-t th { text-align:left; font-size:12px; letter-spacing:.8px; text-transform:uppercase; color:#8b949e; padding:4px 8px; border-bottom:2px solid #30363d; }
 .pyp-t td { padding:4px 8px; border-top:1px solid rgba(255,255,255,.07); white-space:nowrap; } .pyp-t td.pyp-best { box-shadow:inset 0 0 0 2px #ffd24a; background:rgba(255,210,74,.10); border-radius:6px; }
@@ -7383,17 +7392,17 @@ function mtfSyncAttrs(o, n) {
   Array.from(o.attributes).forEach(at => { if (!n.hasAttribute(at.name)) o.removeAttribute(at.name); });
   Array.from(n.attributes).forEach(at => { if (o.getAttribute(at.name) !== at.value) o.setAttribute(at.name, at.value); });
 }
-function mtfHolds(el) { return el.nodeType === 1 && (el.classList.contains('mtf-live') || el.classList.contains('ctb-slot') || el.classList.contains('alt-slot') || el.classList.contains('tk-slot') || el.classList.contains('tk-drop') || !!el.querySelector('.mtf-live, .ctb-slot, .tk-drop')); }
+function mtfHolds(el) { return el.nodeType === 1 && (el.classList.contains('mtf-live') || el.classList.contains('ctb-slot') || el.classList.contains('alt-slot') || el.classList.contains('alt-drop') || el.classList.contains('tk-slot') || el.classList.contains('tk-drop') || !!el.querySelector('.mtf-live, .ctb-slot, .tk-drop')); }
 function mtfSync(op, np) {
   const keep = new Set(), out = [];
   Array.from(np.childNodes).forEach(n => {
     let m = null;
     if (n.nodeType === 1 && mtfHolds(n)) {
-      m = Array.from(op.children).find(o => !keep.has(o) && o.tagName === n.tagName && (o.getAttribute('data-asset') || '') === (n.getAttribute('data-asset') || '') && o.classList.contains('alt-slot') === n.classList.contains('alt-slot') && o.classList.contains('tk-slot') === n.classList.contains('tk-slot') && o.classList.contains('tk-drop') === n.classList.contains('tk-drop') && mtfHolds(o));
+      m = Array.from(op.children).find(o => !keep.has(o) && o.tagName === n.tagName && (o.getAttribute('data-asset') || '') === (n.getAttribute('data-asset') || '') && o.classList.contains('alt-slot') === n.classList.contains('alt-slot') && o.classList.contains('alt-drop') === n.classList.contains('alt-drop') && o.classList.contains('tk-slot') === n.classList.contains('tk-slot') && o.classList.contains('tk-drop') === n.classList.contains('tk-drop') && mtfHolds(o));
     }
     if (m) {
       keep.add(m);
-      if (m.classList.contains('alt-slot') || m.classList.contains('tk-slot') || m.classList.contains('tk-drop')) { /* the coin board and the live trades pull-down stay exactly as they are */ } else if (m.classList.contains('ctb-slot')) {                                   // the running call banner is NOT redrawn - only the numbers it reads are refreshed
+      if (m.classList.contains('alt-slot') || m.classList.contains('alt-drop') || m.classList.contains('tk-slot') || m.classList.contains('tk-drop')) { /* the coin board and the live trades pull-down stay exactly as they are */ } else if (m.classList.contains('ctb-slot')) {                                   // the running call banner is NOT redrawn - only the numbers it reads are refreshed
         const oj = m.querySelector('.ctb-json'), nj = n.querySelector('.ctb-json');
         if (oj && nj && oj.textContent !== nj.textContent) oj.textContent = nj.textContent;
       } else if (!m.classList.contains('mtf-live')) { mtfSyncAttrs(m, n); mtfSync(m, n); }
@@ -7492,8 +7501,10 @@ function renderExpanded() {
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeExpanded(); });
 // which pull-downs are open is remembered in this browser, so they are still open after a reload (the heat map starts open the very first time; the per-pattern / per-event ones are not saved)
 function loadOpenPats() {
-  try { const s = localStorage.getItem('openPats'); if (s !== null) { const a = JSON.parse(s); if (Array.isArray(a)) return a; } } catch (e) {}
-  return ['BM|BTC', 'BM|XRP'];
+  let a = ['BM|BTC', 'BM|XRP'];
+  try { const s = localStorage.getItem('openPats'); if (s !== null) { const b = JSON.parse(s); if (Array.isArray(b)) a = b; } } catch (e) {}
+  try { if (!localStorage.getItem('tugBoxInit')) { localStorage.setItem('tugBoxInit', '1'); ['TUGBOX|BTC', 'TUGBOX|XRP'].forEach(k => { if (a.indexOf(k) < 0) a.push(k); }); } } catch (e) {}   // the PRICE VS THE LINE box is open the first time, then stays how you leave it
+  return a;
 }
 function saveOpenPats() {
   try { localStorage.setItem('openPats', JSON.stringify(Array.from(openPatterns).filter(k => !/^(WIN|KEPT|KEPTLIST|EV|HIST)[|]/.test(k)))); } catch (e) {}
@@ -9806,6 +9817,7 @@ def _ctb_indicator_cards(name):
 
 # What has been updated, newest first - the UPDATES card in the scrolling banner shows the top ones. Add a line here every time something ships (date, NEW or FIX, a short name, one plain line).
 SITE_UPDATES = [
+    (1793413500, "NEW", "One-screen layout", "the chart sits beside everything again; 15-minute markets and the price box are drop-downs"),
     (1793409450, "FIX", "5-second candles", "one steady price, so the candles no longer jump between exchanges"),
     (1793351700, "FIX", "Laptop screens", "the 5-second chart now stays inside the window"),
     (1793350395, "NEW", "5-second chart", "live candles from the real trades - the button is next to the Tunnel chart"),
@@ -10420,7 +10432,8 @@ def _alts_json():
 
 
 def _alt_slot_html(name):
-    return f'<div class="alt-slot" data-asset="{name}"></div>'
+    return (f'<details class="lc-drop alt-drop" data-asset="{name}" data-pat="ALT|{name}"><summary><b>15-minute markets</b> <span class="hint">- the chance of UP for every Kalshi 15-minute crypto market (click to open)</span></summary>'
+            f'<div class="alt-slot" data-asset="{name}"></div></details>')
 
 
 _TBARS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data_cache", "tick_bars.json")
@@ -11950,7 +11963,9 @@ def build_tug_panel(name, d):
     more_html = (f'<details class="tug-more" data-pat="TUGMORE|{name}"><summary class="hint">where these numbers come from, and trading around the line</summary>{srcnote}{around}</details>') if (srcnote or around) else ""
     mm, ss = divmod(int(left), 60)
     end_html = _end_call_html(name, d, tn, tn.get("fair"), left, spot, line) + _line_behavior_box(name)
-    return (f'<div class="tug"><div class="tug-title">PRICE VS THE LINE &middot; tug of war <span class="hint">(this round &middot; resets in {mm:02d}:{ss:02d})</span></div>'
+    return (f'<details class="lc-drop tug-drop" data-asset="{name}" data-pat="TUGBOX|{name}"><summary><b>Price vs the line</b> <span class="hint">- tug of war, END CALL, flip risk, pressure</span>'
+            f'<b class="tug-sum {"up" if up_side else "down"}">{"UP" if up_side else "DOWN"} by {fmt_price(abs(diff), dec)}</b></summary>'
+            f'<div class="tug"><div class="tug-title">PRICE VS THE LINE &middot; tug of war <span class="hint">(this round &middot; resets in {mm:02d}:{ss:02d})</span></div>'
             f'{end_html}'
             f'<div class="tug-top"><div class="tug-pair"><div><div class="hint">price to beat (Kalshi line)</div><div class="tug-big">{fmt_price(line, dec)}</div><div class="hint">{kal}</div></div>'
             f'<div class="tug-vs hint">vs</div>'
@@ -11964,7 +11979,7 @@ def build_tug_panel(name, d):
             f'<span class="tug-gr hint">UP &#9650;</span></div>'
             f'<div class="hint tug-cap">centre = the line &middot; needle = live price ({fmt_price(spot, dec)})</div>'
             f'<div class="tug-head {"up" if up_side else "down"}">{"UP" if up_side else "DOWN"} is winning by {fmt_price(abs(diff), dec)}</div>'
-            f'{lean_html}{"".join(rows)}{boxes}{agree}{more_html}' + _tug_help(name) + '</div>')
+            f'{lean_html}{"".join(rows)}{boxes}{agree}{more_html}' + _tug_help(name) + '</div></details>')
 
 
 def _coinbase_last_price(symbol):
@@ -15126,6 +15141,7 @@ def render_html():
         <div class="card" data-asset="{name}">
           {sweep_marker_html}
           {experimental_html}
+          <div class="leftcol">
           <div class="topbar">
             <div class="tb-main">
               <div class="asset-name"><span class="asset-label asset-{name}">{name}</span> <button class="ev-i" title="Market information - upcoming important news (click)" onclick="evToggle('{name}', event)">i</button>{flip_badge_html}{clock_html}{boom_html}{win_alert_html}{lock_alert_html}<div class="ev-pop" data-ev="{name}" style="display:none">{events_pop_html}</div></div>
@@ -15148,6 +15164,7 @@ def render_html():
               {pressure_html}
             </div>
             <div class="tugvol">{vol_side_html}</div>
+          </div>
           </div>
           {pattern_window_html}
           {bookmap_panel_html}
