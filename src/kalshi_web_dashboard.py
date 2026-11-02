@@ -807,7 +807,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-11-02-lock133"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-11-02-keep134"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -7618,6 +7618,7 @@ syncTz(); setInterval(syncTz, 3600000);
 // the bottom of the chart is in the window (never below 60%); if it still does not fit, scroll so the bottom of the chart is at the bottom edge. Saved per browser.
 let fitScreen = (window.screen.width >= 1100 && !('ontouchstart' in window));      // phones / tablets start OFF (it keeps scrolling the page for you)
 try { const fv = localStorage.getItem('fitScreen'); if (fv !== null) fitScreen = fv === 'true'; } catch (e) {}
+let fitScrollAt = 0;                                    // when Fit-to-screen last moved the page on purpose (the content swap must not undo that)
 let fitDone = false;                                    // true once the page has been fitted; it is only refitted when you switch coin / resize / click the button
 let userScrollAt = 0;                                    // when you last scrolled / touched the page: Fit-to-screen never moves the page while you are using it
 ['wheel', 'touchstart', 'touchmove', 'keydown', 'mousedown'].forEach(ev => window.addEventListener(ev, () => { userScrollAt = Date.now(); }, {passive: true}));
@@ -7822,7 +7823,7 @@ function applyFit(force) {
   if (!force && (fitDone || Date.now() - userScrollAt < 10000)) { if (bothOn && lastFit) document.body.style.zoom = String(Math.min(lastFit, Math.round(Math.min(0.8, Math.max(0.5, window.innerWidth / 2000)) * 50) / 50)); return; }
   const rows = Array.from(document.querySelectorAll('.pat-chart-row, .pat-win, .tugrow')).filter(r => r.offsetParent !== null);       // the chart is now the live pattern window (.pat-win), no longer a .pat-chart-row: fit to the chart, or to the price-vs-line block when the chart is closed
   if (!rows.length) return;
-  fitDone = true;
+  fitDone = true; fitScrollAt = Date.now();
   document.body.style.zoom = '1';                         // measure at 100% (all in one task - nothing is painted in between)
   window.scrollTo(0, 0);
   const H = Math.max.apply(null, rows.map(r => r.getBoundingClientRect().bottom)) + 12;
@@ -8122,6 +8123,7 @@ async function refreshInner() {
   // SAME element id still exists post-render and is still an editable
   // input - never restores into some other field.
   const contentEl = document.getElementById('content');
+  const sy0 = window.scrollY, sx0 = window.scrollX, fa0 = fitScrollAt;          // the swap below can throw the page back to the top when you are at the bottom: remember where you were
   const active = document.activeElement;
   let savedId = null, savedValue = null, savedSelStart = null, savedSelEnd = null;
   if (active && active.id && contentEl.contains(active) &&
@@ -8185,6 +8187,7 @@ async function refreshInner() {
   drawAllBm();                         // after the pull-downs are restored, so an open heat map is drawn
   applyMarketPick();
   applyFit();
+  if (fitScrollAt === fa0 && (Math.abs(window.scrollY - sy0) > 1 || Math.abs(window.scrollX - sx0) > 1)) window.scrollTo(sx0, sy0);       // put the page back where you were (Fit-to-screen's own deliberate move is left alone)
   syncLegendHeights();
   contentEl.querySelectorAll('.pat-win-legend, .alert-dock[data-dock], .ct-body').forEach(el => { const k = scrollKey(el); if (k && keepScroll[k]) el.scrollTop = keepScroll[k]; });
   contentEl.querySelectorAll('.pyp-body').forEach(el => { const k = pypKey(el), v = k && keepPyp[k]; if (v) { el.scrollLeft = v[0]; el.scrollTop = v[1]; } });
@@ -9860,6 +9863,7 @@ def _ctb_indicator_cards(name):
 
 # What has been updated, newest first - the UPDATES card in the scrolling banner shows the top ones. Add a line here every time something ships (date, NEW or FIX, a short name, one plain line).
 SITE_UPDATES = [
+    (1793656116, "FIX", "Page stays where you scrolled", "scrolling to the bottom no longer throws the page back to the top"),
     (1793655207, "FIX", "Chart stays put", "BTC only / XRP only: the chart no longer moves or resizes when you scroll the page - it stays exactly where it is and only the left side scrolls"),
     (1793652516, "FIX", "Chart stays beside the info", "BTC only / XRP only: the chart now sits to the right of the top information on laptop-size windows too, so you see it all at once"),
     (1793652474, "FIX", "Volume bar", "the tall buy / sell volume bar beside the chart now always draws, on every computer (a Mac showed only its label)"),
