@@ -807,7 +807,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-11-02-side132"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-11-02-lock133"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -7370,11 +7370,18 @@ function applyMtf() {
     const _single = document.body.getAttribute('data-view') === 'BTC' || document.body.getAttribute('data-view') === 'XRP';
     let _fit = 0;
     if (_single && window.innerWidth >= 1050) {
-      const _zm = parseFloat(document.body.style.zoom) || 1, _vh = window.innerHeight / _zm, _tp = (fr.getBoundingClientRect().top + window.scrollY) / _zm;
+      const _zm = parseFloat(document.body.style.zoom) || 1, _vh = window.innerHeight / _zm;
+      const _card = win.parentElement, _ct = _card ? (_card.getBoundingClientRect().top + window.scrollY) / _zm : 0;       // the card does not move when you scroll, the stuck chart does: measure from the card
+      const _ccs = _card ? getComputedStyle(_card) : null, _lock = Math.max(8, Math.round(_ct + (_ccs ? (parseFloat(_ccs.paddingTop) || 0) + (parseFloat(_ccs.borderTopWidth) || 0) : 0)));
+      const _tp = _lock + (fr.getBoundingClientRect().top - win.getBoundingClientRect().top) / _zm;                         // the chart stays EXACTLY where it is at the top of the page: scrolling moves the left side only
+      if (win.style.top !== _lock + 'px') win.style.top = _lock + 'px';
+      const _mh = Math.max(380, Math.floor(_vh - _lock - 16)) + 'px';
+      if (win.style.maxHeight !== _mh) win.style.maxHeight = _mh;
       let _f = _vh - _tp - 90;                                         // the room left on screen below the chart's top edge ...
       if (_f < _vh * 0.55) _f = _vh - 110;                              // ... but on a laptop the chart sits below the fold (that left only the 380 px minimum, a small chart): give it the whole window height instead
       _fit = Math.max(380, Math.round(_f));
     }
+    if (!_single || window.innerWidth < 1050) { if (win.style.top) win.style.top = ''; if (win.style.maxHeight) win.style.maxHeight = ''; }
     if (fr.dataset.fit !== String(_fit)) {
       try { fr.contentWindow.postMessage({mtfFit: _fit}, '*'); fr.dataset.fit = String(_fit); } catch (e) {}
     }
@@ -9853,6 +9860,7 @@ def _ctb_indicator_cards(name):
 
 # What has been updated, newest first - the UPDATES card in the scrolling banner shows the top ones. Add a line here every time something ships (date, NEW or FIX, a short name, one plain line).
 SITE_UPDATES = [
+    (1793655207, "FIX", "Chart stays put", "BTC only / XRP only: the chart no longer moves or resizes when you scroll the page - it stays exactly where it is and only the left side scrolls"),
     (1793652516, "FIX", "Chart stays beside the info", "BTC only / XRP only: the chart now sits to the right of the top information on laptop-size windows too, so you see it all at once"),
     (1793652474, "FIX", "Volume bar", "the tall buy / sell volume bar beside the chart now always draws, on every computer (a Mac showed only its label)"),
     (1793648049, "FIX", "Pull-downs and clicks", "the page no longer rebuilds under your finger, so the RSI box (and every pull-down) opens and closes first time; tap anywhere else or press Esc to close it"),
