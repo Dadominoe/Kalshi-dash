@@ -807,7 +807,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-11-02-right135"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-11-02-zoom137"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -4915,9 +4915,9 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 /* ONE coin on screen, wide window: the chart sits BESIDE the top information (price vs the line, END CALL, pressure) so it all fits on one screen */
 @media (min-width:1050px) {
   body[data-view="BTC"] .card[data-asset="BTC"], body[data-view="XRP"] .card[data-asset="XRP"] { display:grid; grid-template-columns:minmax(400px,0.8fr) minmax(0,1.5fr); column-gap:16px; align-items:start; }
-  body[data-view="BTC"] .card[data-asset="BTC"] > *, body[data-view="XRP"] .card[data-asset="XRP"] > * { grid-column:1; min-width:0; }
+  body[data-view="BTC"] .card[data-asset="BTC"] > *, body[data-view="XRP"] .card[data-asset="XRP"] > * { grid-column:1 / -1; }
   body[data-view="BTC"] .card[data-asset="BTC"] > .leftcol, body[data-view="XRP"] .card[data-asset="XRP"] > .leftcol { grid-column:1; min-width:0; }
-  body[data-view="BTC"] .card[data-asset="BTC"] > .pat-win, body[data-view="XRP"] .card[data-asset="XRP"] > .pat-win { grid-column:2; grid-row:1 / span 60; margin-top:0; position:sticky; top:8px; align-self:start; overflow:visible; }       /* spans every row: stays locked in the right column for the whole page; the PAGE scrolls, never the chart panel */
+  body[data-view="BTC"] .card[data-asset="BTC"] > .pat-win, body[data-view="XRP"] .card[data-asset="XRP"] > .pat-win { grid-column:2; margin-top:0; align-self:start; }       /* side by side with the info, in normal page flow: scroll down and you scroll past it, like everything else. No scrollbar of its own. */
 }
 @media (min-width:1050px) {
   body[data-view="BTC"] .leftcol .topbar .tb-main .alert-dock, body[data-view="XRP"] .leftcol .topbar .tb-main .alert-dock { flex:1 1 100%; width:auto; height:120px; min-height:120px; max-height:120px; }
@@ -5261,6 +5261,12 @@ details.pat > summary { cursor:pointer; }
 .lc-drop > summary { cursor:pointer; font-size:15px; color:#58a6ff; padding:5px 0; }
 .lc-table { width:100%; font-size:14px; margin:6px 0; } .lc-table td, .lc-table th { padding:4px 8px; text-align:left; }
 .lc-hour { margin:10px 0 14px; padding-top:6px; border-top:1px solid #21262d; }
+svg.lc-svg { cursor:zoom-in; max-width:100%; }
+#lc-overlay { position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(5,8,12,0.97); z-index:100001; overflow:auto; padding:14px 22px; cursor:zoom-out; }
+#lc-overlay .lcz-bar { display:flex; align-items:center; gap:14px; margin-bottom:10px; font-size:20px; color:#e6edf3; }
+#lc-overlay .lcz-bar b { font-size:22px; } #lc-overlay .lcz-bar button { margin-left:auto; font-size:18px; padding:6px 16px; }
+#lc-overlay svg { display:block; width:100%; height:auto; max-height:calc(100vh - 120px); background:#0d1117; border:1px solid #30363d; border-radius:8px; }
+#lc-overlay .lcz-hint { font-size:14px; color:#8b949e; margin-top:8px; }
 .lc-hour-title { font-size:16px; } .lc-hour-read { font-size:14px; color:#c9d1d9; margin:2px 0 4px; }
 .lc-svg { width:100%; height:auto; display:block; border:1px solid #30363d; border-radius:6px; }
 .lc-help summary { cursor:pointer; color:#58a6ff; font-size:13px; margin-top:4px; }
@@ -7371,21 +7377,18 @@ function applyMtf() {
     let _fit = 0;
     if (_single && window.innerWidth >= 1050) {
       const _zm = parseFloat(document.body.style.zoom) || 1, _vh = window.innerHeight / _zm;
-      const _card = win.parentElement, _ct = _card ? (_card.getBoundingClientRect().top + window.scrollY) / _zm : 0;       // the card does not move when you scroll, the stuck chart does: measure from the card
-      const _ccs = _card ? getComputedStyle(_card) : null, _lock = Math.max(8, Math.round(_ct + (_ccs ? (parseFloat(_ccs.paddingTop) || 0) + (parseFloat(_ccs.borderTopWidth) || 0) : 0)));
-      const _tp = _lock + (fr.getBoundingClientRect().top - win.getBoundingClientRect().top) / _zm;                         // the chart stays EXACTLY where it is at the top of the page: scrolling moves the left side only
-      if (win.style.top !== _lock + 'px') win.style.top = _lock + 'px';
-      const _cb = _card ? _card.getBoundingClientRect().bottom : 0, _foot = Math.max(0, (document.documentElement.scrollHeight - (_cb + window.scrollY)) / _zm);       // what sits under the card at the very bottom of the page (sound bar ...)
-      let _f = _vh - _tp - 78 - _foot;                                  // the chart ends just above that, so at the very bottom of the page it is never pushed up                                         // the room left on screen below the chart's top edge ...
+      const _wt = (win.getBoundingClientRect().top + window.scrollY) / _zm;                // where the chart panel sits on the page (it scrolls with the page now, so this never changes)
+      const _tp = _wt + (fr.getBoundingClientRect().top - win.getBoundingClientRect().top) / _zm;
+      let _f = _vh - _tp - 90;                                           // the room left on screen below the chart's top edge ...
       if (_f < _vh * 0.55) _f = _vh - 110;                              // ... but on a laptop the chart sits below the fold (that left only the 380 px minimum, a small chart): give it the whole window height instead
       _fit = Math.max(380, Math.round(_f));
-      const _cur = parseFloat(fr.dataset.fit) || 0;                       // then trim / grow it by what is actually left over: the whole panel (chart + the strips under it) must end just above the bottom of the window, so the chart is never pushed up and has no scrollbar
+      const _cur = parseFloat(fr.dataset.fit) || 0;                       // then trim / grow by what is really left over: the whole panel (chart + the strips under it) should end at the bottom of the window with the page at the top, so it has no scrollbar and nothing is cut off
       if (_cur > 0 && Date.now() - (fr._fitAt || 0) > 2500) {
-        const _over = _lock + win.offsetHeight - (_vh - _foot - 32);
+        const _over = _wt + win.offsetHeight - (_vh - 12);
         _fit = (_over > 6 || _over < -40) ? Math.max(380, Math.round(_cur - _over)) : _cur;
       } else if (_cur > 0) _fit = _cur;
     }
-    if (!_single || window.innerWidth < 1050) { if (win.style.top) win.style.top = ''; if (win.style.maxHeight) win.style.maxHeight = ''; }
+    if (win.style.top) win.style.top = ''; if (win.style.maxHeight) win.style.maxHeight = '';         // (an older build pinned the chart with these - never any more)
     if (fr.dataset.fit !== String(_fit)) {
       try { fr.contentWindow.postMessage({mtfFit: _fit}, '*'); fr.dataset.fit = String(_fit); fr._fitAt = Date.now(); } catch (e) {}
     }
@@ -7516,7 +7519,21 @@ function renderExpanded() {
   o.innerHTML = '<div class="pat-ov-bar"><span class="live-clock live-clock-big"><span class="lc-t"></span><span class="lc-d"></span></span><b>' + expandedAsset + ' - what is being formed (live)</b> ' + (tfs ? tfs.outerHTML : '') +
     ' <button onclick="closeExpanded()">Close (Esc)</button></div><div class="pat-ov-chart">' + (chart ? chart.innerHTML : '') + '</div>';
 }
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeExpanded(); closePopHelps(null); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeExpanded(); closePopHelps(null); closeLcZoom(); } });
+// ---- blow up a line-crossing / last-window picture: click it, it fills the screen (a copy, so the once-a-second page rebuild cannot touch it); click anywhere, Close or Esc puts it away
+function closeLcZoom() { const o = document.getElementById('lc-overlay'); if (o) o.remove(); }
+document.addEventListener('click', e => {
+  const sv = e.target && e.target.closest ? e.target.closest('svg.lc-svg') : null;
+  if (!sv || sv.closest('#lc-overlay')) return;
+  closeLcZoom();
+  const box = sv.closest('.lc-hour, .lw-card, .lc-drop');
+  const tt = box ? (box.querySelector('.lc-hour-title') || box.firstElementChild) : null;
+  const o = document.createElement('div'); o.id = 'lc-overlay';
+  const svg = sv.outerHTML.replace(/(id="|url\(#)((?:lc|lw)\w+)/g, '$1z$2').replace(/(<svg[^>]*?)\s(width|height)="[^"]*"/g, '$1');
+  o.innerHTML = '<div class="lcz-bar"><span>' + (tt ? tt.innerHTML : 'Line crossings') + '</span><button class="size-mode-btn" type="button">Close (Esc)</button></div>' + svg + '<div class="lcz-hint">Click anywhere, press Esc or the Close button to go back.</div>';
+  o.addEventListener('click', () => closeLcZoom());
+  document.body.appendChild(o);
+});
 // a pull-down that pops OVER the page (the RSI explainer) closes when you press or tap anywhere else, or press Esc - so it can never get stuck on the screen
 function closePopHelps(inside) {
   let any = false;
@@ -9867,6 +9884,8 @@ def _ctb_indicator_cards(name):
 
 # What has been updated, newest first - the UPDATES card in the scrolling banner shows the top ones. Add a line here every time something ships (date, NEW or FIX, a short name, one plain line).
 SITE_UPDATES = [
+    (1793660885, "NEW", "Blow up the line-crossing pictures", "click any line-crossing picture to see it full screen; click again or press Esc to close"),
+    (1793660837, "FIX", "Chart scrolls with the page", "BTC only / XRP only: the chart sits beside the info in normal flow again - scroll down and you scroll past it with everything else"),
     (1793659852, "FIX", "Chart locked on the right", "BTC only / XRP only: the chart stays locked in the right column and only the page scrolls; the volume bar is taller"),
     (1793656116, "FIX", "Page stays where you scrolled", "scrolling to the bottom no longer throws the page back to the top"),
     (1793655207, "FIX", "Chart stays put", "BTC only / XRP only: the chart no longer moves or resizes when you scroll the page - it stays exactly where it is and only the left side scrolls"),
