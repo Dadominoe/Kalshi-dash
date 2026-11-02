@@ -807,7 +807,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-11-02-click130"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-11-02-side132"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -4852,9 +4852,9 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .vol-legend { font-size:12px; text-align:left; line-height:1.4; }
 .lg-buy { color:#238636; } .lg-sell { color:#da3633; } .lg-norm { color:#e6edf3; }
 .tug-sub .tug-lab { color:#a6b0bb; font-size:14px; }
-.vol-track { position:relative; flex:1 1 auto; width:32px; min-height:120px; background:#21262d; border-radius:6px; overflow:hidden; display:flex; align-items:flex-end; }
-.vol-fill { width:100%; display:flex; flex-direction:column; transition:height 0.4s ease; }
-.vol-buy { background:#238636; } .vol-sell { background:#da3633; }
+.vol-track { position:relative; flex:1 1 auto; width:32px; min-height:120px; background:#21262d; border-radius:6px; overflow:hidden; }
+.vol-fill { position:absolute; left:0; right:0; bottom:0; transition:height 0.4s ease; }   /* placed against the track, not sized by a flex percentage, so it always draws */
+.vol-buy { position:absolute; left:0; right:0; top:0; background:#238636; } .vol-sell { position:absolute; left:0; right:0; bottom:0; background:#da3633; }
 .vol-normal { position:absolute; left:0; right:0; height:2px; background:#e6edf3; opacity:0.85; }
 @media (max-width:560px) { .vol-bar { flex-basis:46px; font-size:12px; } .vol-track { width:24px; } }
 #pat-overlay { position:fixed; top:0; left:0; right:0; bottom:0; background:#0d1117; z-index:100000; overflow:auto; padding:10px 16px; }
@@ -4913,18 +4913,19 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .flip-risk-bar.down { border-color:#ff3b5c; background:#2a0a10; box-shadow:0 0 22px rgba(255,59,92,.6); animation:frbpulse 1.1s ease-in-out infinite; } .flip-risk-bar.down b { color:#ff4d6d; } .flip-risk-bar.down .frb-track i { background:#ff3b5c; box-shadow:0 0 12px rgba(255,59,92,.9); }
 @keyframes frbpulse { 50% { box-shadow:0 0 34px rgba(255,59,92,.95); } }
 /* ONE coin on screen, wide window: the chart sits BESIDE the top information (price vs the line, END CALL, pressure) so it all fits on one screen */
-@media (min-width:1300px) {
-  body[data-view="BTC"] .card[data-asset="BTC"], body[data-view="XRP"] .card[data-asset="XRP"] { display:grid; grid-template-columns:minmax(470px,0.8fr) minmax(0,1.5fr); column-gap:16px; align-items:start; }
+@media (min-width:1050px) {
+  body[data-view="BTC"] .card[data-asset="BTC"], body[data-view="XRP"] .card[data-asset="XRP"] { display:grid; grid-template-columns:minmax(400px,0.8fr) minmax(0,1.5fr); column-gap:16px; align-items:start; }
   body[data-view="BTC"] .card[data-asset="BTC"] > *, body[data-view="XRP"] .card[data-asset="XRP"] > * { grid-column:1 / -1; }
   body[data-view="BTC"] .card[data-asset="BTC"] > .leftcol, body[data-view="XRP"] .card[data-asset="XRP"] > .leftcol { grid-column:1; min-width:0; }
   body[data-view="BTC"] .card[data-asset="BTC"] > .pat-win, body[data-view="XRP"] .card[data-asset="XRP"] > .pat-win { grid-column:2; margin-top:0; position:sticky; top:8px; align-self:start; max-height:calc(100vh - 16px); overflow-y:auto; }
 }
-@media (min-width:1300px) {
+@media (min-width:1050px) {
   body[data-view="BTC"] .leftcol .topbar .tb-main .alert-dock, body[data-view="XRP"] .leftcol .topbar .tb-main .alert-dock { flex:1 1 100%; width:auto; height:120px; min-height:120px; max-height:120px; }
   body[data-view="BTC"] .leftcol .tb-right, body[data-view="XRP"] .leftcol .tb-right { margin-left:0; max-width:100%; flex-wrap:wrap; }
   body[data-view="BTC"] .leftcol .tb-right .flip-combo, body[data-view="XRP"] .leftcol .tb-right .flip-combo { flex-wrap:wrap; }
   body[data-view="BTC"] .leftcol .tb-right .streak-pull-wrap, body[data-view="XRP"] .leftcol .tb-right .streak-pull-wrap { right:auto; left:0; width:min(480px,92%); }
 }
+@media (min-width:1300px) { body[data-view="BTC"] .card[data-asset="BTC"], body[data-view="XRP"] .card[data-asset="XRP"] { grid-template-columns:minmax(470px,0.8fr) minmax(0,1.5fr); } }
 @media (min-width:1900px) {                                                   /* a big monitor: use the whole width - a left column of normal size and a much wider chart */
   body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:none; }
   body[data-view="BTC"] .card[data-asset="BTC"], body[data-view="XRP"] .card[data-asset="XRP"] { grid-template-columns:minmax(560px,700px) minmax(0,1fr); }
@@ -5229,6 +5230,8 @@ details.pat > summary { cursor:pointer; }
 .tugcol { flex:1 1 0; min-width:0; }
 .tugvol { flex:0 0 96px; display:flex; margin:8px 0; }
 .tugvol .vol-bar { flex:1 1 auto; width:96px; font-size:14px; }
+.tugvol .vol-bar { align-self:flex-start; position:sticky; top:8px; }                       /* stays near the top of the tall column instead of stretching down it */
+.tugvol .vol-track { flex:0 0 190px; min-height:0; height:190px; }                         /* a bar you can see whole: the fill grows from its bottom edge */
 .tugvol .vol-title { font-size:14px; }
 .tugvol .vol-label { font-size:13px; }
 .tugvol .vol-legend { font-size:13px; line-height:1.5; }
@@ -7366,7 +7369,7 @@ function applyMtf() {
     fr.style.visibility = mtfReady[a] ? 'visible' : 'hidden';
     const _single = document.body.getAttribute('data-view') === 'BTC' || document.body.getAttribute('data-view') === 'XRP';
     let _fit = 0;
-    if (_single && window.innerWidth >= 1300) {
+    if (_single && window.innerWidth >= 1050) {
       const _zm = parseFloat(document.body.style.zoom) || 1, _vh = window.innerHeight / _zm, _tp = (fr.getBoundingClientRect().top + window.scrollY) / _zm;
       let _f = _vh - _tp - 90;                                         // the room left on screen below the chart's top edge ...
       if (_f < _vh * 0.55) _f = _vh - 110;                              // ... but on a laptop the chart sits below the fold (that left only the 380 px minimum, a small chart): give it the whole window height instead
@@ -9850,6 +9853,8 @@ def _ctb_indicator_cards(name):
 
 # What has been updated, newest first - the UPDATES card in the scrolling banner shows the top ones. Add a line here every time something ships (date, NEW or FIX, a short name, one plain line).
 SITE_UPDATES = [
+    (1793652516, "FIX", "Chart stays beside the info", "BTC only / XRP only: the chart now sits to the right of the top information on laptop-size windows too, so you see it all at once"),
+    (1793652474, "FIX", "Volume bar", "the tall buy / sell volume bar beside the chart now always draws, on every computer (a Mac showed only its label)"),
     (1793648049, "FIX", "Pull-downs and clicks", "the page no longer rebuilds under your finger, so the RSI box (and every pull-down) opens and closes first time; tap anywhere else or press Esc to close it"),
     (1793415300, "FIX", "5-second chart", "steady price scale (no more jumping) and it now fits your screen height"),
     (1793413500, "NEW", "One-screen layout", "the chart sits beside everything again; 15-minute markets and the price box are drop-downs"),
