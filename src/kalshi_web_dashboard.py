@@ -807,7 +807,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-10-30-steady129"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-11-02-click130"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -7502,7 +7502,18 @@ function renderExpanded() {
   o.innerHTML = '<div class="pat-ov-bar"><span class="live-clock live-clock-big"><span class="lc-t"></span><span class="lc-d"></span></span><b>' + expandedAsset + ' - what is being formed (live)</b> ' + (tfs ? tfs.outerHTML : '') +
     ' <button onclick="closeExpanded()">Close (Esc)</button></div><div class="pat-ov-chart">' + (chart ? chart.innerHTML : '') + '</div>';
 }
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeExpanded(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeExpanded(); closePopHelps(null); } });
+// a pull-down that pops OVER the page (the RSI explainer) closes when you press or tap anywhere else, or press Esc - so it can never get stuck on the screen
+function closePopHelps(inside) {
+  let any = false;
+  document.querySelectorAll('details.ih-pop[open]').forEach(d => {
+    if (inside && d.contains(inside)) return;
+    d.open = false; any = true;
+    if (d.dataset.pat) openPatterns.delete(d.dataset.pat);
+  });
+  if (any) saveOpenPats();
+}
+document.addEventListener('pointerdown', e => { if (document.querySelector('details.ih-pop[open]')) closePopHelps(e.target); }, true);
 // which pull-downs are open is remembered in this browser, so they are still open after a reload (the heat map starts open the very first time; the per-pattern / per-event ones are not saved)
 function loadOpenPats() {
   let a = ['BM|BTC', 'BM|XRP'];
@@ -8038,6 +8049,11 @@ let pageBuild = null;
 // Pick your poison scrolls sideways on a phone. The page swaps its whole content every few seconds, which made the table brand new and snapped it back to the left:
 // keep the scroll position across the swap, and do not swap at all while a finger / the wheel is on the table.
 let pypHold = 0;
+// the page re-draws #content every second: a click that starts on one copy of a button and ends on the next copy is lost (a pull-down would not open / close, the RSI pop-up looked stuck).
+// So nothing is swapped while a finger or mouse button is down (3 s at most, in case the release is never seen), nor for half a second after it comes up.
+let pressHold = 0;
+['pointerdown', 'touchstart'].forEach(ev => document.addEventListener(ev, () => { pressHold = Date.now() + 3000; }, {passive: true, capture: true}));
+['pointerup', 'pointercancel', 'touchend', 'touchcancel'].forEach(ev => document.addEventListener(ev, () => { pressHold = Date.now() + 500; }, {passive: true, capture: true}));
 ['touchstart', 'touchmove', 'wheel'].forEach(ev => document.addEventListener(ev, e => { if (e.target && e.target.closest && e.target.closest('.pyp-body')) pypHold = Date.now() + 2500; }, {passive: true, capture: true}));
 document.addEventListener('touchend', e => { if (e.target && e.target.closest && e.target.closest('.pyp-body')) pypHold = Date.now() + 1800; }, {passive: true, capture: true});
 function pypKey(el) { const d = el.closest('details[data-pat]'); return d ? d.getAttribute('data-pat') : null; }
@@ -8067,6 +8083,7 @@ async function refresh() {
 }
 async function refreshInner() {
   if (Date.now() < pypHold) { lastRefreshOk = Date.now(); return; }
+  if (Date.now() < pressHold) { lastRefreshOk = Date.now(); return; }                    // a click / tap is in progress: do not rebuild the buttons under it
   if (Date.now() < sliderHold) { lastRefreshOk = Date.now(); return; }                   // the narrator volume slider is being dragged: do not rebuild it under the finger
   const activeNow = document.activeElement;
   const typingNow = activeNow && activeNow.tagName === 'INPUT' &&
@@ -9833,6 +9850,7 @@ def _ctb_indicator_cards(name):
 
 # What has been updated, newest first - the UPDATES card in the scrolling banner shows the top ones. Add a line here every time something ships (date, NEW or FIX, a short name, one plain line).
 SITE_UPDATES = [
+    (1793648049, "FIX", "Pull-downs and clicks", "the page no longer rebuilds under your finger, so the RSI box (and every pull-down) opens and closes first time; tap anywhere else or press Esc to close it"),
     (1793415300, "FIX", "5-second chart", "steady price scale (no more jumping) and it now fits your screen height"),
     (1793413500, "NEW", "One-screen layout", "the chart sits beside everything again; 15-minute markets and the price box are drop-downs"),
     (1793409450, "FIX", "5-second candles", "one steady price, so the candles no longer jump between exchanges"),
