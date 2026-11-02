@@ -1629,6 +1629,7 @@ def narr_json(coin_, dec_, cs1, lines_):
 EMBED_JS = r"""
 (function(){
  var COIN=(document.querySelector('.card h2')||{}).textContent||'';
+ document.documentElement.style.overflow='hidden';   /* the dashboard sizes this frame to the chart exactly - the chart screen never has its own scrollbar */
  function postH(){try{parent.postMessage({mtf:1,coin:COIN,h:Math.ceil(document.body.offsetHeight)},'*')}catch(e){}}
  window.addEventListener('load',postH);setInterval(postH,700);
  var lastPtr=0;['pointerdown','pointermove','wheel','keydown'].forEach(function(t){window.addEventListener(t,function(){lastPtr=Date.now()},{passive:true})});
