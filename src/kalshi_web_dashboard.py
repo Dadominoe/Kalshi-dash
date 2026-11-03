@@ -807,7 +807,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-11-02-zoom137"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-11-03-ctscroll138"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -8086,12 +8086,12 @@ let pypHold = 0;
 let pressHold = 0;
 ['pointerdown', 'touchstart'].forEach(ev => document.addEventListener(ev, () => { pressHold = Date.now() + 3000; }, {passive: true, capture: true}));
 ['pointerup', 'pointercancel', 'touchend', 'touchcancel'].forEach(ev => document.addEventListener(ev, () => { pressHold = Date.now() + 500; }, {passive: true, capture: true}));
-['touchstart', 'touchmove', 'wheel'].forEach(ev => document.addEventListener(ev, e => { if (e.target && e.target.closest && e.target.closest('.pyp-body')) pypHold = Date.now() + 2500; }, {passive: true, capture: true}));
-document.addEventListener('touchend', e => { if (e.target && e.target.closest && e.target.closest('.pyp-body')) pypHold = Date.now() + 1800; }, {passive: true, capture: true});
+['touchstart', 'touchmove', 'wheel'].forEach(ev => document.addEventListener(ev, e => { if (e.target && e.target.closest && e.target.closest('.pyp-body, .ct-body')) pypHold = Date.now() + 2500; }, {passive: true, capture: true}));
+document.addEventListener('touchend', e => { if (e.target && e.target.closest && e.target.closest('.pyp-body, .ct-body')) pypHold = Date.now() + 1800; }, {passive: true, capture: true});
 function pypKey(el) { const d = el.closest('details[data-pat]'); return d ? d.getAttribute('data-pat') : null; }
 
 function scrollKey(el) {
-  if (el.classList.contains('ct-body')) { const w0 = el.closest('.pat-win'); return w0 ? 'ct|' + w0.getAttribute('data-asset') : null; }
+  if (el.classList.contains('ct-body')) { const w0 = el.closest('.pat-win'); if (w0) return 'ct|' + w0.getAttribute('data-asset'); const d0 = el.closest('details[data-pat]'); return d0 ? 'ctd|' + d0.getAttribute('data-pat') : null; }       // The 3 calls box sits under the card, not in the chart panel: key it by its own pull-down
   if (el.classList.contains('alert-dock')) return 'dock|' + el.getAttribute('data-dock');
   const w = el.closest('.pat-win');
   return w ? 'leg|' + w.getAttribute('data-asset') : null;
@@ -9884,6 +9884,7 @@ def _ctb_indicator_cards(name):
 
 # What has been updated, newest first - the UPDATES card in the scrolling banner shows the top ones. Add a line here every time something ships (date, NEW or FIX, a short name, one plain line).
 SITE_UPDATES = [
+    (1793738567, "FIX", "The 3 calls stays where you scrolled", "scrolling down inside The 3 calls (down to When the calls agree) no longer jumps back to the top, on computer or phone"),
     (1793660885, "NEW", "Blow up the line-crossing pictures", "click any line-crossing picture to see it full screen; click again or press Esc to close"),
     (1793660837, "FIX", "Chart scrolls with the page", "BTC only / XRP only: the chart sits beside the info in normal flow again - scroll down and you scroll past it with everything else"),
     (1793659852, "FIX", "Chart locked on the right", "BTC only / XRP only: the chart stays locked in the right column and only the page scrolls; the volume bar is taller"),
