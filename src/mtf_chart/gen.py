@@ -1063,41 +1063,6 @@ def build_svg(coin, base_cs, lines_by_tf, emas, srs, frames, uid, dec, nshow, wi
         x = sx(c[0] + step / 2)
         o.append(f'<g class="cd" data-t="{c[0]}" clip-path="url(#{uid}c)"><line x1="{x:.1f}" y1="{sy(c[2]):.1f}" x2="{x:.1f}" y2="{sy(c[3]):.1f}" stroke="{col}" stroke-width="1.6" stroke-opacity="0.95"/>'
                  f'<rect x="{x - bw / 2:.1f}" y="{sy(max(c[1], c[4])):.1f}" width="{bw:.1f}" height="{max(sy(min(c[1], c[4])) - sy(max(c[1], c[4])), 1):.1f}" fill="{col}" fill-opacity="1"/></g>')
-    try:                                                               # DOJI TEST (owner's idea): a doji, then a decisive green / red candle -> a little arrow beside the doji (up / down) and a running score of how often price then went that way
-        _closed_last = n - 1 if base_cs[-1][0] + step <= time.time() else n - 2
-        _rg = [c_[2] - c_[3] for c_ in base_cs]
-        _right = _tot = 0
-        _ar = []
-        for j in range(30, _closed_last):
-            _avg = sum(_rg[j - 30:j]) / 30 or 1e-9
-            d_ = base_cs[j]
-            if not (_rg[j] >= 0.4 * _avg and abs(d_[4] - d_[1]) <= 0.1 * _rg[j]):
-                continue
-            nx = base_cs[j + 1]
-            if abs(nx[4] - nx[1]) < 0.25 * _avg:
-                continue
-            dr_ = 1 if nx[4] > nx[1] else -1
-            if j + 3 <= _closed_last:
-                _tot += 1
-                _right += 1 if (base_cs[j + 3][4] - nx[4]) * dr_ > 0 else 0
-            if j >= off:
-                _ar.append((j, dr_))
-        o.append('<g class="dojiarr" clip-path="url(#' + uid + 'c)">')
-        for j, dr_ in _ar:
-            x_ = sx(base_cs[j][0] + step / 2)
-            col_ = "#3fb950" if dr_ == 1 else "#f85149"
-            if dr_ == 1:
-                y_ = sy(base_cs[j][3]) + 6
-                pts = f"{x_:.1f},{y_:.1f} {x_ - 6:.1f},{y_ + 11:.1f} {x_ + 6:.1f},{y_ + 11:.1f}"
-            else:
-                y_ = sy(base_cs[j][2]) - 6
-                pts = f"{x_:.1f},{y_:.1f} {x_ - 6:.1f},{y_ - 11:.1f} {x_ + 6:.1f},{y_ - 11:.1f}"
-            o.append(f'<polygon points="{pts}" fill="{col_}" stroke="#0d1117" stroke-width="1"><title>doji, then a {"green" if dr_ == 1 else "red"} candle: the test arrow expects a small push {"up" if dr_ == 1 else "down"} (a test, not a promise)</title></polygon>')
-        o.append("</g>")
-        if _tot:
-            o.append(f'<text x="{L_ + 8}" y="{T_ + 16}" font-size="13" fill="#8b949e">doji arrows (test): price went the arrow way {_right} of {_tot} times over the next 2 candles ({100 * _right / _tot:.0f}%)</text>')
-    except Exception as e_:
-        print(f"[chart] doji arrows skipped: {e_!r}")
     o.append(f'<line x1="{sx(t1):.1f}" y1="{T_}" x2="{sx(t1):.1f}" y2="{T_ + ph}" stroke="#484f58" stroke-dasharray="4 4"/>')
     if bias:                                                               # the market-bias strip along the bottom: green = bullish bias, red = bearish
         cw = pw / (tmax - t0) * step
