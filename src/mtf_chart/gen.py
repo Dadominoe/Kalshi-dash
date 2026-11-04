@@ -16,11 +16,11 @@ HOLD_SECONDS = 6 * 60                                       # a freshly projecte
 BIAS_WEAK = 0.25                                           # below this strength (in candle sizes) the market-bias strip is drawn faded; the Indicators tab uses the measured split
 MONEY_P, RED_P, BLUE_P = 15, 34, 111                      # the owner's TradingView MA Ribbon: SMA on the close
 # key, minutes, color, width, on by default, lines kept per side
-TFS = (("1m", 1, "#ffd54a", 1.7, True, 6), ("5m", 5, "#ff9f43", 1.9, False, 5), ("15m", 15, "#39d0ff", 2.3, True, 5),
+TFS = (("1m", 1, "#ffd54a", 1.7, True, 6), ("3m", 3, "#2ee8b6", 1.8, False, 5), ("5m", 5, "#ff9f43", 1.9, False, 5), ("15m", 15, "#39d0ff", 2.3, True, 5),
        ("30m", 30, "#7ee787", 2.5, False, 5), ("1h", 60, "#ff4dd2", 3.0, True, 5), ("1d", 1440, "#b388ff", 3.6, False, 5))
-BASES = (("1 minute candles", "1m"), ("15 minute candles", "15m"), ("1 hour candles", "1h"))
-SHOW = {"1m": 100, "15m": 56, "1h": 72}                 # candles on screen
-GRAN = {"1m": 60, "5m": 300, "15m": 900, "1h": 3600, "1d": 86400}
+BASES = (("1 minute candles", "1m"), ("3 minute candles", "3m"), ("5 minute candles", "5m"), ("15 minute candles", "15m"), ("1 hour candles", "1h"))
+SHOW = {"1m": 100, "3m": 80, "5m": 72, "15m": 56, "1h": 72}                 # candles on screen
+GRAN = {"1m": 60, "3m": 180, "5m": 300, "15m": 900, "1h": 3600, "1d": 86400}
 FRAMES, FRAME_STEP = 12, 5                               # replay: 12 pictures, the lines redrawn every 5 candles
 
 
@@ -88,10 +88,36 @@ def agg(cs, factor):
     return out
 
 
+def agg_sec(cs, sec):
+    """Candles of `sec` seconds built from smaller ones (the newest one is still forming, like every other chart size)."""
+    out, cur = [], None
+    for c in cs:
+        key = c[0] // sec
+        if cur is None or cur[0] != key:
+            if cur is not None:
+                out.append(cur[1])
+            cur = (key, [key * sec, c[1], c[2], c[3], c[4]])
+        else:
+            b = cur[1]; b[2] = max(b[2], c[2]); b[3] = min(b[3], c[3]); b[4] = c[4]
+    if cur is not None:
+        out.append(cur[1])
+    return out
+
+
+_TF_MEMO = {}
+
+
 def get_tf(sym, key):
+    if (sym, key) in _TF_MEMO:
+        return _TF_MEMO[(sym, key)]
     if key == "30m":
-        return agg(fetch(sym, 900), 2)
-    return fetch(sym, GRAN[key], pages={"1m": 8, "15m": 3, "1h": 2}.get(key, 1))
+        r = agg(fetch(sym, 900), 2)
+    elif key == "3m":                                         # Coinbase has no 3-minute candle: build it from the 1-minute ones
+        r = agg_sec(get_tf(sym, "1m"), 180)
+    else:
+        r = fetch(sym, GRAN[key], pages={"1m": 8, "15m": 3, "1h": 2}.get(key, 1))
+    _TF_MEMO[(sym, key)] = r
+    return r
 
 
 def sma(closes, p):
@@ -864,7 +890,7 @@ def channel_svg(tun, t_now, sx, sy, t0, tmax):
     return out
 
 
-BIG_FIRST = ("1d", "1h", "30m", "15m", "5m", "1m")
+BIG_FIRST = ("1d", "1h", "30m", "15m", "5m", "3m", "1m")
 
 
 def line_at(ln, t):
@@ -1164,7 +1190,7 @@ def _agree_votes(closed, cl):
 
 def _agree_other(closed, cl, coin, base):
     """The same six readings for the 15-minute or 1-hour chart, from that chart's own candles. (The 'how did windows like this end' history is only measured from the 1-minute chart, so it is not repeated here.)"""
-    nm = {"15m": "15-minute", "1h": "1-hour"}.get(base, base)
+    nm = {"3m": "3-minute", "5m": "5-minute", "15m": "15-minute", "1h": "1-hour"}.get(base, base)
     votes = _agree_votes(closed, cl)
     AGREE_VOTES[coin + "|" + base] = [[v[0], v[1], v[2], IND_EXPLAIN.get(v[0], "")] for v in votes]
     up, dn = sum(1 for v in votes if v[1] == 1), sum(1 for v in votes if v[1] == -1)
@@ -1242,7 +1268,7 @@ def agree_live(cs, coin, base="1m", gran=60):
 
 
 def ind_panel(coin, chips, agree=""):
-    sel = ('<select onchange="setShade(\'' + coin + '\',this.value)" class="isel"><option value="1m" selected>1 minute tunnel</option><option value="5m">5 minute tunnel</option><option value="15m">15 minute tunnel</option>'
+    sel = ('<select onchange="setShade(\'' + coin + '\',this.value)" class="isel"><option value="1m" selected>1 minute tunnel</option><option value="3m">3 minute tunnel</option><option value="5m">5 minute tunnel</option><option value="15m">15 minute tunnel</option>'
            '<option value="30m">30 minute tunnel</option><option value="1h">1 hour tunnel</option><option value="1d">1 day tunnel</option><option value="none">no shading</option></select>')
 
     def row(name, sub, ctl, key, wide=False):
@@ -1282,7 +1308,7 @@ blocks = []
 tfc_by_coin, lines_by_coin = {}, {}
 for coin, sym, dec in COINS:
     tfc = {key: get_tf(sym, key) for key, *_ in TFS}
-    lines = {t[0]: all_lines(tfc[t[0]], t[5], (2 if t[0] in ('1m', '5m') else 3)) for t in TFS}
+    lines = {t[0]: all_lines(tfc[t[0]], t[5], (2 if t[0] in ('1m', '3m', '5m') else 3)) for t in TFS}
     tfc_by_coin[coin] = tfc
     lines_by_coin[coin] = lines
     for t in TFS:
@@ -1299,14 +1325,15 @@ for coin, sym, dec in COINS:
         big_for_1m = [ln for k_ in BIG_FIRST[:-1] for ln in lines_v.get(k_, [])]
         bigger = [ln for k_ in BIG_FIRST[:BIG_FIRST.index(bkey)] for ln in lines_v.get(k_, [])]
         own_keep = next(t_[5] for t_ in TFS if t_[0] == bkey)
-        own_L = 2 if bkey in ("1m", "5m") else 3
+        own_L = 2 if bkey in ("1m", "3m", "5m") else 3
         frames = []
         step = cs[1][0] - cs[0][0]
-        for k in range(FRAMES):                                  # oldest picture first; the last one is "now" (computed once, shared by every zoom level)
+        for k in (range(FRAMES) if bkey == "1m" else ()):        # the replay is a 1-minute-only feature: no pictures to work out for the other chart sizes
+            # oldest picture first; the last one is "now" (computed once, shared by every zoom level)
             e = len(cs) - 1 - FRAME_STEP * (FRAMES - 1 - k)
             frames.append((cs[e][0] + step, cs[e][4], [ln for ln in all_lines(cs[:e + 1], own_keep, own_L) if ln[4] == 'floor' or not is_dup(ln, bigger, _times, _tol)], tunnel(cs[:e + 1])))
-        own_name = {"1m": "1-minute", "15m": "15-minute", "1h": "1-hour"}[bkey]
-        own_col = {"1m": "yellow", "15m": "blue", "1h": "pink"}[bkey]
+        own_name = {"1m": "1-minute", "3m": "3-minute", "5m": "5-minute", "15m": "15-minute", "1h": "1-hour"}[bkey]
+        own_col = {"1m": "yellow", "3m": "teal", "5m": "orange", "15m": "blue", "1h": "pink"}[bkey]
 
         def replay_bar(uid_):
             return (f'<div class="bar"><b>Replay:</b> <input type="range" min="0" max="{FRAMES - 1}" value="{FRAMES - 1}" style="width:340px;vertical-align:middle" oninput="rep(\'{uid_}\',this.value)"> '
@@ -1337,7 +1364,7 @@ for coin, sym, dec in COINS:
     chips_html = ""
     for _bi, (_bn, _bk) in enumerate(BASES):                    # each chart size reads its OWN six indicators; only the chip for the chart on show is visible
         try:
-            _lab = agree_live(tfc[_bk], coin, _bk, {"1m": 60, "15m": 900, "1h": 3600}[_bk])
+            _lab = agree_live(tfc[_bk], coin, _bk, {"1m": 60, "3m": 180, "5m": 300, "15m": 900, "1h": 3600}[_bk])
         except Exception as _ae:
             _lab = "not available right now"
             print("agree row failed:", _bk, repr(_ae))
