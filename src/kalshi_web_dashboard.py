@@ -807,7 +807,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-11-03-ctscroll138"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-11-04-crowd139"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -4907,6 +4907,7 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .flip-risk-bar .frb-side.up { background:rgba(0,230,118,.18); color:#00e676; } .flip-risk-bar .frb-side.down { background:rgba(255,59,92,.2); color:#ff4d6d; }
 .flip-risk-bar .frb-cross { color:#ffd166; }
 .flip-risk-bar .frb-t { font-size:17px; font-weight:800; color:#e8eaf0; }
+.flip-risk-bar .frb-crowd { display:block; margin:4px 0 2px; padding:3px 8px; border-radius:6px; background:rgba(255,166,0,0.16); border:1px solid rgba(255,166,0,0.65); color:#ffb84d; font-size:14px; font-weight:800; letter-spacing:0.2px; }
 .flip-risk-bar .frb-track { display:block; height:16px; background:#1b1d24; border:1px solid #3d1420; border-radius:8px; margin:10px 0 8px; overflow:hidden; }
 .flip-risk-bar .frb-track i { display:block; height:100%; border-radius:8px; background:#00e676; box-shadow:0 0 10px rgba(0,230,118,.7); }
 .flip-risk-bar.warn { border-color:#ffb020; background:#241b07; box-shadow:0 0 18px rgba(255,176,32,.45); } .flip-risk-bar.warn b { color:#ffb020; } .flip-risk-bar.warn .frb-track i { background:#ffb020; box-shadow:0 0 10px rgba(255,176,32,.8); }
@@ -7238,12 +7239,19 @@ function flipPre(name, v) {                                            // before
   }
   st.side = v.side;
 }
+const crowdSaid = {};
+function crowdPressure(name, v) {                                      // the crowd's quote is turning against the call while the bar is still low: say it once per round
+  if (crowdSaid[v.key]) return;
+  if (!narCoin[name] && (!soundEnabled || !soundOn(name))) return;
+  crowdSaid[v.key] = true;
+  if (narCoin[name]) narSay(name + '. Pressure is building. The crowd is turning.', 'crowd:' + v.key, 600000, 'flip_warn', null, true); else speakUrgent(name + '. Pressure is building. The crowd is turning.');
+}
 let flipFastBusy = false;
 function flipFast() {
   if (flipFastBusy) return;
   flipFastBusy = true;
   fetch('/flip_now', {cache: 'no-store'}).then(r => r.json()).then(j => {
-    Object.keys(j || {}).forEach(n => { const v = j[n]; if (v.call === 'PRE') flipPre(n, v); else flipLadder(n, v.key, v.risk, v.call, v.sd); });
+    Object.keys(j || {}).forEach(n => { const v = j[n]; if (v.call === 'PRE') flipPre(n, v); else flipLadder(n, v.key, v.risk, v.call, v.sd); if (v.crowd) crowdPressure(n, v); });
   }).catch(() => {}).then(() => { flipFastBusy = false; });
 }
 setInterval(flipFast, 500);
@@ -9884,6 +9892,7 @@ def _ctb_indicator_cards(name):
 
 # What has been updated, newest first - the UPDATES card in the scrolling banner shows the top ones. Add a line here every time something ships (date, NEW or FIX, a short name, one plain line).
 SITE_UPDATES = [
+    (1793750000, "NEW", "Pressure-building warning", "when the FLIP RISK bar is still low but the Kalshi crowd is already pricing more flip risk and its confidence just dropped, an orange PRESSURE BUILDING line appears on the bar (and the narrator says it once); in past rounds this flipped about 3 times as often as a normal low-risk reading"),
     (1793738567, "FIX", "The 3 calls stays where you scrolled", "scrolling down inside The 3 calls (down to When the calls agree) no longer jumps back to the top, on computer or phone"),
     (1793660885, "NEW", "Blow up the line-crossing pictures", "click any line-crossing picture to see it full screen; click again or press Esc to close"),
     (1793660837, "FIX", "Chart scrolls with the page", "BTC only / XRP only: the chart sits beside the info in normal flow again - scroll down and you scroll past it with everything else"),
@@ -11186,6 +11195,66 @@ def _lock_watch_loop():
         time.sleep(0.25)
 
 
+_CROWD_HIST = {}
+_CROWD_LOGGED = set()
+_CROWD_MU = threading.Lock()
+
+
+def _crowd_warn(name, side_yes, risk):
+    """EARLY WARNING: the bar is low but the Kalshi crowd is already turning against the current side. -> {crowd_flip, gap, drop} or None. Information only.
+    Rule (back-tested on 46k readings, both halves agree): bar <= 12% AND crowd's flip chance >= bar + 3 pts AND the crowd's price for this side fell >= 2 pts over the last ~minute."""
+    try:
+        if risk is None or risk > 0.12:
+            return None
+        with _lock:
+            d = dict(_state.get(name) or {})
+        yes, tk = d.get("kalshi_price"), d.get("ticker")
+        if yes is None or not tk or not (0.0 < float(yes) < 1.0):
+            return None
+        cur = float(yes) if side_yes else 1.0 - float(yes)
+        now = time.time()
+        k = (name, tk)
+        with _CROWD_MU:
+            h = _CROWD_HIST.setdefault(k, [])
+            if not h or now - h[-1][0] >= 1.0:
+                h.append((now, cur))
+            while h and now - h[0][0] > 150:
+                h.pop(0)
+            for old in [x for x in _CROWD_HIST if x[0] == name and x != k]:
+                _CROWD_HIST.pop(old, None)
+            ref = [v for t_, v in h if 45 <= now - t_ <= 100]
+            if not ref:
+                return None
+            drop = ref[0] - cur
+        gap = (1.0 - cur) - risk
+        if gap >= 0.03 and drop >= 0.02:
+            w = {"crowd_flip": round(1.0 - cur, 3), "gap": round(gap, 3), "drop": round(drop, 3)}
+            if k not in _CROWD_LOGGED:                                          # one row per round the first time it fires - so the owner can see later how it did
+                _CROWD_LOGGED.add(k)
+                try:
+                    f = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "bot_state", "crowd_warn_log.csv")
+                    new = not os.path.exists(f)
+                    with open(f, "a", encoding="utf-8", newline="") as fh:
+                        wr = csv.writer(fh)
+                        if new:
+                            wr.writerow(["ts_utc", "asset", "ticker", "seconds_left", "side", "bar_risk", "crowd_flip", "gap", "drop_1min"])
+                        wr.writerow([dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"), name, tk, d.get("seconds_left"), "YES" if side_yes else "NO", round(risk, 4), w["crowd_flip"], w["gap"], w["drop"]])
+                except Exception:
+                    pass
+            return w
+        return None
+    except Exception:
+        return None
+
+
+def _crowd_html(name, side_yes, risk):
+    w = _crowd_warn(name, side_yes, risk)
+    if not w:
+        return ""
+    return (f'<span class="frb-crowd" title="The Kalshi crowd is already pricing more flip risk than the bar shows, and its confidence in this side just dropped. In past rounds this combination flipped about 3 times as often as a normal low-risk reading. Information only.">'
+            f'PRESSURE BUILDING &middot; the crowd sees {w["crowd_flip"] * 100:.0f}% flip chance (bar {risk * 100:.0f}%) and is falling</span>')
+
+
 def _flip_now():
     """The flip meter, worked out RIGHT NOW from the live price (not the 2-second poll): {coin: {call, risk, sd, key, left}} for every coin that has a locked call this round.
     Information only - it reads the lock, never makes one."""
@@ -11207,10 +11276,16 @@ def _flip_now():
             pr = _flip_pre(name, spot, line, left)
             if pr:
                 out[name] = {"call": "PRE", "risk": round(pr[0], 3), "sd": round(pr[1], 3), "side": "UP" if pr[2] == 1 else "DOWN", "key": f"{name}::{ticker}::pre", "left": int(left)}
+                _cw = _crowd_warn(name, pr[2] == 1, pr[0]) if pr[1] > 0 else None
+                if _cw:
+                    out[name]["crowd"] = _cw
             continue
         fr = _flip_risk(name, lk["side"], spot, line, left) if spot else None
         if fr:
             out[name] = {"call": lk["side"], "risk": round(fr[0], 3), "sd": round(fr[1], 3), "key": f"{name}::{ticker}", "left": int(left)}
+            _cw = _crowd_warn(name, lk["side"] == "YES", fr[0]) if fr[1] > 0 else None
+            if _cw:
+                out[name]["crowd"] = _cw
     return out
 
 
@@ -11704,6 +11779,7 @@ def _pre_risk_html(name, spot, line, left):
     cls = "down" if r >= 0.38 else ("warn" if r >= 0.28 else "ok")                    # lowered 2026-10-27 (owner: the warning only popped up at 40-something percent)
     txt = "price is right at the line - it can cross either way" if r >= 0.36 else ("price is near the line" if r >= 0.28 else "price is well clear of the line")
     return (f'<div class="flip-risk-bar {cls}"><span class="frb-l">FLIP RISK</span> <b>{r * 100:.0f}%</b> <span class="frb-t">{txt}</span>'
+            f'{_crowd_html(name, side == 1, r) if sd > 0 else ""}'
             f'<span class="frb-track"><i style="width:{min(100, r * 100):.0f}%"></i></span>'
             f'{_cross_html(name, spot, line)}'
             f'<span class="hint">price is {sd:.1f} candle-ranges {"above" if side == 1 else "below"} the line &middot; from the last 60 days of rounds: when price was this far from the line at this point, '
@@ -11940,6 +12016,7 @@ def _end_call_html(name, d, tn, fair, left, spot, line):
         _cls = "down" if _r >= 0.45 else ("warn" if _r >= 0.28 else "ok")
         _txt = ("FLIPPING - price is already on the other side of the line" if _sd < 0 else ("flip risk is building - price is close to the line" if _r >= 0.30 else "low"))
         risk_html = (f'<div class="flip-risk-bar {_cls}"><span class="frb-l">FLIP RISK</span> <b>{_r * 100:.0f}%</b> <span class="frb-t">{_txt}</span>'
+                     f'{_crowd_html(name, yes, _r) if _sd > 0 else ""}'
                      f'<span class="frb-track"><i style="width:{min(100, _r * 100):.0f}%"></i></span>'
                      f'{_cross_html(name, spot, line)}'
                      f'<span class="hint">{abs(_sd):.1f} candle-ranges {"on the call side" if _sd >= 0 else "PAST the line"} &middot; from the last 60 days of rounds: calls at this distance with this much time left failed {_r * 100:.0f}% of the time</span></div>'
