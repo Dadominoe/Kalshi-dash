@@ -807,7 +807,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-11-04-alt161"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-11-04-pyp162"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -5010,7 +5010,12 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 #crowd-overlay.pyp-panel { border-color:#ffd24a; } #crowd-overlay.pyp-panel .crowd-body b { color:#ffd24a; } #crowd-overlay.pyp-panel .crowd-body { font-size:14px; line-height:1.5; }
 .pyp-why { width:330px; max-width:100%; white-space:normal; margin-top:6px; padding:8px 10px; border:1px solid #ffd24a; border-radius:8px; background:#161b22; color:#e6edf3; font-size:13px; line-height:1.4; font-style:normal; font-weight:400; } .pyp-why b { color:#ffd24a; }
 .pyp-min { font-size:14px; } .pyp-tag { font-size:11px; letter-spacing:.8px; color:#ffd24a; border:1px solid #ffd24a; border-radius:999px; padding:0 7px; margin-left:6px; } .pyp-foot td { border-top:2px solid #30363d; } .pyp-note { margin-top:8px; }
-.pyp-body { overflow-x:auto; }
+.pyp-body { overflow-x:auto; } .pyp-x { display:none; }
+@media (min-width:1050px) {
+  .pyp-drop[open] > .pyp-body { position:fixed; top:4vh; left:12px; width:min(1240px, calc(100vw - 24px)); max-height:88vh; overflow:auto; box-sizing:border-box; z-index:100001; background:#0d1117; border:2px solid #ffd24a; border-radius:12px; padding:10px 14px 14px; box-shadow:0 10px 40px rgba(0,0,0,.75); }
+  .pyp-drop[open] > .pyp-body .pyp-t { font-size:13px; } .pyp-drop[open] > .pyp-body .pyp-t th { white-space:normal; padding:4px 5px; } .pyp-drop[open] > .pyp-body .pyp-t td { padding:4px 5px; }
+  .pyp-drop[open] > .pyp-body .pyp-x { display:block; position:sticky; top:0; margin:0 0 6px auto; float:right; z-index:2; }
+}
 .ct-body { position:absolute; left:0; top:calc(100% + 4px); width:100%; min-width:680px; max-width:min(1300px, 98vw); z-index:60; max-height:78vh; overflow:auto; background:#0d1117; border:2px solid #39d0d8; border-radius:12px; padding:12px; box-shadow:0 14px 44px rgba(0,0,0,.75); }
 .ct-cards { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:10px; }
 @media (max-width:900px) { .ct-cards { grid-template-columns:1fr; } .ct-body { min-width:0; } }
@@ -7361,6 +7366,7 @@ function flipPre(name, v) {                                            // before
   }
   st.side = v.side;
 }
+document.addEventListener('click', e => { const x = e.target && e.target.closest ? e.target.closest('.pyp-x') : null; if (x) { const d = x.closest('details'); if (d) d.open = false; } });
 function closeCrowdHelp() { const o = document.getElementById('crowd-overlay'); if (o) o.remove(); }
 document.addEventListener('click', e => {                              // the little i beside PRESSURE WATCH opens a centered window (it is cut out of the page so the 1 s re-draw cannot close it or clip it)
   const t = e.target;
@@ -10563,7 +10569,7 @@ def build_pick_poison(name, d, tn):
         foot.append(f'<td class="pyp-best"><b>{", ".join(str(15 - M) for M in bm)} min in</b></td>' if bm else '<td class="flat">-</td>')
     return (f'<details class="ct-drop pyp-drop" data-pat="PYP|{name}"><summary><span class="dd-ic">&#9654;</span><b>Pick your poison</b>'
             f'<span class="dd-hint"> - a call at every minute, 2 to 14 minutes in, with its record - click to compare</span></summary>'
-            f'<div class="ct-body pyp-body"><table class="pyp-t"><tr><th>Call made at</th><th>This round</th>{"".join(f"<th>{l}</th>" for l, _h, _n in _PYP_WINS)}<th title="average cents per contract after the fee, following the call made at this minute, at the Kalshi price recorded then (an estimate)">Est. profit 24h</th><th>Est. profit overall</th></tr>'
+            f'<div class="ct-body pyp-body"><button type="button" class="size-mode-btn pyp-x">Close</button><table class="pyp-t"><tr><th>Call made at</th><th>This round</th>{"".join(f"<th>{l}</th>" for l, _h, _n in _PYP_WINS)}<th title="average cents per contract after the fee, following the call made at this minute, at the Kalshi price recorded then (an estimate)">Est. profit 24h</th><th>Est. profit overall</th></tr>'
             f'{"".join(body)}<tr class="pyp-foot"><td class="pyp-min"><b>Best minute</b></td><td></td>{"".join(foot)}<td></td><td></td></tr></table>'
             '<div class="hint pyp-note">Every minute of the round gets its own call from the same price-vs-line rule, written down at that minute and scored from Kalshi\'s result. Gold-bordered = the best record in that column; the shaded row is the best one at the moment (best estimated profit over 24 hours, following the call made at that minute, at the Kalshi price recorded then - an estimate, not a real fill) '
             '(only once it has enough rounds). A short window is noisy - give it time. A later call is almost always the more accurate one simply because less time is left for the round to change, so compare the coins and the markets minute by minute, not just later-is-better. Mid (8 min in) is the real END CALL. Nothing here changes a call or a trade. Information only.</div></div></details>')
