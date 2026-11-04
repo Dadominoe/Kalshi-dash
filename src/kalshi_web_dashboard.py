@@ -807,7 +807,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-11-04-crowd142"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-11-04-crowd143"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -4909,6 +4909,7 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .flip-risk-bar .frb-t { font-size:17px; font-weight:800; color:#e8eaf0; }
 .flip-risk-bar .frb-crowd-row { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:4px 0 2px; } .frb-crowd-row .info-help { margin:0; } .frb-crowd-row .info-help summary { display:inline-block; padding:2px 9px; border:1px solid #58a6ff; border-radius:11px; font-weight:700; white-space:nowrap; }
 .frb-crowd-row .ih-pop .info-help-body { width:min(440px, 86vw); max-height:70vh; overflow:auto; }
+.frb-crowd-calm { font-size:12px; font-weight:600; color:#8b949e; }
 .crowd-stats { width:100%; border-collapse:collapse; font-size:12px; margin:4px 0 8px; } .crowd-stats th, .crowd-stats td { padding:3px 6px; border-bottom:1px solid #30363d; text-align:right; } .crowd-stats th:first-child, .crowd-stats td:first-child { text-align:left; } .crowd-stats th { color:#8b949e; font-weight:600; }
 .flip-risk-bar .frb-crowd { display:block; margin:0; padding:3px 8px; border-radius:6px; background:rgba(255,166,0,0.16); border:1px solid rgba(255,166,0,0.65); color:#ffb84d; font-size:14px; font-weight:800; letter-spacing:0.2px; }
 .flip-risk-bar .frb-track { display:block; height:16px; background:#1b1d24; border:1px solid #3d1420; border-radius:8px; margin:10px 0 8px; overflow:hidden; }
@@ -9896,6 +9897,7 @@ def _ctb_indicator_cards(name):
 
 # What has been updated, newest first - the UPDATES card in the scrolling banner shows the top ones. Add a line here every time something ships (date, NEW or FIX, a short name, one plain line).
 SITE_UPDATES = [
+    (1793761000, "NEW", "Pressure watch line always visible", "a small PRESSURE WATCH line with an i what is this tab now always sits under the FLIP RISK bar (grey when calm, orange PRESSURE BUILDING when the crowd turns against a low bar)"),
     (1793760000, "NEW", "Stats in the pressure warning info tab", "the i what is this tab on the PRESSURE BUILDING warning now shows the back-test numbers: how often it flipped, by minute of the round, and how each piece did on its own"),
     (1793755000, "FIX", "Pressure warning has its own voice line", "the PRESSURE BUILDING warning now says: Scent of blood. Possible scalp. (twice) - its own line, separate from the Scalp opportunity alert"),
     (1793751500, "NEW", "Info tab on the pressure warning", "the orange PRESSURE BUILDING line on the FLIP RISK bar now has an 'i what is this' tab that explains what it means, when it shows and how often it was right"),
@@ -11203,6 +11205,7 @@ def _lock_watch_loop():
 
 
 _CROWD_HIST = {}
+_CROWD_LAST = {}
 _CROWD_LOGGED = set()
 _CROWD_MU = threading.Lock()
 
@@ -11230,6 +11233,7 @@ def _crowd_warn(name, side_yes, risk):
             for old in [x for x in _CROWD_HIST if x[0] == name and x != k]:
                 _CROWD_HIST.pop(old, None)
             ref = [v for t_, v in h if 45 <= now - t_ <= 100]
+            _CROWD_LAST[name] = {"crowd_flip": round(1.0 - cur, 3), "drop": round(ref[0] - cur, 3) if ref else None}
             if not ref:
                 return None
             drop = ref[0] - cur
@@ -11255,18 +11259,30 @@ def _crowd_warn(name, side_yes, risk):
 
 
 def _crowd_html(name, side_yes, risk):
-    w = _crowd_warn(name, side_yes, risk)
-    if not w:
-        return ""
-    return (f'<div class="frb-crowd-row"><span class="frb-crowd">PRESSURE BUILDING &middot; the crowd sees {w["crowd_flip"] * 100:.0f}% flip chance (bar {risk * 100:.0f}%) and is falling</span>'
-            + _crowd_help(name, w, risk) + '</div>')
+    w = _crowd_warn(name, side_yes, risk) if risk is not None else None
+    last = _CROWD_LAST.get(name)
+    if w:
+        return (f'<div class="frb-crowd-row"><span class="frb-crowd">PRESSURE BUILDING &middot; the crowd sees {w["crowd_flip"] * 100:.0f}% flip chance (bar {risk * 100:.0f}%) and is falling</span>'
+                + _crowd_help(name, w, risk, last) + '</div>')
+    if risk is None or risk > 0.12:
+        txt = "PRESSURE WATCH &middot; off - the bar is already above 12%, so the bar itself is the warning"
+    else:
+        txt = "PRESSURE WATCH &middot; calm - the crowd agrees with the bar" + (f' (it sees {last["crowd_flip"] * 100:.0f}%)' if last else "")
+    return f'<div class="frb-crowd-row"><span class="frb-crowd-calm">{txt}</span>' + _crowd_help(name, None, risk, last) + '</div>'
 
 
-def _crowd_help(name, w, risk):
+def _crowd_help(name, w, risk, last=None):
+    if w:
+        right = (f'<p><b>Right now.</b> The bar says {risk * 100:.0f}% flip risk. The crowd is pricing about {w["crowd_flip"] * 100:.0f}%, and its confidence in the current side fell {w["drop"] * 100:.0f} points in the last minute.</p>')
+    elif risk is not None and last:
+        right = (f'<p><b>Right now.</b> No warning. The bar says {risk * 100:.0f}% flip risk and the crowd is pricing about {last["crowd_flip"] * 100:.0f}%.'
+                 + (f' Its confidence in the current side {"fell" if last["drop"] >= 0 else "rose"} {abs(last["drop"]) * 100:.0f} points in the last minute.' if last.get("drop") is not None else "") + ' The line turns orange and says PRESSURE BUILDING when the conditions below are all true.</p>')
+    else:
+        right = '<p><b>Right now.</b> No warning. The line turns orange and says PRESSURE BUILDING when the conditions below are all true.</p>'
     return _info_help(f"CROWD|{name}", "i what is this", (
         '<p><b>What it means.</b> The FLIP RISK bar only looks at two things: how far price is from the line, and how much time is left. It cannot see people getting nervous. '
         'The <b>crowd</b> is everyone trading this Kalshi market. When they start selling the side price is on, the market price moves <i>before</i> the bar does. This line appears when that happens while the bar is still low.</p>'
-        f'<p><b>Right now.</b> The bar says {risk * 100:.0f}% flip risk. The crowd is pricing about {w["crowd_flip"] * 100:.0f}%, and its confidence in the current side fell {w["drop"] * 100:.0f} points in the last minute.</p>'
+        f'{right}'
         '<p><b>When it shows.</b> All three at once: the bar is 12% or lower, the crowd is pricing at least 3 points more flip risk than the bar, and the crowd\'s confidence dropped at least 2 points over about the last minute.</p>'
         '<p><b>The stats (past rounds, BTC + XRP, 26 days, 46,491 readings from 4,232 rounds).</b> Out of 15,428 readings where the bar was 12% or lower, 5.4% really ended on the other side of the line. '
         'When this warning condition was true (544 readings) <b>14.9%</b> did - about <b>3 times</b> the normal rate. First half of the days 14.2%, second half 16.0%, so it was not a fluke of one stretch.</p>'
@@ -11814,7 +11830,7 @@ def _pre_risk_html(name, spot, line, left):
     cls = "down" if r >= 0.38 else ("warn" if r >= 0.28 else "ok")                    # lowered 2026-10-27 (owner: the warning only popped up at 40-something percent)
     txt = "price is right at the line - it can cross either way" if r >= 0.36 else ("price is near the line" if r >= 0.28 else "price is well clear of the line")
     return (f'<div class="flip-risk-bar {cls}"><span class="frb-l">FLIP RISK</span> <b>{r * 100:.0f}%</b> <span class="frb-t">{txt}</span>'
-            f'{_crowd_html(name, side == 1, r) if sd > 0 else ""}'
+            f'{_crowd_html(name, side == 1, r)}'
             f'<span class="frb-track"><i style="width:{min(100, r * 100):.0f}%"></i></span>'
             f'{_cross_html(name, spot, line)}'
             f'<span class="hint">price is {sd:.1f} candle-ranges {"above" if side == 1 else "below"} the line &middot; from the last 60 days of rounds: when price was this far from the line at this point, '
@@ -12051,7 +12067,7 @@ def _end_call_html(name, d, tn, fair, left, spot, line):
         _cls = "down" if _r >= 0.45 else ("warn" if _r >= 0.28 else "ok")
         _txt = ("FLIPPING - price is already on the other side of the line" if _sd < 0 else ("flip risk is building - price is close to the line" if _r >= 0.30 else "low"))
         risk_html = (f'<div class="flip-risk-bar {_cls}"><span class="frb-l">FLIP RISK</span> <b>{_r * 100:.0f}%</b> <span class="frb-t">{_txt}</span>'
-                     f'{_crowd_html(name, yes, _r) if _sd > 0 else ""}'
+                     f'{_crowd_html(name, yes, _r)}'
                      f'<span class="frb-track"><i style="width:{min(100, _r * 100):.0f}%"></i></span>'
                      f'{_cross_html(name, spot, line)}'
                      f'<span class="hint">{abs(_sd):.1f} candle-ranges {"on the call side" if _sd >= 0 else "PAST the line"} &middot; from the last 60 days of rounds: calls at this distance with this much time left failed {_r * 100:.0f}% of the time</span></div>'
