@@ -807,7 +807,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-11-04-crowd139"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-11-04-crowd140"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -4907,7 +4907,8 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .flip-risk-bar .frb-side.up { background:rgba(0,230,118,.18); color:#00e676; } .flip-risk-bar .frb-side.down { background:rgba(255,59,92,.2); color:#ff4d6d; }
 .flip-risk-bar .frb-cross { color:#ffd166; }
 .flip-risk-bar .frb-t { font-size:17px; font-weight:800; color:#e8eaf0; }
-.flip-risk-bar .frb-crowd { display:block; margin:4px 0 2px; padding:3px 8px; border-radius:6px; background:rgba(255,166,0,0.16); border:1px solid rgba(255,166,0,0.65); color:#ffb84d; font-size:14px; font-weight:800; letter-spacing:0.2px; }
+.flip-risk-bar .frb-crowd-row { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:4px 0 2px; } .frb-crowd-row .info-help { margin:0; } .frb-crowd-row .info-help summary { display:inline-block; padding:2px 9px; border:1px solid #58a6ff; border-radius:11px; font-weight:700; white-space:nowrap; }
+.flip-risk-bar .frb-crowd { display:block; margin:0; padding:3px 8px; border-radius:6px; background:rgba(255,166,0,0.16); border:1px solid rgba(255,166,0,0.65); color:#ffb84d; font-size:14px; font-weight:800; letter-spacing:0.2px; }
 .flip-risk-bar .frb-track { display:block; height:16px; background:#1b1d24; border:1px solid #3d1420; border-radius:8px; margin:10px 0 8px; overflow:hidden; }
 .flip-risk-bar .frb-track i { display:block; height:100%; border-radius:8px; background:#00e676; box-shadow:0 0 10px rgba(0,230,118,.7); }
 .flip-risk-bar.warn { border-color:#ffb020; background:#241b07; box-shadow:0 0 18px rgba(255,176,32,.45); } .flip-risk-bar.warn b { color:#ffb020; } .flip-risk-bar.warn .frb-track i { background:#ffb020; box-shadow:0 0 10px rgba(255,176,32,.8); }
@@ -9892,6 +9893,7 @@ def _ctb_indicator_cards(name):
 
 # What has been updated, newest first - the UPDATES card in the scrolling banner shows the top ones. Add a line here every time something ships (date, NEW or FIX, a short name, one plain line).
 SITE_UPDATES = [
+    (1793751500, "NEW", "Info tab on the pressure warning", "the orange PRESSURE BUILDING line on the FLIP RISK bar now has an 'i what is this' tab that explains what it means, when it shows and how often it was right"),
     (1793750000, "NEW", "Pressure-building warning", "when the FLIP RISK bar is still low but the Kalshi crowd is already pricing more flip risk and its confidence just dropped, an orange PRESSURE BUILDING line appears on the bar (and the narrator says it once); in past rounds this flipped about 3 times as often as a normal low-risk reading"),
     (1793738567, "FIX", "The 3 calls stays where you scrolled", "scrolling down inside The 3 calls (down to When the calls agree) no longer jumps back to the top, on computer or phone"),
     (1793660885, "NEW", "Blow up the line-crossing pictures", "click any line-crossing picture to see it full screen; click again or press Esc to close"),
@@ -11251,8 +11253,19 @@ def _crowd_html(name, side_yes, risk):
     w = _crowd_warn(name, side_yes, risk)
     if not w:
         return ""
-    return (f'<span class="frb-crowd" title="The Kalshi crowd is already pricing more flip risk than the bar shows, and its confidence in this side just dropped. In past rounds this combination flipped about 3 times as often as a normal low-risk reading. Information only.">'
-            f'PRESSURE BUILDING &middot; the crowd sees {w["crowd_flip"] * 100:.0f}% flip chance (bar {risk * 100:.0f}%) and is falling</span>')
+    return (f'<div class="frb-crowd-row"><span class="frb-crowd">PRESSURE BUILDING &middot; the crowd sees {w["crowd_flip"] * 100:.0f}% flip chance (bar {risk * 100:.0f}%) and is falling</span>'
+            + _crowd_help(name, w, risk) + '</div>')
+
+
+def _crowd_help(name, w, risk):
+    return _info_help(f"CROWD|{name}", "i what is this", (
+        '<p><b>What it means.</b> The FLIP RISK bar only looks at two things: how far price is from the line, and how much time is left. It cannot see people getting nervous. '
+        'The <b>crowd</b> is everyone trading this Kalshi market. When they start selling the side price is on, the market price moves <i>before</i> the bar does. This line appears when that happens while the bar is still low.</p>'
+        f'<p><b>Right now.</b> The bar says {risk * 100:.0f}% flip risk. The crowd is pricing about {w["crowd_flip"] * 100:.0f}%, and its confidence in the current side fell {w["drop"] * 100:.0f} points in the last minute.</p>'
+        '<p><b>When it shows.</b> All three at once: the bar is 12% or lower, the crowd is pricing at least 3 points more flip risk than the bar, and the crowd\'s confidence dropped at least 2 points over about the last minute.</p>'
+        '<p><b>How often it was right.</b> In 26 days of past rounds, when this happened the round really ended on the other side of the line about 15% of the time, against about 5% for a normal low-risk reading. '
+        'Late in the round (the last 3 minutes) it was about 18% against 3%. So it is a heads-up that the odds got worse, not a prediction: most of the time (about 85%) the round still does not flip.</p>'
+        '<p class="hint">Information only. It never changes the locked call and it is not advice to buy or sell anything. Each time it fires it is written to a log so its record can be checked.</p>'), pop=True)
 
 
 def _flip_now():
