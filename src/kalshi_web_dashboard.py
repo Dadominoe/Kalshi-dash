@@ -807,7 +807,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-11-04-crowd141"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-11-04-crowd142"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -4908,6 +4908,8 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .flip-risk-bar .frb-cross { color:#ffd166; }
 .flip-risk-bar .frb-t { font-size:17px; font-weight:800; color:#e8eaf0; }
 .flip-risk-bar .frb-crowd-row { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:4px 0 2px; } .frb-crowd-row .info-help { margin:0; } .frb-crowd-row .info-help summary { display:inline-block; padding:2px 9px; border:1px solid #58a6ff; border-radius:11px; font-weight:700; white-space:nowrap; }
+.frb-crowd-row .ih-pop .info-help-body { width:min(440px, 86vw); max-height:70vh; overflow:auto; }
+.crowd-stats { width:100%; border-collapse:collapse; font-size:12px; margin:4px 0 8px; } .crowd-stats th, .crowd-stats td { padding:3px 6px; border-bottom:1px solid #30363d; text-align:right; } .crowd-stats th:first-child, .crowd-stats td:first-child { text-align:left; } .crowd-stats th { color:#8b949e; font-weight:600; }
 .flip-risk-bar .frb-crowd { display:block; margin:0; padding:3px 8px; border-radius:6px; background:rgba(255,166,0,0.16); border:1px solid rgba(255,166,0,0.65); color:#ffb84d; font-size:14px; font-weight:800; letter-spacing:0.2px; }
 .flip-risk-bar .frb-track { display:block; height:16px; background:#1b1d24; border:1px solid #3d1420; border-radius:8px; margin:10px 0 8px; overflow:hidden; }
 .flip-risk-bar .frb-track i { display:block; height:100%; border-radius:8px; background:#00e676; box-shadow:0 0 10px rgba(0,230,118,.7); }
@@ -9894,6 +9896,7 @@ def _ctb_indicator_cards(name):
 
 # What has been updated, newest first - the UPDATES card in the scrolling banner shows the top ones. Add a line here every time something ships (date, NEW or FIX, a short name, one plain line).
 SITE_UPDATES = [
+    (1793760000, "NEW", "Stats in the pressure warning info tab", "the i what is this tab on the PRESSURE BUILDING warning now shows the back-test numbers: how often it flipped, by minute of the round, and how each piece did on its own"),
     (1793755000, "FIX", "Pressure warning has its own voice line", "the PRESSURE BUILDING warning now says: Scent of blood. Possible scalp. (twice) - its own line, separate from the Scalp opportunity alert"),
     (1793751500, "NEW", "Info tab on the pressure warning", "the orange PRESSURE BUILDING line on the FLIP RISK bar now has an 'i what is this' tab that explains what it means, when it shows and how often it was right"),
     (1793750000, "NEW", "Pressure-building warning", "when the FLIP RISK bar is still low but the Kalshi crowd is already pricing more flip risk and its confidence just dropped, an orange PRESSURE BUILDING line appears on the bar (and the narrator says it once); in past rounds this flipped about 3 times as often as a normal low-risk reading"),
@@ -11265,9 +11268,26 @@ def _crowd_help(name, w, risk):
         'The <b>crowd</b> is everyone trading this Kalshi market. When they start selling the side price is on, the market price moves <i>before</i> the bar does. This line appears when that happens while the bar is still low.</p>'
         f'<p><b>Right now.</b> The bar says {risk * 100:.0f}% flip risk. The crowd is pricing about {w["crowd_flip"] * 100:.0f}%, and its confidence in the current side fell {w["drop"] * 100:.0f} points in the last minute.</p>'
         '<p><b>When it shows.</b> All three at once: the bar is 12% or lower, the crowd is pricing at least 3 points more flip risk than the bar, and the crowd\'s confidence dropped at least 2 points over about the last minute.</p>'
-        '<p><b>How often it was right.</b> In 26 days of past rounds, when this happened the round really ended on the other side of the line about 15% of the time, against about 5% for a normal low-risk reading. '
-        'Late in the round (the last 3 minutes) it was about 18% against 3%. So it is a heads-up that the odds got worse, not a prediction: most of the time (about 85%) the round still does not flip.</p>'
-        '<p class="hint">Information only. It never changes the locked call and it is not advice to buy or sell anything. Each time it fires it is written to a log so its record can be checked.</p>'), pop=True)
+        '<p><b>The stats (past rounds, BTC + XRP, 26 days, 46,491 readings from 4,232 rounds).</b> Out of 15,428 readings where the bar was 12% or lower, 5.4% really ended on the other side of the line. '
+        'When this warning condition was true (544 readings) <b>14.9%</b> did - about <b>3 times</b> the normal rate. First half of the days 14.2%, second half 16.0%, so it was not a fluke of one stretch.</p>'
+        '<table class="crowd-stats"><tr><th>Minute of the round</th><th>Warning</th><th>Normal low-risk</th><th>Readings</th></tr>'
+        '<tr><td>3 - 6</td><td>10.0%</td><td>8.7%</td><td>80</td></tr>'
+        '<tr><td>7 - 9</td><td>14.5%</td><td>7.1%</td><td>165</td></tr>'
+        '<tr><td>10 - 11</td><td>15.1%</td><td>4.6%</td><td>146</td></tr>'
+        '<tr><td>12 - 13 (last 3 min)</td><td><b>17.6%</b></td><td>3.4%</td><td>153</td></tr></table>'
+        '<p>The later in the round, the more it matters: the bar barely moves until price is very close to the line, but the crowd moves first. Late in the round it flipped about <b>5 times</b> as often as a normal low reading.</p>'
+        '<table class="crowd-stats"><tr><th>The two pieces on their own</th><th>Flipped</th><th>Readings</th></tr>'
+        '<tr><td>Crowd 3-8 pts more worried than the bar</td><td>8.7%</td><td>1,926</td></tr>'
+        '<tr><td>Crowd 8-15 pts more worried</td><td>14.7%</td><td>689</td></tr>'
+        '<tr><td>Crowd 15+ pts more worried</td><td>22.8%</td><td>377</td></tr>'
+        '<tr><td>Crowd confidence down 2-5 pts in a minute</td><td>10.0%</td><td>612</td></tr>'
+        '<tr><td>Crowd confidence down 5-10 pts</td><td>11.1%</td><td>235</td></tr>'
+        '<tr><td>Crowd confidence down 10+ pts</td><td>24.7%</td><td>97</td></tr>'
+        '<tr><td>Crowd steady or more confident</td><td>2.7%</td><td>5,326</td></tr></table>'
+        '<p><b>Does the bar climb afterwards?</b> After this warning, the bar later reached 15% or more in the same round 26% of the time (12% for a normal low reading).</p>'
+        '<p><b>What it is NOT.</b> About 85% of the time this warning fires, the round still does not flip. It is a heads-up that the odds got worse, not a prediction. We also tested candle patterns (doji, hammer, shooting star, head and shoulders), '
+        'RSI, momentum, drawn ceilings and floors, buy / sell pressure, order flow and the order book as early warnings: none of them warned ahead of time. Only the crowd\'s own price did.</p>'
+        '<p class="hint">Information only. It never changes the locked call and it is not advice to buy or sell anything. Every time it fires it is written to a log (one row per round), so its live record can be checked against these numbers.</p>'), pop=True)
 
 
 def _flip_now():
