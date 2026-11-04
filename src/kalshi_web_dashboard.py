@@ -807,7 +807,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-11-04-crowd140"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-11-04-crowd141"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -7245,7 +7245,8 @@ function crowdPressure(name, v) {                                      // the cr
   if (crowdSaid[v.key]) return;
   if (!narCoin[name] && (!soundEnabled || !soundOn(name))) return;
   crowdSaid[v.key] = true;
-  if (narCoin[name]) narSay(name + '. Pressure is building. The crowd is turning.', 'crowd:' + v.key, 600000, 'flip_warn', null, true); else speakUrgent(name + '. Pressure is building. The crowd is turning.');
+  const line = name + '. Scent of blood. Possible scalp. Scent of blood. Possible scalp.';          // owner's wording; its own alert slot (crowd_turn) - a recording for it can be added later, until then the text is spoken
+  if (narCoin[name]) narSay(line, 'crowd:' + v.key, 600000, 'crowd_turn', null, true); else speakUrgent(line);
 }
 let flipFastBusy = false;
 function flipFast() {
@@ -9893,6 +9894,7 @@ def _ctb_indicator_cards(name):
 
 # What has been updated, newest first - the UPDATES card in the scrolling banner shows the top ones. Add a line here every time something ships (date, NEW or FIX, a short name, one plain line).
 SITE_UPDATES = [
+    (1793755000, "FIX", "Pressure warning has its own voice line", "the PRESSURE BUILDING warning now says: Scent of blood. Possible scalp. (twice) - its own line, separate from the Scalp opportunity alert"),
     (1793751500, "NEW", "Info tab on the pressure warning", "the orange PRESSURE BUILDING line on the FLIP RISK bar now has an 'i what is this' tab that explains what it means, when it shows and how often it was right"),
     (1793750000, "NEW", "Pressure-building warning", "when the FLIP RISK bar is still low but the Kalshi crowd is already pricing more flip risk and its confidence just dropped, an orange PRESSURE BUILDING line appears on the bar (and the narrator says it once); in past rounds this flipped about 3 times as often as a normal low-risk reading"),
     (1793738567, "FIX", "The 3 calls stays where you scrolled", "scrolling down inside The 3 calls (down to When the calls agree) no longer jumps back to the top, on computer or phone"),
