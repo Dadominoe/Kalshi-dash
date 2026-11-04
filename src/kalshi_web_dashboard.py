@@ -807,7 +807,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-11-04-solo154"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-11-04-solo155"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -7275,7 +7275,7 @@ document.addEventListener('click', e => {                              // the li
   if (btn) {
     e.preventDefault();
     if (document.getElementById('crowd-overlay')) { closeCrowdHelp(); return; }          // the i again closes it
-    const src = document.querySelector('.crowd-help-src');
+    const src = (btn.parentElement && btn.parentElement.querySelector('.crowd-help-src')) || document.querySelector('.crowd-help-src');
     if (!src) return;
     const o = document.createElement('div');
     o.id = 'crowd-overlay';
@@ -8586,7 +8586,6 @@ __USERBAR__<h1 class="dom-banner"><span class="dom-logo"><svg viewBox="0 0 100 1
   <button class="size-mode-btn" data-view="XRP" onclick="setAssetView('XRP')">XRP only</button>
   <button class="size-mode-btn" data-view="both" onclick="setAssetView('both')">Both</button>
   <button class="size-mode-btn" id="ctb-btn" onclick="ctbToggle()" title="Show or hide the scrolling call banner (the early, mid and late calls). Off = the old 'The 3 calls' bar.">Call banner: ON</button>
-  <span class="hint" style="margin-left:8px">Pressure watch</span> <button type="button" class="crowd-i" id="pw-i" title="Pressure watch: what is this?" aria-label="Pressure watch: what is this?">i</button>
   <button class="size-mode-btn" id="sc-btn" onclick="soundCheck()" title="Plays a test voice and tells you what this browser did with it (use it when sound is not working)">Sound check</button>
   <button class="size-mode-btn" id="fit-btn" onclick="toggleFit()" title="Scales the page so everything from the top to the bottom of the chart fits the window, and keeps it that way after every reload - for streaming when nobody is touching the mouse">Fit to screen: ON</button></div>
 <div id="content">Loading...</div>
@@ -11328,13 +11327,13 @@ def _crowd_html(name, side_yes, risk):
     w = _crowd_warn(name, side_yes, risk) if risk is not None else None
     last = _CROWD_LAST.get(name)
     if w:
-        return (f'<div class="frb-crowd-row"><span class="frb-crowd">PRESSURE BUILDING &middot; the crowd sees {w["crowd_flip"] * 100:.0f}% flip chance (bar {risk * 100:.0f}%) and is falling</span><span class="frb-crowd-calm">(press the i at the top)</span>'
+        return (f'<div class="frb-crowd-row"><span class="frb-crowd">PRESSURE BUILDING &middot; the crowd sees {w["crowd_flip"] * 100:.0f}% flip chance (bar {risk * 100:.0f}%) and is falling</span><button type="button" class="crowd-i" title="What is this?" aria-label="Pressure watch: what is this?">i</button>'
                 + _crowd_help(name, w, risk, last) + '</div>')
     if risk is None or risk > 0.12:
-        txt = "PRESSURE WATCH &middot; off - the bar is already above 12%, so the bar itself is the warning (press the i at the top)"
+        txt = "PRESSURE WATCH &middot; off - the bar is already above 12%, so the bar itself is the warning"
     else:
-        txt = "PRESSURE WATCH &middot; calm - the crowd agrees with the bar" + (f' (it sees {last["crowd_flip"] * 100:.0f}%)' if last else "") + " (press the i at the top)"
-    return f'<div class="frb-crowd-row"><span class="frb-crowd-calm">{txt}</span>' + _crowd_help(name, None, risk, last) + '</div>'
+        txt = "PRESSURE WATCH &middot; calm - the crowd agrees with the bar" + (f' (it sees {last["crowd_flip"] * 100:.0f}%)' if last else "") + ""
+    return f'<div class="frb-crowd-row"><span class="frb-crowd-calm">{txt}</span><button type="button" class="crowd-i" title="What is this?" aria-label="Pressure watch: what is this?">i</button>' + _crowd_help(name, None, risk, last) + '</div>'
 
 
 def _crowd_help(name, w, risk, last=None):
