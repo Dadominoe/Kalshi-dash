@@ -807,7 +807,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-11-04-flip165"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-11-04-audio166"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -5518,7 +5518,7 @@ function flipVolSet(v) {
   sliderHold = Math.max(sliderHold === Infinity ? 0 : sliderHold, Date.now() + 1500);
   document.querySelectorAll('.fl-volpct').forEach(el => { el.textContent = Math.round(flipVol * 100) + '%'; });
 }
-let flipAlertsOn = true, flipSayUntil = 0;
+let flipAlertsOn = true, flipSayUntil = 0, flipNarUntil = 0, flipBusyUntil = 0, flipBusyLvl = 0, flipSeq = 0;
 try { const fa0 = localStorage.getItem('flipAlerts'); if (fa0 !== null) flipAlertsOn = fa0 === '1'; } catch (e) {}
 function flipAlertsPaint() {
   document.querySelectorAll('.mtf-fla').forEach(b => { b.classList.toggle('on', flipAlertsOn); const l = b.querySelector('.fla-lab'); if (l) l.textContent = 'Flip alerts ' + (flipAlertsOn ? 'ON' : 'OFF'); });
@@ -5542,22 +5542,32 @@ function flipBeep(pulses) {                                          // the flip
 function flipPlay(name, text, clip, pulses) {                        // a flip alert on THIS computer, on its own: alarm, then the recorded voice (computer voice when there is no recording)
   if (!flipAlertsOn || !soundEnabled || !soundOn(name)) return;          // the SOUND button is the master switch: OFF = nothing plays, flip alerts included
   if (clip && sigOff.indexOf(clip) >= 0) return;                     // that alert is switched off in the Alert voices panel
-  flipBeep(pulses || 1);
-  flipSayUntil = Date.now() + (pulses || 1) * 400 + 12000;
+  const lv = pulses || 1;                                            // 1 = scalp opportunity / pressure, 2 = flip incoming, 3 = we are flipping
+  if (Date.now() < flipBusyUntil) {
+    if (lv <= flipBusyLvl) return;                                   // the last flip alert is still playing: never talk / beep over it - unless this one is MORE serious, then it takes over
+    try { window.speechSynthesis.cancel(); if (ttsAudio) { ttsAudio.onended = null; ttsAudio.onerror = null; ttsAudio.pause(); } } catch (e) {}
+  }
+  flipBusyLvl = lv; flipBusyUntil = Date.now() + 9000;
+  const my = ++flipSeq;                                              // a replaced alert drops out completely (no stray tag / voice from it)
+  flipBeep(1);                                                       // one short two-tone alarm, then the voice
   setTimeout(() => {
-    if (!soundEnabled) return;                                       // switched off while the beep was playing
+    if (!soundEnabled || my !== flipSeq) return;                     // switched off while the beep was playing, or replaced by a more serious alert
     const vc = voiceBy[name] || voiceSet;
     const go = () => {
+      if (!soundEnabled || my !== flipSeq) return;
+      flipSayUntil = Date.now() + 600;                              // the flip volume applies only to the line that is starting right now
       if (clip && clipPlay(clip, null, vc)) return;
       try { const u = new SpeechSynthesisUtterance(text.replace(/^BTC\b/, 'Bitcoin').replace(/^XRP\b/, 'X R P')); u.volume = flipVol; window.speechSynthesis.cancel(); window.speechSynthesis.speak(u); } catch (e) {}
     };
+    flipSayUntil = Date.now() + 600;
     if (!coinTag(name, go)) go();
-  }, (pulses || 1) * 400 + 150);
+  }, 650);
 }
 function flipSay(name, text, clip, key, ttl, pulses) {               // narrator ON for this coin: the narrator says it (and the shared feed carries it); otherwise this computer plays it itself
   if (narCoin[name]) narSay(text, key, ttl, clip, null, true); else flipPlay(name, text, clip, pulses);
 }
 function flipVolPreview() {                                          // let go of the slider = a short two-tone beep at the flip level
+  if (!soundEnabled) return;                                         // SOUND is the master switch
   try {
     const ctx = ensureAudioCtx(), now = ctx.currentTime;
     [660, 880].forEach((f, i) => {
@@ -6839,7 +6849,7 @@ let narVol = 0.2;                                                    // the narr
 let sliderHold = 0;
 document.addEventListener('pointerdown', e => { if (e.target && e.target.classList && e.target.classList.contains('nar-vol')) sliderHold = Infinity; }, true);
 ['pointerup', 'pointercancel'].forEach(ev => document.addEventListener(ev, () => { if (sliderHold === Infinity) sliderHold = Date.now() + 400; }, true));
-function narGain() { if (Date.now() < flipSayUntil || (narNow && isFlipLine(narNow.clip, narNow.text))) return flipVol; if (timerSayText && ((narNow && narNow.text === timerSayText) || Date.now() < timerSayUntil)) return timerOpts.vol; return narVol; }          // the round-alarm line has its own volume
+function narGain() { if (timerSayText && narNow && narNow.text === timerSayText) return timerOpts.vol; if (Date.now() < flipSayUntil || Date.now() < flipNarUntil) return flipVol; if (timerSayText && ((narNow && narNow.text === timerSayText) || Date.now() < timerSayUntil)) return timerOpts.vol; return narVol; }          // the round-alarm line has its own volume
 function narVolSet(v) {
   narVol = Math.max(0, Math.min(1, Number(v) / 100));
   try { localStorage.setItem('narVol', String(narVol)); } catch (e) {}
@@ -7185,6 +7195,7 @@ function narFlush() {
   const it = narQueue.shift();
   if (!it) return;
   narNow = it;
+  flipNarUntil = isFlipLine(it.clip, it.text) ? Date.now() + 15000 : 0;          // this line is a flip alert: it plays at the flip volume (and only it - the next line resets this)
   const cm = /^(BTC|XRP)\b/.exec(it.text || '');
   const spoken = (it.text || '').replace(/^BTC\b/, 'Bitcoin').replace(/^XRP\b/, 'X R P');
   const vc = cm ? voiceBy[cm[1]] : voiceSet;                         // this coin's own narrator voice
