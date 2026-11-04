@@ -1287,7 +1287,7 @@ for coin, sym, dec in COINS:
     lines_by_coin[coin] = lines
     for t in TFS:
         lines[t[0] + '_t'] = tunnel(tfc[t[0]], key=f"{coin}|{t[0]}")
-    views, stat_txt = [], ""
+    views, stat_txt, zbar_top = [], "", ""
     for bi, (bname, bkey) in enumerate(BASES):
         cs = tfc[bkey]
         cl = [c[4] for c in cs]
@@ -1319,7 +1319,8 @@ for coin, sym, dec in COINS:
                 inner += f'<div class="zoomv zv-{nz}" style="display:{"block" if zi == 0 else "none"}">' + build_svg(coin, cs, lines_v, emas, srs, (frames if nz in (45, 100) else []), uid, dec, nz, bias=bias, own=bkey) + (replay_bar(uid) if nz in (45, 100) else '<div class="bar"><span class="hint">Replay is on the 45 and 100 candle views (keeps this page light and fast).</span></div>') + f'<div class="macdpane">{macd_svg(cs, nz, uid + "m")}</div>' + "</div>"
             zbar = ('<div class="bar zbar"><b>Candles shown:</b> <button class="on" onclick="setCandles(\'' + coin + '\',45,this)">45 (standard)</button>'
                     '<button onclick="setCandles(\'' + coin + '\',100,this)">100</button><button onclick="setCandles(\'' + coin + '\',200,this)">200 (zoomed out)</button></div>')
-            body = inner + zbar
+            body = inner
+            zbar_top = zbar                                 # shown under the chart-size buttons at the top instead of under the chart
         else:
             uid = f"{coin}{bkey}"
             body = ('<div class="zoomv" style="display:block">' + build_svg(coin, cs, lines_v, emas, srs, [], uid, dec, SHOW[bkey], bias=bias, own=bkey) + '<div class="bar"><span class="hint">Replay is on the 1-minute chart (keeps this page light and fast).</span></div>'
@@ -1348,7 +1349,7 @@ for coin, sym, dec in COINS:
     base_btns = "".join(f'<button class="{"on" if i == 0 else ""}" onclick="setBase(\'{coin}\',\'{b[1]}\',this)">{b[0]}</button>' for i, b in enumerate(BASES))
     tf_boxes = "".join(f'<label class="chip"><input type="checkbox" data-k="{key}" {"checked" if on else ""} onchange="toggleTf(\'{coin}\',\'{key}\',this.checked)"><i style="background:{color}"></i>{key}</label>' for key, mins, color, w, on, keep in TFS)
     lad_btns = "".join(f'<button class="{"on" if m == "both" else ""}" onclick="setLad(\'{coin}\',\'{m}\',this)">{nm}</button>' for m, nm in (("both", "Both ladders"), ("up", "Up ladder (rising lines)"), ("down", "Down ladder (falling lines)")))
-    blocks.append(f'<section class="card lad-both"><h2>{coin}</h2><div class="modebar"><button class="on" onclick="setMode(\'{coin}\',\'pat\',this)">Patterns</button><button onclick="setMode(\'{coin}\',\'tun\',this)">Tunnel</button></div><div class="mpat"><div class="bar basebar">{base_btns}{chips_html}</div><div class="pgrid"><div class="pleft">{"".join(views)}<div class="bar2"><b>Show:</b> {lad_btns} <button class="fs" onclick="goFull(this)">Full screen</button> <button class="fs" style="background:#30363d;border-color:#484f58" onclick="toggleAll(this)">Show every line</button> <button class="fs" style="background:#30363d;border-color:#484f58" onclick="resetZoom(this)">Reset zoom</button> <span class="hint">scroll wheel = zoom - drag = move - double-click = reset</span></div>{stat_txt}</div><div class="pright"><details class="indfold" data-coin="{coin}"><summary>Trend lines, indicators &amp; info (click to open)</summary>{ind_panel(coin, tf_boxes, agree_label)}</details></div></div></div><div class="mtun" style="display:none">{build_tunnel_tab(coin, tfc, dec)}</div></section>')
+    blocks.append(f'<section class="card lad-both"><h2>{coin}</h2><div class="modebar"><button class="on" onclick="setMode(\'{coin}\',\'pat\',this)">Patterns</button><button onclick="setMode(\'{coin}\',\'tun\',this)">Tunnel</button></div><div class="mpat"><div class="bar basebar">{base_btns}{chips_html}</div>{zbar_top}<div class="pgrid"><div class="pleft">{"".join(views)}<div class="bar2"><b>Show:</b> {lad_btns} <button class="fs" onclick="goFull(this)">Full screen</button> <button class="fs" style="background:#30363d;border-color:#484f58" onclick="toggleAll(this)">Show every line</button> <button class="fs" style="background:#30363d;border-color:#484f58" onclick="resetZoom(this)">Reset zoom</button> <span class="hint">scroll wheel = zoom - drag = move - double-click = reset</span></div>{stat_txt}</div><div class="pright"><details class="indfold" data-coin="{coin}"><summary>Trend lines, indicators &amp; info (click to open)</summary>{ind_panel(coin, tf_boxes, agree_label)}</details></div></div></div><div class="mtun" style="display:none">{build_tunnel_tab(coin, tfc, dec)}</div></section>')
 
 def _load_stats():
     try:
@@ -1575,7 +1576,7 @@ function showAgree(el,key){{var chip=el.closest?el.closest('.agreechip'):el;var 
 function showInfo(btn,key){{var cd=btn.closest('.indgrid');var s=document.querySelector('#infostore [data-info="'+key+'"]');if(!s)return;cd.querySelector('.infoin').innerHTML='<h3>'+(s.getAttribute('data-title')||'')+'</h3>'+s.innerHTML;cd.querySelector('.infopanel').scrollTop=0;[].forEach.call(cd.querySelectorAll('.ibtn'),function(b){{b.classList.toggle('on',b===btn)}})}}
 function toggleFl(on,el){{var cd=el.closest('.card');cd.classList.toggle('nofl',!on)}}
 function setLad(c,m,btn){{var cd=card(c);cd.className='card lad-'+m+(cd.classList.contains('nofl')?' nofl':'')+(cd.classList.contains('alllines')?' alllines':'');[].forEach.call(cd.querySelectorAll('.bar2 button'),function(x){{x.classList.toggle('on',x===btn)}})}}
-function setBase(c,b,btn){{var cd=card(c);[].forEach.call(cd.querySelectorAll('.view'),function(v){{v.style.display=v.className.indexOf('v-'+c+'-'+b)>=0?'block':'none'}});[].forEach.call(cd.querySelectorAll('.basebar button'),function(x){{x.classList.toggle('on',x===btn)}});[].forEach.call(cd.querySelectorAll('.agreechip'),function(x){{x.style.display=x.getAttribute('data-base')===b?'inline-flex':'none'}});var sel=cd.querySelector('.isel');if(sel){{sel.value=b;}}setShade(c,b)}}
+function setBase(c,b,btn){{var cd=card(c);[].forEach.call(cd.querySelectorAll('.view'),function(v){{v.style.display=v.className.indexOf('v-'+c+'-'+b)>=0?'block':'none'}});[].forEach.call(cd.querySelectorAll('.basebar button'),function(x){{x.classList.toggle('on',x===btn)}});[].forEach.call(cd.querySelectorAll('.agreechip'),function(x){{x.style.display=x.getAttribute('data-base')===b?'inline-flex':'none'}});[].forEach.call(cd.querySelectorAll('.zbar'),function(z){{z.style.display=b==='1m'?'':'none'}});var sel=cd.querySelector('.isel');if(sel){{sel.value=b;}}setShade(c,b)}}
 [].forEach.call(document.querySelectorAll('.view svg'),initZoom);
 (function(){{var SW='.card .sw input, .card label.chip input';
  function key(x){{var cd=x.closest('.card'),l=[].slice.call(cd.querySelectorAll(SW));return 'mtfchk:'+cd.querySelector('h2').textContent+':'+l.indexOf(x)}}
@@ -1634,7 +1635,7 @@ EMBED_JS = r"""
  function postH(){try{parent.postMessage({mtf:1,coin:COIN,h:Math.ceil(document.body.offsetHeight)},'*')}catch(e){}}
  window.addEventListener('load',postH);setInterval(postH,700);
  var lastPtr=0;['pointerdown','pointermove','wheel','keydown'].forEach(function(t){window.addEventListener(t,function(){lastPtr=Date.now()},{passive:true})});
- var SEL=['.view','.zoomv','.tunv','.mpat','.mtun','.agreechip'];
+ var SEL=['.view','.zoomv','.tunv','.mpat','.mtun','.agreechip','.zbar'];
  function snap(cd){var s={cls:cd.className,chk:[],sel:[],on:[],rng:[],disp:{},info:'',all:null,vb:{}};
   [].forEach.call(cd.querySelectorAll('input[type=checkbox]'),function(x){s.chk.push(x.checked)});
   [].forEach.call(cd.querySelectorAll('select'),function(x){s.sel.push(x.value)});

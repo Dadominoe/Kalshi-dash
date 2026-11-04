@@ -807,7 +807,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-11-04-solo155"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-11-04-solo156"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -4930,21 +4930,28 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
   body[data-view="BTC"] .card[data-asset="BTC"] > *, body[data-view="XRP"] .card[data-asset="XRP"] > * { grid-column:1 / -1; }
   body[data-view="BTC"] .card[data-asset="BTC"] > .leftcol, body[data-view="XRP"] .card[data-asset="XRP"] > .leftcol { grid-column:1; min-width:0; }
   body[data-view="BTC"] .card[data-asset="BTC"] > .pat-win, body[data-view="XRP"] .card[data-asset="XRP"] > .pat-win { grid-column:2; margin-top:0; align-self:start; }       /* side by side with the info, in normal page flow: scroll down and you scroll past it, like everything else. No scrollbar of its own. */
-  /* one coin on screen: the 15-MIN MARKETS board and the alert window go to the top of the right column, above the chart buttons - the left column (and the pressure bar) rises */
+  /* one coin on screen: the call banner goes to the top of the right column (wide enough to read, above the chart buttons) under the 15-MIN MARKETS board; the alert window stays in the left column */
   body[data-view="BTC"] .card[data-asset="BTC"], body[data-view="XRP"] .card[data-asset="XRP"] { grid-template-rows:repeat(8, auto) 1fr; }
   body[data-view="BTC"] .card[data-asset="BTC"] > .leftcol, body[data-view="XRP"] .card[data-asset="XRP"] > .leftcol { display:contents; }
   body[data-view="BTC"] .card[data-asset="BTC"] > .leftcol > *, body[data-view="XRP"] .card[data-asset="XRP"] > .leftcol > * { grid-column:1; min-width:0; align-self:start; }
   body[data-view="BTC"] .card[data-asset="BTC"] > .leftcol > .topbar, body[data-view="XRP"] .card[data-asset="XRP"] > .leftcol > .topbar { grid-row:1 / 3; }
   body[data-view="BTC"] .card[data-asset="BTC"] > .leftcol > .alt-drop, body[data-view="XRP"] .card[data-asset="XRP"] > .leftcol > .alt-drop { grid-column:2; grid-row:1; }
-  body[data-view="BTC"] .card[data-asset="BTC"] > .leftcol > .ctb-slot, body[data-view="XRP"] .card[data-asset="XRP"] > .leftcol > .ctb-slot { grid-row:3; }
-  body[data-view="BTC"] .card[data-asset="BTC"] > .leftcol > .ct-drop, body[data-view="XRP"] .card[data-asset="XRP"] > .leftcol > .ct-drop { grid-row:4; }
-  body[data-view="BTC"] .card[data-asset="BTC"] > .leftcol > .pyp-drop, body[data-view="XRP"] .card[data-asset="XRP"] > .leftcol > .pyp-drop { grid-row:5; }
-  body[data-view="BTC"] .card[data-asset="BTC"] > .leftcol > .cwrow, body[data-view="XRP"] .card[data-asset="XRP"] > .leftcol > .cwrow { grid-row:6; }
-  body[data-view="BTC"] .card[data-asset="BTC"] > .leftcol > .row-tight, body[data-view="XRP"] .card[data-asset="XRP"] > .leftcol > .row-tight { grid-row:7; }
-  body[data-view="BTC"] .card[data-asset="BTC"] > .leftcol > .tugrow, body[data-view="XRP"] .card[data-asset="XRP"] > .leftcol > .tugrow { grid-row:8; }
-  body[data-view="BTC"] .card[data-asset="BTC"] > .pat-win, body[data-view="XRP"] .card[data-asset="XRP"] > .pat-win { grid-row:2 / 10; }
-  body[data-view="BTC"] .pat-win[data-asset="BTC"] > .pw-dock, body[data-view="XRP"] .pat-win[data-asset="XRP"] > .pw-dock { display:block; flex:none; position:relative; box-sizing:border-box; padding:0; width:100%; height:100px; min-height:100px; max-height:100px; margin:0 0 8px; overflow:hidden; }
-  body[data-view="BTC"] .leftcol .topbar .tb-main .alert-dock, body[data-view="XRP"] .leftcol .topbar .tb-main .alert-dock { display:none; }
+  body[data-view="BTC"] .card[data-asset="BTC"] > .leftcol > .ctb-slot, body[data-view="XRP"] .card[data-asset="XRP"] > .leftcol > .ctb-slot { grid-column:2; grid-row:2; }
+  body[data-view="BTC"] .card[data-asset="BTC"] > .leftcol > .ct-drop, body[data-view="XRP"] .card[data-asset="XRP"] > .leftcol > .ct-drop { grid-row:3; }
+  body[data-view="BTC"] .card[data-asset="BTC"] > .leftcol > .pyp-drop, body[data-view="XRP"] .card[data-asset="XRP"] > .leftcol > .pyp-drop { grid-row:4; }
+  body[data-view="BTC"] .card[data-asset="BTC"] > .leftcol > .cwrow, body[data-view="XRP"] .card[data-asset="XRP"] > .leftcol > .cwrow { grid-row:5; }
+  body[data-view="BTC"] .card[data-asset="BTC"] > .leftcol > .row-tight, body[data-view="XRP"] .card[data-asset="XRP"] > .leftcol > .row-tight { grid-row:6; }
+  body[data-view="BTC"] .card[data-asset="BTC"] > .leftcol > .tugrow, body[data-view="XRP"] .card[data-asset="XRP"] > .leftcol > .tugrow { grid-row:7; }
+  body[data-view="BTC"] .card[data-asset="BTC"] > .pat-win, body[data-view="XRP"] .card[data-asset="XRP"] > .pat-win { grid-row:3 / 10; }
+  /* banner OFF: nothing sits between the board and the chart, so the chart rises to the top and the board floats over its top edge when it is opened */
+  body.no-ctb[data-view="BTC"] .card[data-asset="BTC"] > .leftcol > .topbar, body.no-ctb[data-view="XRP"] .card[data-asset="XRP"] > .leftcol > .topbar { grid-row:1; }
+  body.no-ctb[data-view="BTC"] .card[data-asset="BTC"] > .leftcol > .alt-drop, body.no-ctb[data-view="XRP"] .card[data-asset="XRP"] > .leftcol > .alt-drop { grid-row:1; z-index:6; }
+  body.no-ctb[data-view="BTC"] .card[data-asset="BTC"] > .leftcol > .ct-drop, body.no-ctb[data-view="XRP"] .card[data-asset="XRP"] > .leftcol > .ct-drop { grid-row:2; }
+  body.no-ctb[data-view="BTC"] .card[data-asset="BTC"] > .leftcol > .pyp-drop, body.no-ctb[data-view="XRP"] .card[data-asset="XRP"] > .leftcol > .pyp-drop { grid-row:3; }
+  body.no-ctb[data-view="BTC"] .card[data-asset="BTC"] > .leftcol > .cwrow, body.no-ctb[data-view="XRP"] .card[data-asset="XRP"] > .leftcol > .cwrow { grid-row:4; }
+  body.no-ctb[data-view="BTC"] .card[data-asset="BTC"] > .leftcol > .row-tight, body.no-ctb[data-view="XRP"] .card[data-asset="XRP"] > .leftcol > .row-tight { grid-row:5; }
+  body.no-ctb[data-view="BTC"] .card[data-asset="BTC"] > .leftcol > .tugrow, body.no-ctb[data-view="XRP"] .card[data-asset="XRP"] > .leftcol > .tugrow { grid-row:6; }
+  body.no-ctb[data-view="BTC"] .card[data-asset="BTC"] > .pat-win, body.no-ctb[data-view="XRP"] .card[data-asset="XRP"] > .pat-win { grid-row:1 / 10; margin-top:40px; }
 }
 @media (min-width:1050px) {
   body[data-view="BTC"] .leftcol .topbar .tb-main .alert-dock, body[data-view="XRP"] .leftcol .topbar .tb-main .alert-dock { flex:1 1 100%; width:auto; height:120px; min-height:120px; max-height:120px; }
