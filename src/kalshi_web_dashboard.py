@@ -807,7 +807,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-11-04-pyp159"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-11-04-alt160"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -4995,10 +4995,10 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .alt-track { display:flex; width:max-content; animation:altroll 30s linear infinite; }
 @keyframes altroll { from { transform:translateX(0); } to { transform:translateX(-50%); } }
 @media (prefers-reduced-motion: reduce) { .alt-track { animation:none; } .alt-roll { overflow-x:auto; } }
-.alt-chip { flex:0 0 118px; height:48px; margin-right:6px; border:1px solid #30363d; border-radius:7px; padding:2px 7px; box-sizing:border-box; display:grid; grid-template-columns:auto 1fr; grid-template-rows:auto auto; column-gap:6px; align-items:center; background:#0d1117; }
+.alt-chip { flex:0 0 142px; height:48px; margin-right:6px; border:1px solid #30363d; border-radius:7px; padding:2px 7px; box-sizing:border-box; display:grid; grid-template-columns:auto 1fr; grid-template-rows:auto auto; column-gap:6px; align-items:center; background:#0d1117; }
 .alt-sym { font-size:12px; color:#c9d1d9; } .alt-pct { font-size:21px; font-weight:900; text-align:right; line-height:1; color:#e6edf3; }
 .alt-chip.up .alt-pct { color:#3fb950; } .alt-chip.down .alt-pct { color:#ff5d5d; }
-.alt-d { font-size:11px; font-weight:800; color:#8b949e; } .alt-d.up { color:#3fb950; } .alt-d.down { color:#ff5d5d; }
+.alt-d { font-size:11px; font-weight:800; color:#8b949e; white-space:nowrap; } .alt-d.up { color:#3fb950; } .alt-d.down { color:#ff5d5d; }
 .alt-sub { font-size:10px; color:#8b949e; text-align:right; white-space:nowrap; }
 .alt-chip.lag { border-color:#ffd24a; box-shadow:0 0 0 1px #ffd24a inset; } .alt-chip.lag .alt-sub { color:#ffd24a; font-weight:900; font-size:11px; }
 .alt-chip.stale { opacity:.45; }
