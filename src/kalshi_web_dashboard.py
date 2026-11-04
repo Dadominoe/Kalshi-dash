@@ -807,7 +807,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-11-04-pw147"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-11-04-crowd146"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -4837,8 +4837,6 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .incoming-buy { color:#3fb950; } .incoming-sell { color:#f85149; }
 .whale-latest { margin-top:3px; font-size:13px; text-align:right; line-height:1.4; font-weight:400; }
 .pat-win { display:block; }
-.pat-win .mtf-master { font-weight:800; }
-.pat-win.pw-closed .mtf-switch .mtf-vs:not(.mtf-master) { display:none; }
 .pat-chart { cursor:zoom-in; flex:1 1 auto; min-width:0; }
 #pat-overlay .pat-chart svg { max-height:86vh; }
 .pat-chart-row { display:flex; gap:8px; align-items:stretch; }
@@ -7376,14 +7374,6 @@ try { mtfView = JSON.parse(localStorage.getItem('mtfViews') || '{}') || {}; } ca
 let mtfH = {BTC: 1500, XRP: 1500};
 try { const sv = JSON.parse(localStorage.getItem('mtfH') || 'null'); if (sv && sv.BTC > 400 && sv.XRP > 400) mtfH = sv; } catch (e) {}
 const mtfReady = {};
-const mtfLast = {};
-function mtfMaster(a) {                                                  // one button for the whole window: close it (remembering which view was open) or open it again
-  const cur = (mtfView[a] === 'tun' ? 'pat' : (mtfView[a] || 'pat'));
-  if (cur !== 'none') { mtfLast[a] = cur; mtfView[a] = 'none'; } else { mtfView[a] = mtfLast[a] || 'pat'; }
-  if (document.body.getAttribute('data-view') === 'both') mtfView[a === 'BTC' ? 'XRP' : 'BTC'] = mtfView[a];
-  try { localStorage.setItem('mtfViews', JSON.stringify(mtfView)); } catch (e) {}
-  applyMtf();
-}
 function mtfSetView(a, v) {
   mtfView[a] = (mtfView[a] === 'tun' ? 'pat' : (mtfView[a] || 'pat')) === v ? 'none' : v;               // click the open one again to close it
   if (document.body.getAttribute('data-view') === 'both') mtfView[a === 'BTC' ? 'XRP' : 'BTC'] = mtfView[a];   // side by side: both coins always show the same chart, so the two screens match
@@ -7401,16 +7391,15 @@ function applyMtf() {
     if (!win) return;
     const live = win.querySelector('.mtf-live');
     let v = mtfView[a] || 'pat';
-    win.classList.toggle('pw-closed', v === 'none');
     const tkb = win.querySelector('.pat-tick-box');                       // the 5-second chart option: shown only while it is the chosen one
     if (tkb) { const sh = v === 'tick' ? 'block' : 'none'; if (tkb.style.display !== sh) { tkb.style.display = sh; if (sh === 'block') setTimeout(tkPoll, 50); } }
-    if (!live) { win.querySelectorAll('.mtf-vs').forEach(b => { b.classList.toggle('on', b.getAttribute('data-v') === 'master' ? v !== 'none' : b.getAttribute('data-v') === v); }); return; }
+    if (!live) { win.querySelectorAll('.mtf-vs').forEach(b => { b.classList.toggle('on', b.getAttribute('data-v') === v); }); return; }
     if (v === 'tun') v = 'pat';                                          // the separate tunnel screen was removed at the owner's request
     const old = win.querySelector('.pat-old-box');
     const showLive = (v === 'pat' || v === 'tun');
     live.style.display = showLive ? 'block' : 'none';
     if (old) old.style.display = (v === 'old') ? 'block' : 'none';
-    win.querySelectorAll('.mtf-vs').forEach(b => { b.classList.toggle('on', b.getAttribute('data-v') === 'master' ? v !== 'none' : b.getAttribute('data-v') === v); });
+    win.querySelectorAll('.mtf-vs').forEach(b => { b.classList.toggle('on', b.getAttribute('data-v') === v); });
     if (!showLive) return;
     const holder = live.querySelector('.mtf-holder');
     let fr = holder.querySelector('iframe');
@@ -9937,7 +9926,6 @@ def _ctb_indicator_cards(name):
 
 # What has been updated, newest first - the UPDATES card in the scrolling banner shows the top ones. Add a line here every time something ships (date, NEW or FIX, a short name, one plain line).
 SITE_UPDATES = [
-    (1793765000, "NEW", "One drop-down for the whole pattern window", "a new Patterns, trend lines & indicators button opens and closes the whole chart window in one click, so the pressure bars have room on the screen; it remembers your choice"),
     (1793764000, "FIX", "Pressure watch info is a small drop-down", "the i at the top now opens a small box right under it (nothing is dimmed or covered); press the i again, press Esc, or click anywhere else to close it"),
     (1793763000, "FIX", "Pressure watch i moved to the top", "the i for the PRESSURE WATCH info now sits in the button row at the top of the page (it was inside the moving flip bar and glitched); press it to open the explanation and stats"),
     (1793762000, "FIX", "Pressure watch info button", "the info tab beside PRESSURE WATCH is now a plain i button that opens a centered pop-up window (click outside or press Esc to close)"),
@@ -13589,7 +13577,7 @@ def build_pattern_window(asset_name):
     mtf_part, old_open, old_close = "", "", ""
     if _MTF_ON and asset_name in ("BTC", "XRP"):
         _vb = lambda v, cls, label: (f'<button class="mtf-vs {cls}" data-v="{v}" onclick="mtfSetView(\'{asset_name}\',\'{v}\')"><span class="dd-ic">&#9654;</span>{label}</button>')
-        mtf_part = (f'<div class="mtf-switch">' + f'<button class="mtf-vs mtf-master" data-v="master" onclick="mtfMaster(\'{asset_name}\')" title="Open or close the whole Patterns / Tunnel window (chart, trend lines, indicators) to make room on the screen"><span class="dd-ic">&#9654;</span>Patterns, trend lines &amp; indicators</button>' + _vb("pat", "mtf-vs-pat", "Tunnel chart") + _vb("old", "mtf-vs-old", "Live pattern window") + _vb("tick", "mtf-vs-tick", "5-second chart") + '<button class="mtf-spk" onclick="narToggle(this)" title="AI narrator for this coin: talks about what is happening on its chart and pressure"><span class="dd-ic">&#128266;</span><span class="nar-lab">Narrator OFF</span></button><button class="mtf-alv" onclick="alvToggle()" title="Switch each alert voice on or off, and hear it"><span class="dd-ic">&#127911;</span><span>Alert voices</span></button><label class="nar-volbox" title="Narrator volume"><span class="dd-ic">&#128266;</span><input type="range" class="nar-vol" min="0" max="100" step="5" value="100" oninput="narVolSet(this.value)"><span class="nar-volpct">100%</span></label>'
+        mtf_part = (f'<div class="mtf-switch">' + _vb("pat", "mtf-vs-pat", "Tunnel chart") + _vb("old", "mtf-vs-old", "Live pattern window") + _vb("tick", "mtf-vs-tick", "5-second chart") + '<button class="mtf-spk" onclick="narToggle(this)" title="AI narrator for this coin: talks about what is happening on its chart and pressure"><span class="dd-ic">&#128266;</span><span class="nar-lab">Narrator OFF</span></button><button class="mtf-alv" onclick="alvToggle()" title="Switch each alert voice on or off, and hear it"><span class="dd-ic">&#127911;</span><span>Alert voices</span></button><label class="nar-volbox" title="Narrator volume"><span class="dd-ic">&#128266;</span><input type="range" class="nar-vol" min="0" max="100" step="5" value="100" oninput="narVolSet(this.value)"><span class="nar-volpct">100%</span></label>'
                     + f'</div><div class="mtf-live" data-asset="{asset_name}"><div class="mtf-holder"></div></div>' + _tick_box_html(asset_name))
         old_open, old_close = '<div class="pat-old-box" style="display:none">', '</div>'
     voice_bar = ""
