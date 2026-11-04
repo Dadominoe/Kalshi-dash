@@ -1606,7 +1606,7 @@ function setLad(c,m,btn){{var cd=card(c);cd.className='card lad-'+m+(cd.classLis
 function setBase(c,b,btn){{var cd=card(c);[].forEach.call(cd.querySelectorAll('.view'),function(v){{v.style.display=v.className.indexOf('v-'+c+'-'+b)>=0?'block':'none'}});[].forEach.call(cd.querySelectorAll('.basebar button'),function(x){{x.classList.toggle('on',x===btn)}});[].forEach.call(cd.querySelectorAll('.agreechip'),function(x){{x.style.display=x.getAttribute('data-base')===b?'inline-flex':'none'}});[].forEach.call(cd.querySelectorAll('.zbar'),function(z){{z.style.display=b==='1m'?'':'none'}});var sel=cd.querySelector('.isel');if(sel){{sel.value=b;}}setShade(c,b)}}
 [].forEach.call(document.querySelectorAll('.view svg'),initZoom);
 (function(){{var SW='.card .sw input, .card label.chip input';
- function key(x){{var cd=x.closest('.card'),l=[].slice.call(cd.querySelectorAll(SW));return 'mtfchk:'+cd.querySelector('h2').textContent+':'+l.indexOf(x)}}
+ function key(x){{var cd=x.closest('.card'),r=x.closest('.irow'),nm=x.getAttribute('data-k')||(r&&r.querySelector('.iname b')?r.querySelector('.iname b').textContent:'');if(!nm){{nm='#'+[].slice.call(cd.querySelectorAll(SW)).indexOf(x)}}return 'mtfchk2:'+cd.querySelector('h2').textContent+':'+nm}}
  [].forEach.call(document.querySelectorAll(SW),function(x){{var v=null;try{{v=localStorage.getItem(key(x))}}catch(e){{}}
   if(v!==null&&(v==='1')!==x.checked){{x.checked=v==='1';x.dispatchEvent(new Event('change'))}}}});
  document.addEventListener('change',function(ev){{var x=ev.target;if(!x||!x.matches||!x.matches(SW))return;try{{localStorage.setItem(key(x),x.checked?'1':'0')}}catch(e){{}}}},true)}})();
@@ -1672,11 +1672,12 @@ EMBED_JS = r"""
   [].forEach.call(cd.querySelectorAll('svg[id]'),function(x){s.vb[x.id]=x.getAttribute('viewBox')});
   var ib=cd.querySelector('.infoin');s.info=ib?ib.innerHTML:'';var ta=cd.querySelector('button[onclick*="toggleAll"]');s.all=ta?ta.textContent:null;return s}
  function apply(cd,s){cd.className=s.cls;
-  [].forEach.call(cd.querySelectorAll('input[type=checkbox]'),function(x,i){if(s.chk[i]!==undefined&&x.checked!==s.chk[i]){x.checked=s.chk[i];x.dispatchEvent(new Event('change'))}});
-  [].forEach.call(cd.querySelectorAll('select'),function(x,i){if(s.sel[i]!==undefined&&x.value!==s.sel[i]){x.value=s.sel[i];x.dispatchEvent(new Event('change'))}});
-  [].forEach.call(cd.querySelectorAll('input[type=range]'),function(x,i){if(s.rng[i]!==undefined){x.value=s.rng[i];x.dispatchEvent(new Event('input'))}});
-  [].forEach.call(cd.querySelectorAll('button'),function(x,i){if(s.on[i]!==undefined)x.classList.toggle('on',s.on[i])});
-  SEL.forEach(function(q){[].forEach.call(cd.querySelectorAll(q),function(x,i){if(s.disp[q][i]!==undefined)x.style.display=s.disp[q][i]})});
+  var okC=cd.querySelectorAll('input[type=checkbox]').length===s.chk.length,okS=cd.querySelectorAll('select').length===s.sel.length,okR=cd.querySelectorAll('input[type=range]').length===s.rng.length,okB=cd.querySelectorAll('button').length===s.on.length;      // a changed page shape (new chart sizes, new buttons): do NOT put things back by position
+  if(okC)[].forEach.call(cd.querySelectorAll('input[type=checkbox]'),function(x,i){if(s.chk[i]!==undefined&&x.checked!==s.chk[i]){x.checked=s.chk[i];x.dispatchEvent(new Event('change'))}});
+  if(okS)[].forEach.call(cd.querySelectorAll('select'),function(x,i){if(s.sel[i]!==undefined&&x.value!==s.sel[i]){x.value=s.sel[i];x.dispatchEvent(new Event('change'))}});
+  if(okR)[].forEach.call(cd.querySelectorAll('input[type=range]'),function(x,i){if(s.rng[i]!==undefined){x.value=s.rng[i];x.dispatchEvent(new Event('input'))}});
+  if(okB)[].forEach.call(cd.querySelectorAll('button'),function(x,i){if(s.on[i]!==undefined)x.classList.toggle('on',s.on[i])});
+  SEL.forEach(function(q){var ns=cd.querySelectorAll(q);if(ns.length!==(s.disp[q]||[]).length)return;[].forEach.call(ns,function(x,i){if(s.disp[q][i]!==undefined)x.style.display=s.disp[q][i]})});
   var ib=cd.querySelector('.infoin');if(ib&&s.info)ib.innerHTML=s.info;var ta=cd.querySelector('button[onclick*="toggleAll"]');if(ta&&s.all)ta.textContent=s.all;
   [].forEach.call(cd.querySelectorAll('.view svg'),initZoom);
   Object.keys(s.vb||{}).forEach(function(id){var sv=document.getElementById(id);if(sv&&sv._vb&&s.vb[id]){var q=s.vb[id].split(' ').map(Number);if(q.length===4&&q[2]>0){sv.setAttribute('viewBox',s.vb[id]);sv._vb={x:q[0],y:q[1],w:q[2],h:q[3]}}}})}
