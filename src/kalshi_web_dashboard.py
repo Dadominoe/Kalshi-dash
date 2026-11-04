@@ -807,7 +807,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-11-04-alarm157"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-11-04-alarm158"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -4883,6 +4883,7 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .tm-min b { font-size:17px; } .tm-min small { font-size:10px; color:#8b949e; }
 .tm-min.on { background:linear-gradient(180deg,#b35900,#7a3d00); border-color:#ffb84d; box-shadow:0 0 0 3px rgba(255,184,77,.3); } .tm-min.on small { color:#ffe0b3; }
 .tm-min.now { outline:2px dashed #58a6ff; outline-offset:1px; }
+.tm-vol { margin:6px 0; } .tm-vol label { display:flex; align-items:center; gap:8px; } .tm-vol input[type=range] { flex:1; min-width:120px; } .tm-vol b { min-width:40px; text-align:right; }
 .tm-opts { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:4px 0; }
 #timer-toast { position:fixed; left:50%; top:14px; transform:translateX(-50%); z-index:100003; background:#b35900; color:#fff; border:3px solid #ffb84d; border-radius:12px; padding:12px 24px; display:flex; flex-direction:column; align-items:center; gap:2px; font-size:18px; box-shadow:0 8px 30px rgba(0,0,0,.7); cursor:pointer; animation:tmpulse 1s ease-in-out infinite; }
 #timer-toast b { font-size:26px; letter-spacing:.5px; } @keyframes tmpulse { 50% { box-shadow:0 0 38px rgba(255,184,77,.95); } }
@@ -6761,11 +6762,12 @@ function compVoiceSet(on) { compVoiceOn = !!on; try { localStorage.setItem('comp
 let oldSoundsOn = false;
 try { oldSoundsOn = localStorage.getItem('oldSounds') === '1'; } catch (e) {}
 function oldSoundsSet(on) { oldSoundsOn = !!on; try { localStorage.setItem('oldSounds', on ? '1' : '0'); } catch (e) {} }
+let timerSayUntil = 0;
 let narVol = 0.2;                                                    // the narrator volume starts at 20% after every page load / reload (owner, 2026-10-28); the slider changes it until the next reload
 let sliderHold = 0;
 document.addEventListener('pointerdown', e => { if (e.target && e.target.classList && e.target.classList.contains('nar-vol')) sliderHold = Infinity; }, true);
 ['pointerup', 'pointercancel'].forEach(ev => document.addEventListener(ev, () => { if (sliderHold === Infinity) sliderHold = Date.now() + 400; }, true));
-function narGain() { return narVol; }
+function narGain() { if (timerSayText && ((narNow && narNow.text === timerSayText) || Date.now() < timerSayUntil)) return timerOpts.vol; return narVol; }          // the round-alarm line has its own volume
 function narVolSet(v) {
   narVol = Math.max(0, Math.min(1, Number(v) / 100));
   try { localStorage.setItem('narVol', String(narVol)); } catch (e) {}
@@ -6903,11 +6905,17 @@ function ctRecToggle(name, M) {
   if (d) { d.open = !d.open; if (d.open) { try { d.scrollIntoView({block: 'nearest'}); } catch (e) {} } }
 }
 // ---- ROUND ALARMS (owner's idea): pick the minute of the 15-minute round; an alarm goes off then, every round. Information only - a timer, nothing more. Local to this browser (never the shared voice feed).
-let timerMins = [], timerOpts = {voice: true, beep: true}, timerFired = {};
+let timerMins = [], timerOpts = {voice: true, beep: true, vol: 0.7}, timerFired = {}, timerSayText = '';
 try { const t0 = JSON.parse(localStorage.getItem('timerAlarms') || 'null'); if (t0 && Array.isArray(t0.mins)) { timerMins = t0.mins.filter(n => n >= 1 && n <= 14); timerOpts = Object.assign(timerOpts, t0.opts || {}); } } catch (e) {}
+timerOpts.vol = Math.max(0, Math.min(1, Number(timerOpts.vol))); if (!isFinite(timerOpts.vol)) timerOpts.vol = 0.7;
 function timerSave() { try { localStorage.setItem('timerAlarms', JSON.stringify({mins: timerMins, opts: timerOpts})); } catch (e) {} }
 function timerSet(m) { const i = timerMins.indexOf(m); if (i >= 0) timerMins.splice(i, 1); else timerMins.push(m); timerMins.sort((a, b) => a - b); timerSave(); timerPaint(); }
 function timerOpt(k, v) { timerOpts[k] = v; timerSave(); }
+function timerVolSet(v, preview) {
+  timerOpts.vol = Math.max(0, Math.min(1, Number(v) / 100)); timerSave();
+  document.querySelectorAll('.tm-volpct').forEach(el => { el.textContent = Math.round(timerOpts.vol * 100) + '%'; });
+  if (preview) timerBeep();                                           // let go of the slider = hear how loud it is
+}
 function timerClear() { timerMins = []; timerSave(); timerPaint(); }
 function timerPaint() {
   document.querySelectorAll('#alv-panel .tm-min').forEach(b => b.classList.toggle('on', timerMins.indexOf(+b.getAttribute('data-m')) >= 0));
@@ -6921,6 +6929,7 @@ function timerHtml() {
     '<div class="tm-grid">' + g + '</div>' +
     '<div class="tm-opts"><label><input type="checkbox" ' + (timerOpts.voice ? 'checked' : '') + ' onchange="timerOpt(\'voice\', this.checked)"> voice</label> <label><input type="checkbox" ' + (timerOpts.beep ? 'checked' : '') + ' onchange="timerOpt(\'beep\', this.checked)"> beep</label> ' +
     '<button type="button" class="size-mode-btn" onclick="timerFire(timerMins[0] || 11, true)">Test alarm</button> <button type="button" class="size-mode-btn" onclick="timerClear()">Clear all</button></div>' +
+    '<div class="tm-vol"><label>Alarm volume <input type="range" min="0" max="100" step="1" value="' + Math.round(timerOpts.vol * 100) + '" oninput="timerVolSet(this.value, false)" onchange="timerVolSet(this.value, true)"> <b class="tm-volpct">' + Math.round(timerOpts.vol * 100) + '%</b></label></div>' +
     '<div id="tm-sum" class="hint"></div><div id="tm-now" class="hint"></div>' +
     '<div class="hint">The voice and beep need the SOUND button ON. The on-screen banner always shows.</div></div>';
 }
@@ -6930,7 +6939,7 @@ function timerBeep() {
     [880, 1175, 880, 1175].forEach((f, i) => {
       const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'square'; o.connect(g); g.connect(ctx.destination);
       const t0 = now + i * 0.22; o.frequency.setValueAtTime(f, t0);
-      g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(vol(0.35), t0 + 0.02); g.gain.linearRampToValueAtTime(0.0001, t0 + 0.18);
+      g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(Math.max(0.0001, 0.4 * timerOpts.vol), t0 + 0.02); g.gain.linearRampToValueAtTime(0.0001, t0 + 0.18);
       o.start(t0); o.stop(t0 + 0.2);
     });
   } catch (e) {}
@@ -6950,6 +6959,7 @@ function timerFire(m, test) {
   if (timerOpts.beep) timerBeep();
   if (timerOpts.voice) {
     const say = 'Minute ' + m + '. ' + left + (left === 1 ? ' minute' : ' minutes') + ' left.';
+    timerSayText = say; timerSayUntil = Date.now() + 8000;
     try { if (narratorOn) narPlayLocal(say, 'timer:' + m + ':' + Date.now(), 20000, null, null, true, null); else speakUrgent(say, 700); } catch (e) {}
   }
 }
