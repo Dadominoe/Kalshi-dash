@@ -807,7 +807,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-11-04-flip164"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-11-04-flip165"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -5540,11 +5540,12 @@ function flipBeep(pulses) {                                          // the flip
   } catch (e) {}
 }
 function flipPlay(name, text, clip, pulses) {                        // a flip alert on THIS computer, on its own: alarm, then the recorded voice (computer voice when there is no recording)
-  if (!flipAlertsOn || !soundOn(name)) return;
+  if (!flipAlertsOn || !soundEnabled || !soundOn(name)) return;          // the SOUND button is the master switch: OFF = nothing plays, flip alerts included
   if (clip && sigOff.indexOf(clip) >= 0) return;                     // that alert is switched off in the Alert voices panel
   flipBeep(pulses || 1);
   flipSayUntil = Date.now() + (pulses || 1) * 400 + 12000;
   setTimeout(() => {
+    if (!soundEnabled) return;                                       // switched off while the beep was playing
     const vc = voiceBy[name] || voiceSet;
     const go = () => {
       if (clip && clipPlay(clip, null, vc)) return;
@@ -7318,7 +7319,7 @@ function flipLadder(name, key, r, call, sd) {
     if (!name || !key || isNaN(r)) return;
     if (sd !== undefined && sd !== null && sd < 0) r = Math.max(r, flipSteps.flip);                    // price is already PAST the line: that is a flip, whatever the percentage says
     const said = flipRiskSaid[key] || (flipRiskSaid[key] = {});
-    if (!narCoin[name] && !(flipAlertsOn && soundOn(name))) return;
+    if (!narCoin[name] && !(flipAlertsOn && soundEnabled && soundOn(name))) return;
     // three steps, each at its own flip-risk percentage (set in Alert voices; back-test of 1,451 locked calls at 20 / 30 / 55%: about 5:45 / 4:30 / 3:30 before the end - the earlier it fires the more false alarms)
     if (r >= flipSteps.flip && !said.flip) {
       said.flip = true; said.rise = true; said.early = true;
@@ -7420,7 +7421,7 @@ function checkFlipRiskAlerts() {
 // the fast lane: the flip meter re-worked from the LIVE price about twice a second, independent of the page refresh
 const flipPreState = {};
 function flipPre(name, v) {                                            // before the call (or in a no-call round): scalp opportunity when price is right at the line, and "flipping" each time it crosses
-  if (!narCoin[name] && !(flipAlertsOn && soundOn(name))) return;
+  if (!narCoin[name] && !(flipAlertsOn && soundEnabled && soundOn(name))) return;
   const st = flipPreState[v.key] || (flipPreState[v.key] = {side: null, scalp: false, cross: 0});
   const now = Date.now();
   if (st.side !== null && st.side !== v.side && now - st.cross > 30000) {
@@ -7463,7 +7464,7 @@ document.addEventListener('click', e => {                              // the li
 const crowdSaid = {};
 function crowdPressure(name, v) {                                      // the crowd's quote is turning against the call while the bar is still low: say it once per round
   if (crowdSaid[v.key]) return;
-  if (!narCoin[name] && !(flipAlertsOn && soundOn(name))) return;
+  if (!narCoin[name] && !(flipAlertsOn && soundEnabled && soundOn(name))) return;
   crowdSaid[v.key] = true;
   const line = name + '. Scent of blood. Possible scalp. Scent of blood. Possible scalp.';          // owner's wording; its own alert slot (crowd_turn) - a recording for it can be added later, until then the text is spoken
   flipSay(name, line, 'crowd_turn', 'crowd:' + v.key, 600000, 1);
@@ -13782,7 +13783,7 @@ def build_pattern_window(asset_name):
     mtf_part, old_open, old_close = "", "", ""
     if _MTF_ON and asset_name in ("BTC", "XRP"):
         _vb = lambda v, cls, label: (f'<button class="mtf-vs {cls}" data-v="{v}" onclick="mtfSetView(\'{asset_name}\',\'{v}\')"><span class="dd-ic">&#9654;</span>{label}</button>')
-        mtf_part = (f'<div class="mtf-switch">' + _vb("pat", "mtf-vs-pat", "Tunnel chart") + _vb("old", "mtf-vs-old", "Live pattern window") + _vb("tick", "mtf-vs-tick", "5-second chart") + '<button class="mtf-spk" onclick="narToggle(this)" title="AI narrator for this coin: talks about what is happening on its chart and pressure"><span class="dd-ic">&#128266;</span><span class="nar-lab">Narrator OFF</span></button><button class="mtf-alv" onclick="alvToggle()" title="Switch each alert voice on or off, and hear it"><span class="dd-ic">&#127911;</span><span>Alert voices &amp; alarms</span></button><label class="nar-volbox" title="Narrator volume"><span class="dd-ic">&#128266;</span><input type="range" class="nar-vol" min="0" max="100" step="5" value="100" oninput="narVolSet(this.value)"><span class="nar-volpct">100%</span></label><button class="mtf-alv mtf-fla on" onclick="flipAlertsToggle()" title="Flip alerts on its own: ON = the flip alerts (Scalp opportunity, Flip incoming, We are flipping, Scent of blood) play on this computer with an alarm and the voice, whatever the narrator and SOUND buttons say. OFF = no flip alerts on this screen."><span class="dd-ic">&#9889;</span><span class="fla-lab">Flip alerts ON</span></button><label class="nar-volbox fl-volbox" title="Flip volume: the flip alerts (Scalp opportunity, Flip incoming, reversals, Scent of blood) and their beeps. It is separate from the narrator volume, so you can turn the narrator all the way down and still hear the flip alerts."><span class="dd-ic">&#9889;</span><span>Flip</span><input type="range" class="nar-vol fl-vol" min="0" max="100" step="5" value="100" oninput="flipVolSet(this.value)" onchange="flipVolPreview()"><span class="fl-volpct">100%</span></label>'
+        mtf_part = (f'<div class="mtf-switch">' + _vb("pat", "mtf-vs-pat", "Tunnel chart") + _vb("old", "mtf-vs-old", "Live pattern window") + _vb("tick", "mtf-vs-tick", "5-second chart") + '<button class="mtf-spk" onclick="narToggle(this)" title="AI narrator for this coin: talks about what is happening on its chart and pressure"><span class="dd-ic">&#128266;</span><span class="nar-lab">Narrator OFF</span></button><button class="mtf-alv" onclick="alvToggle()" title="Switch each alert voice on or off, and hear it"><span class="dd-ic">&#127911;</span><span>Alert voices &amp; alarms</span></button><label class="nar-volbox" title="Narrator volume"><span class="dd-ic">&#128266;</span><input type="range" class="nar-vol" min="0" max="100" step="5" value="100" oninput="narVolSet(this.value)"><span class="nar-volpct">100%</span></label><button class="mtf-alv mtf-fla on" onclick="flipAlertsToggle()" title="Flip alerts on its own: ON = the flip alerts (Scalp opportunity, Flip incoming, We are flipping, Scent of blood) play on this computer with an alarm and the voice, even with the narrator OFF (needs the SOUND button ON - SOUND is the master switch). OFF = no flip alerts on this screen."><span class="dd-ic">&#9889;</span><span class="fla-lab">Flip alerts ON</span></button><label class="nar-volbox fl-volbox" title="Flip volume: the flip alerts (Scalp opportunity, Flip incoming, reversals, Scent of blood) and their beeps. It is separate from the narrator volume, so you can turn the narrator all the way down and still hear the flip alerts."><span class="dd-ic">&#9889;</span><span>Flip</span><input type="range" class="nar-vol fl-vol" min="0" max="100" step="5" value="100" oninput="flipVolSet(this.value)" onchange="flipVolPreview()"><span class="fl-volpct">100%</span></label>'
                     + f'</div><div class="mtf-live" data-asset="{asset_name}"><div class="mtf-holder"></div></div>' + _tick_box_html(asset_name))
         old_open, old_close = '<div class="pat-old-box" style="display:none">', '</div>'
     voice_bar = ""
