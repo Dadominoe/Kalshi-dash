@@ -807,7 +807,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-11-04-patwin151"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-11-04-solo152"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -4837,6 +4837,7 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .incoming-buy { color:#3fb950; } .incoming-sell { color:#f85149; }
 .whale-latest { margin-top:3px; font-size:13px; text-align:right; line-height:1.4; font-weight:400; }
 .pat-win { display:block; }
+.pat-win > .pw-dock { display:none; }
 .pat-chart { cursor:zoom-in; flex:1 1 auto; min-width:0; }
 #pat-overlay .pat-chart svg { max-height:86vh; }
 .pat-chart-row { display:flex; gap:8px; align-items:stretch; }
@@ -4929,6 +4930,21 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
   body[data-view="BTC"] .card[data-asset="BTC"] > *, body[data-view="XRP"] .card[data-asset="XRP"] > * { grid-column:1 / -1; }
   body[data-view="BTC"] .card[data-asset="BTC"] > .leftcol, body[data-view="XRP"] .card[data-asset="XRP"] > .leftcol { grid-column:1; min-width:0; }
   body[data-view="BTC"] .card[data-asset="BTC"] > .pat-win, body[data-view="XRP"] .card[data-asset="XRP"] > .pat-win { grid-column:2; margin-top:0; align-self:start; }       /* side by side with the info, in normal page flow: scroll down and you scroll past it, like everything else. No scrollbar of its own. */
+  /* one coin on screen: the 15-MIN MARKETS board and the alert window go to the top of the right column, above the chart buttons - the left column (and the pressure bar) rises */
+  body[data-view="BTC"] .card[data-asset="BTC"], body[data-view="XRP"] .card[data-asset="XRP"] { grid-template-rows:repeat(8, auto) 1fr; }
+  body[data-view="BTC"] .card[data-asset="BTC"] > .leftcol, body[data-view="XRP"] .card[data-asset="XRP"] > .leftcol { display:contents; }
+  body[data-view="BTC"] .card[data-asset="BTC"] > .leftcol > *, body[data-view="XRP"] .card[data-asset="XRP"] > .leftcol > * { grid-column:1; min-width:0; align-self:start; }
+  body[data-view="BTC"] .card[data-asset="BTC"] > .leftcol > .topbar, body[data-view="XRP"] .card[data-asset="XRP"] > .leftcol > .topbar { grid-row:1 / 3; }
+  body[data-view="BTC"] .card[data-asset="BTC"] > .leftcol > .alt-drop, body[data-view="XRP"] .card[data-asset="XRP"] > .leftcol > .alt-drop { grid-column:2; grid-row:1; }
+  body[data-view="BTC"] .card[data-asset="BTC"] > .leftcol > .ctb-slot, body[data-view="XRP"] .card[data-asset="XRP"] > .leftcol > .ctb-slot { grid-row:3; }
+  body[data-view="BTC"] .card[data-asset="BTC"] > .leftcol > .ct-drop, body[data-view="XRP"] .card[data-asset="XRP"] > .leftcol > .ct-drop { grid-row:4; }
+  body[data-view="BTC"] .card[data-asset="BTC"] > .leftcol > .pyp-drop, body[data-view="XRP"] .card[data-asset="XRP"] > .leftcol > .pyp-drop { grid-row:5; }
+  body[data-view="BTC"] .card[data-asset="BTC"] > .leftcol > .cwrow, body[data-view="XRP"] .card[data-asset="XRP"] > .leftcol > .cwrow { grid-row:6; }
+  body[data-view="BTC"] .card[data-asset="BTC"] > .leftcol > .row-tight, body[data-view="XRP"] .card[data-asset="XRP"] > .leftcol > .row-tight { grid-row:7; }
+  body[data-view="BTC"] .card[data-asset="BTC"] > .leftcol > .tugrow, body[data-view="XRP"] .card[data-asset="XRP"] > .leftcol > .tugrow { grid-row:8; }
+  body[data-view="BTC"] .card[data-asset="BTC"] > .pat-win, body[data-view="XRP"] .card[data-asset="XRP"] > .pat-win { grid-row:2 / 10; }
+  body[data-view="BTC"] .pat-win[data-asset="BTC"] > .pw-dock, body[data-view="XRP"] .pat-win[data-asset="XRP"] > .pw-dock { display:block; flex:none; width:100%; height:100px; min-height:100px; max-height:100px; margin:0 0 8px; overflow:hidden; }
+  body[data-view="BTC"] .leftcol .topbar .tb-main .alert-dock, body[data-view="XRP"] .leftcol .topbar .tb-main .alert-dock { display:none; }
 }
 @media (min-width:1050px) {
   body[data-view="BTC"] .leftcol .topbar .tb-main .alert-dock, body[data-view="XRP"] .leftcol .topbar .tb-main .alert-dock { flex:1 1 100%; width:auto; height:120px; min-height:120px; max-height:120px; }
@@ -6145,6 +6161,7 @@ function dkItemEl(name, x, extra) {
 function renderDock() {
   const now = Date.now();
   document.querySelectorAll('.alert-dock[data-dock]').forEach(el => {
+    if (getComputedStyle(el).display === 'none') return;                                            // one coin on screen: the alert window lives at the top of the chart column; otherwise in the top bar - only the showing one is filled
     const name = el.getAttribute('data-dock');
     const list = (dockItems[name] || []).filter(x => !x.until || x.until > now);
     dockItems[name] = list;
@@ -9941,6 +9958,7 @@ def _ctb_indicator_cards(name):
 
 # What has been updated, newest first - the UPDATES card in the scrolling banner shows the top ones. Add a line here every time something ships (date, NEW or FIX, a short name, one plain line).
 SITE_UPDATES = [
+    (1793768000, "NEW", "BTC only / XRP only: markets board and alert window at the top right", "in the single-coin view the 15-MIN MARKETS board and the alert window now sit at the top of the right column, above the chart buttons, so the left column is shorter and the pressure bar is higher up the screen"),
     (1793767000, "NEW", "Live pattern window: wider graph, two columns below", "the graph is wider and still fits the screen; under it, what is forming sits on the left and the kept-for-a-while calls (with the failed ones under them) on the right; the kept lists start closed"),
     (1793764000, "FIX", "Pressure watch info is a small drop-down", "the i at the top now opens a small box right under it (nothing is dimmed or covered); press the i again, press Esc, or click anywhere else to close it"),
     (1793763000, "FIX", "Pressure watch i moved to the top", "the i for the PRESSURE WATCH info now sits in the button row at the top of the page (it was inside the moving flip bar and glitched); press it to open the explanation and stats"),
@@ -13603,7 +13621,7 @@ def build_pattern_window(asset_name):
                      '<button class="mtf-spk" onclick="narToggle(this)" title="AI narrator for this coin: speaks the alerts and the pressure"><span class="dd-ic">&#128266;</span><span class="nar-lab">Narrator OFF</span></button>'
                      '<button class="mtf-alv" onclick="alvToggle()" title="Switch each alert voice on or off, and hear it"><span class="dd-ic">&#127911;</span><span>Alert voices</span></button>'
                      '<label class="nar-volbox" title="Narrator volume"><span class="dd-ic">&#128266;</span><input type="range" class="nar-vol" min="0" max="100" step="5" value="100" oninput="narVolSet(this.value)"><span class="nar-volpct">100%</span></label></div>' + _tick_box_html(asset_name))
-    return (f'<div class="row pat-win" data-asset="{asset_name}">{flags}{voice_bar}{mtf_part}{old_open}'
+    return (f'<div class="row pat-win" data-asset="{asset_name}"><div class="alert-dock pw-dock" data-dock="{asset_name}"></div>{flags}{voice_bar}{mtf_part}{old_open}'
             f'<div class="pat-old-grid">{head}{cpi_strip}'
             f"<div class=\"pat-chart-row\"><div class=\"pat-chart\" data-tf=\"{tf}\" onclick=\"expandPatternChart('{asset_name}')\" title=\"click to make it full-screen\">{svg}</div></div>"
             f'<div class="hint">click the chart to make it full-screen (Esc to close) &middot; <label class="pfvg-sw" title="Show or hide the fair value gaps on this chart"><input type="checkbox" class="pfvg-cb" checked onchange="pfvgSet(this.checked)"> <b>Fair value gaps</b></label> <span>light white box, green lines = BULL gap (left by a jump up), red lines = BEAR gap (left by a jump down); 8 nearest, bigger ones only</span></div>'
