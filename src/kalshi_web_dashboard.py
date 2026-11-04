@@ -807,7 +807,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-11-04-solo156"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-11-04-alarm157"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -4877,6 +4877,15 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .mtf-spk .dd-ic { display:inline-flex; width:30px; height:30px; align-items:center; justify-content:center; border-radius:50%; background:rgba(255,255,255,.2); }
 .mtf-alv { flex:0 0 auto; display:flex; align-items:center; gap:10px; cursor:pointer; font-size:16px; font-weight:800; padding:12px 16px; border-radius:12px; color:#fff; border:2px solid #6e7681; background:#21262d; }
 .mtf-alv .dd-ic { display:inline-flex; width:30px; height:30px; align-items:center; justify-content:center; border-radius:50%; background:rgba(255,255,255,.2); }
+.alv-timer { margin:0 0 10px; padding:8px 10px; border:2px solid #ffb84d; border-radius:10px; background:#241b07; }
+.tm-grid { display:grid; grid-template-columns:repeat(7, 1fr); gap:6px; margin:8px 0; }
+.tm-min { cursor:pointer; padding:5px 0; border-radius:8px; border:2px solid #6e7681; background:#21262d; color:#e6edf3; display:flex; flex-direction:column; align-items:center; line-height:1.1; }
+.tm-min b { font-size:17px; } .tm-min small { font-size:10px; color:#8b949e; }
+.tm-min.on { background:linear-gradient(180deg,#b35900,#7a3d00); border-color:#ffb84d; box-shadow:0 0 0 3px rgba(255,184,77,.3); } .tm-min.on small { color:#ffe0b3; }
+.tm-min.now { outline:2px dashed #58a6ff; outline-offset:1px; }
+.tm-opts { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:4px 0; }
+#timer-toast { position:fixed; left:50%; top:14px; transform:translateX(-50%); z-index:100003; background:#b35900; color:#fff; border:3px solid #ffb84d; border-radius:12px; padding:12px 24px; display:flex; flex-direction:column; align-items:center; gap:2px; font-size:18px; box-shadow:0 8px 30px rgba(0,0,0,.7); cursor:pointer; animation:tmpulse 1s ease-in-out infinite; }
+#timer-toast b { font-size:26px; letter-spacing:.5px; } @keyframes tmpulse { 50% { box-shadow:0 0 38px rgba(255,184,77,.95); } }
 #alv-panel { position:fixed; right:14px; top:70px; z-index:9999; width:430px; max-width:94vw; max-height:80vh; overflow:auto; background:#0d1117; border:2px solid #39d0d8; border-radius:12px; padding:12px; box-shadow:0 14px 44px rgba(0,0,0,.75); }
 .alv-takes { margin:0 0 6px 26px; display:flex; flex-wrap:wrap; gap:4px 8px; } .alv-take { display:inline-flex; align-items:center; gap:2px; } .alv-take button { min-width:26px; }
 .alv-note { flex-basis:100%; font-size:12px; margin-left:26px; } .alv-row { flex-wrap:wrap; }
@@ -6893,13 +6902,77 @@ function ctRecToggle(name, M) {
   const d = document.querySelector('details.ct-recdet[data-pat="CTREC|' + name + '|' + M + '"]');
   if (d) { d.open = !d.open; if (d.open) { try { d.scrollIntoView({block: 'nearest'}); } catch (e) {} } }
 }
+// ---- ROUND ALARMS (owner's idea): pick the minute of the 15-minute round; an alarm goes off then, every round. Information only - a timer, nothing more. Local to this browser (never the shared voice feed).
+let timerMins = [], timerOpts = {voice: true, beep: true}, timerFired = {};
+try { const t0 = JSON.parse(localStorage.getItem('timerAlarms') || 'null'); if (t0 && Array.isArray(t0.mins)) { timerMins = t0.mins.filter(n => n >= 1 && n <= 14); timerOpts = Object.assign(timerOpts, t0.opts || {}); } } catch (e) {}
+function timerSave() { try { localStorage.setItem('timerAlarms', JSON.stringify({mins: timerMins, opts: timerOpts})); } catch (e) {} }
+function timerSet(m) { const i = timerMins.indexOf(m); if (i >= 0) timerMins.splice(i, 1); else timerMins.push(m); timerMins.sort((a, b) => a - b); timerSave(); timerPaint(); }
+function timerOpt(k, v) { timerOpts[k] = v; timerSave(); }
+function timerClear() { timerMins = []; timerSave(); timerPaint(); }
+function timerPaint() {
+  document.querySelectorAll('#alv-panel .tm-min').forEach(b => b.classList.toggle('on', timerMins.indexOf(+b.getAttribute('data-m')) >= 0));
+  const sm = document.getElementById('tm-sum');
+  if (sm) sm.textContent = timerMins.length ? 'Alarms set for minute ' + timerMins.join(', ') + ' (' + timerMins.map(m => (15 - m) + ' left').join(', ') + '). They go off every round.' : 'No alarms set yet - click a minute.';
+}
+function timerHtml() {
+  let g = '';
+  for (let m = 1; m <= 14; m++) g += '<button type="button" class="tm-min" data-m="' + m + '" onclick="timerSet(' + m + ')" title="alarm at minute ' + m + ' of the round (' + (15 - m) + ' minute' + (15 - m === 1 ? '' : 's') + ' left)"><b>' + m + '</b><small>' + (15 - m) + ' left</small></button>';
+  return '<div class="alv-timer"><b>Round alarms</b> <span class="hint">click the minute of the 15-minute round you want an alarm at (minute 11 = 4 minutes left). It goes off every round, on this computer only.</span>' +
+    '<div class="tm-grid">' + g + '</div>' +
+    '<div class="tm-opts"><label><input type="checkbox" ' + (timerOpts.voice ? 'checked' : '') + ' onchange="timerOpt(\'voice\', this.checked)"> voice</label> <label><input type="checkbox" ' + (timerOpts.beep ? 'checked' : '') + ' onchange="timerOpt(\'beep\', this.checked)"> beep</label> ' +
+    '<button type="button" class="size-mode-btn" onclick="timerFire(timerMins[0] || 11, true)">Test alarm</button> <button type="button" class="size-mode-btn" onclick="timerClear()">Clear all</button></div>' +
+    '<div id="tm-sum" class="hint"></div><div id="tm-now" class="hint"></div>' +
+    '<div class="hint">The voice and beep need the SOUND button ON. The on-screen banner always shows.</div></div>';
+}
+function timerBeep() {
+  try {
+    const ctx = ensureAudioCtx(), now = ctx.currentTime;
+    [880, 1175, 880, 1175].forEach((f, i) => {
+      const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'square'; o.connect(g); g.connect(ctx.destination);
+      const t0 = now + i * 0.22; o.frequency.setValueAtTime(f, t0);
+      g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(vol(0.35), t0 + 0.02); g.gain.linearRampToValueAtTime(0.0001, t0 + 0.18);
+      o.start(t0); o.stop(t0 + 0.2);
+    });
+  } catch (e) {}
+}
+function timerToast(m, left, test) {
+  let t = document.getElementById('timer-toast'); if (t) t.remove();
+  t = document.createElement('div'); t.id = 'timer-toast';
+  t.innerHTML = '<b>&#9200; ' + (test ? 'TEST - ' : '') + 'MINUTE ' + m + '</b><span>' + left + ' minute' + (left === 1 ? '' : 's') + ' left in this round</span>';
+  t.onclick = () => t.remove();
+  document.documentElement.appendChild(t);
+  setTimeout(() => { try { t.remove(); } catch (e) {} }, 12000);
+}
+function timerFire(m, test) {
+  const left = 15 - m;
+  timerToast(m, left, test);
+  if (!soundEnabled && !test) return;                                  // SOUND is off: the banner is all there is
+  if (timerOpts.beep) timerBeep();
+  if (timerOpts.voice) {
+    const say = 'Minute ' + m + '. ' + left + (left === 1 ? ' minute' : ' minutes') + ' left.';
+    try { if (narratorOn) narPlayLocal(say, 'timer:' + m + ':' + Date.now(), 20000, null, null, true, null); else speakUrgent(say, 700); } catch (e) {}
+  }
+}
+setInterval(() => {
+  const t = Date.now() / 1000, sec = t % 900, m = Math.floor(sec / 60);
+  const nowEl = document.getElementById('tm-now');
+  if (nowEl) nowEl.textContent = 'Right now: minute ' + m + ' of 15 (' + Math.floor((900 - sec) / 60) + ':' + String(Math.floor((900 - sec) % 60)).padStart(2, '0') + ' left)';
+  document.querySelectorAll('#alv-panel .tm-min').forEach(b => b.classList.toggle('now', +b.getAttribute('data-m') === m));
+  if (!timerMins.length || timerMins.indexOf(m) < 0 || sec - m * 60 > 6) return;
+  const rid = Math.floor(t / 900), key = rid + ':' + m;
+  if (timerFired[key]) return;
+  timerFired[key] = 1;
+  Object.keys(timerFired).forEach(k => { if (+k.split(':')[0] < rid - 2) delete timerFired[k]; });
+  timerFire(m, false);
+}, 500);
 function alvToggle() {
   let p = document.getElementById('alv-panel');
   if (p) { p.remove(); return; }
   p = document.createElement('div'); p.id = 'alv-panel';
   const keys = Object.keys(clipMap).filter(k => k[0] !== '_').sort((x, y) => (clipMap[x].label || x).localeCompare(clipMap[y].label || y));
-  p.innerHTML = '<div class="alv-h"><b>Alert voices</b> <span class="hint">tick = the alert speaks when the narrator is ON. The play button lets you hear it.</span><label class="alv-old"><input type="checkbox" ' + (oldSoundsOn ? 'checked' : '') + ' onchange="oldSoundsSet(this.checked)"> old beeps, sirens and chimes <span class="hint">(archived and OFF - tick to bring them back)</span></label><label class="alv-old"><input type="checkbox" ' + (compVoiceOn ? 'checked' : '') + ' onchange="compVoiceSet(this.checked)"> computer voice for lines that have no recording <span class="hint">(OFF - those lines stay silent)</span></label><button class="alv-x" onclick="alvToggle()">close</button></div>' + ['BTC', 'XRP'].map(c => '<div class="alv-voice"><b>' + c + ' VOICE</b> <button type="button" class="alv-vb' + (voiceBy[c] === 'dominator' ? ' on' : '') + '" onclick="voiceSetSet(\'' + c + '\', \'dominator\')">Dominator (male)</button><button type="button" class="alv-vb' + (voiceBy[c] === 'girl' ? ' on' : '') + '" onclick="voiceSetSet(\'' + c + '\', \'girl\')">Girl (female)</button> <button type="button" onclick="coinTag(\'' + c + '\', function () {})">&#9654; hear it</button></div>').join('') + '<div class="alv-voice hint">The list below shows the takes of the voice you picked last.</div><div class="alv-flip"><b>FLIP METER STEPS</b> <span class="hint">the flip-risk % that fires each flip alert (earlier = more warning but more false alarms)</span><div class="alv-fsteps"><label>1 Scalp opportunity <input type="number" min="5" max="95" step="5" value="' + Math.round(flipSteps.early * 100) + '" onchange="flipStepSet(\'early\', this.value)">%</label><label>2 Incoming <input type="number" min="5" max="95" step="5" value="' + Math.round(flipSteps.rise * 100) + '" onchange="flipStepSet(\'rise\', this.value)">%</label><label>3 Reversal <input type="number" min="5" max="95" step="5" value="' + Math.round(flipSteps.flip * 100) + '" onchange="flipStepSet(\'flip\', this.value)">%</label></div></div><div class="alv-list">' +
+  p.innerHTML = '<div class="alv-h"><b>Alert voices &amp; alarms</b> <span class="hint">tick = the alert speaks when the narrator is ON. The play button lets you hear it.</span><label class="alv-old"><input type="checkbox" ' + (oldSoundsOn ? 'checked' : '') + ' onchange="oldSoundsSet(this.checked)"> old beeps, sirens and chimes <span class="hint">(archived and OFF - tick to bring them back)</span></label><label class="alv-old"><input type="checkbox" ' + (compVoiceOn ? 'checked' : '') + ' onchange="compVoiceSet(this.checked)"> computer voice for lines that have no recording <span class="hint">(OFF - those lines stay silent)</span></label><button class="alv-x" onclick="alvToggle()">close</button></div>' + ['BTC', 'XRP'].map(c => '<div class="alv-voice"><b>' + c + ' VOICE</b> <button type="button" class="alv-vb' + (voiceBy[c] === 'dominator' ? ' on' : '') + '" onclick="voiceSetSet(\'' + c + '\', \'dominator\')">Dominator (male)</button><button type="button" class="alv-vb' + (voiceBy[c] === 'girl' ? ' on' : '') + '" onclick="voiceSetSet(\'' + c + '\', \'girl\')">Girl (female)</button> <button type="button" onclick="coinTag(\'' + c + '\', function () {})">&#9654; hear it</button></div>').join('') + '<div class="alv-voice hint">The list below shows the takes of the voice you picked last.</div><div class="alv-flip"><b>FLIP METER STEPS</b> <span class="hint">the flip-risk % that fires each flip alert (earlier = more warning but more false alarms)</span><div class="alv-fsteps"><label>1 Scalp opportunity <input type="number" min="5" max="95" step="5" value="' + Math.round(flipSteps.early * 100) + '" onchange="flipStepSet(\'early\', this.value)">%</label><label>2 Incoming <input type="number" min="5" max="95" step="5" value="' + Math.round(flipSteps.rise * 100) + '" onchange="flipStepSet(\'rise\', this.value)">%</label><label>3 Reversal <input type="number" min="5" max="95" step="5" value="' + Math.round(flipSteps.flip * 100) + '" onchange="flipStepSet(\'flip\', this.value)">%</label></div></div><div class="alv-list">' +
     keys.map(k => '<label class="alv-row"><input type="checkbox" ' + (sigOff.indexOf(k) < 0 ? 'checked' : '') + ' onchange="alvSet(\'' + k + '\', this.checked)"> <span>' + (clipMap[k].label || k) + '</span> <span class="hint">' + (clipMap[k].nopick ? 'a recording for every call' : clipMap[k].files.length + ' take' + (clipMap[k].files.length > 1 ? 's' : '')) + '</span> <button type="button" onclick="event.preventDefault(); clipPlay(\'' + k + '\')">&#9654;</button>' + (clipMap[k].note ? '<span class="alv-note hint">' + clipMap[k].note + '</span>' : '') + '</label><div class="alv-takes">' + (clipMap[k].nopick ? [] : clipMap[k].files).map((f, i) => '<span class="alv-take"><button type="button" onclick="clipPlayFile(\'' + f + '\')" title="play this take">' + (i + 1) + '</button><label title="untick = never play this take"><input type="checkbox" ' + (badTakes.indexOf(f) < 0 ? 'checked' : '') + ' onchange="takeSet(\'' + f + '\', this.checked)"></label></span>').join('') + '</div>').join('') + '</div>';
+  { const anc = p.querySelector('.alv-flip') || p.querySelector('.alv-h'); if (anc) anc.insertAdjacentHTML('afterend', timerHtml()); timerPaint(); }
   document.body.appendChild(p);
 }
 function soundCheck() {                                              // one click: plays the Dominator clip and says in plain words what this browser did with it
@@ -9964,6 +10037,7 @@ def _ctb_indicator_cards(name):
 
 # What has been updated, newest first - the UPDATES card in the scrolling banner shows the top ones. Add a line here every time something ships (date, NEW or FIX, a short name, one plain line).
 SITE_UPDATES = [
+    (1793770000, "NEW", "Round alarms in Alert voices & alarms", "open Alert voices & alarms, then click the minute(s) of the 15-minute round you want an alarm at (minute 11 = 4 minutes left); it goes off every round on your own computer with a banner, a beep and a voice. It is only a timer"),
     (1793768000, "NEW", "BTC only / XRP only: markets board and alert window at the top right", "in the single-coin view the 15-MIN MARKETS board and the alert window now sit at the top of the right column, above the chart buttons, so the left column is shorter and the pressure bar is higher up the screen"),
     (1793767000, "NEW", "Live pattern window: wider graph, two columns below", "the graph is wider and still fits the screen; under it, what is forming sits on the left and the kept-for-a-while calls (with the failed ones under them) on the right; the kept lists start closed"),
     (1793764000, "FIX", "Pressure watch info is a small drop-down", "the i at the top now opens a small box right under it (nothing is dimmed or covered); press the i again, press Esc, or click anywhere else to close it"),
@@ -13618,14 +13692,14 @@ def build_pattern_window(asset_name):
     mtf_part, old_open, old_close = "", "", ""
     if _MTF_ON and asset_name in ("BTC", "XRP"):
         _vb = lambda v, cls, label: (f'<button class="mtf-vs {cls}" data-v="{v}" onclick="mtfSetView(\'{asset_name}\',\'{v}\')"><span class="dd-ic">&#9654;</span>{label}</button>')
-        mtf_part = (f'<div class="mtf-switch">' + _vb("pat", "mtf-vs-pat", "Tunnel chart") + _vb("old", "mtf-vs-old", "Live pattern window") + _vb("tick", "mtf-vs-tick", "5-second chart") + '<button class="mtf-spk" onclick="narToggle(this)" title="AI narrator for this coin: talks about what is happening on its chart and pressure"><span class="dd-ic">&#128266;</span><span class="nar-lab">Narrator OFF</span></button><button class="mtf-alv" onclick="alvToggle()" title="Switch each alert voice on or off, and hear it"><span class="dd-ic">&#127911;</span><span>Alert voices</span></button><label class="nar-volbox" title="Narrator volume"><span class="dd-ic">&#128266;</span><input type="range" class="nar-vol" min="0" max="100" step="5" value="100" oninput="narVolSet(this.value)"><span class="nar-volpct">100%</span></label>'
+        mtf_part = (f'<div class="mtf-switch">' + _vb("pat", "mtf-vs-pat", "Tunnel chart") + _vb("old", "mtf-vs-old", "Live pattern window") + _vb("tick", "mtf-vs-tick", "5-second chart") + '<button class="mtf-spk" onclick="narToggle(this)" title="AI narrator for this coin: talks about what is happening on its chart and pressure"><span class="dd-ic">&#128266;</span><span class="nar-lab">Narrator OFF</span></button><button class="mtf-alv" onclick="alvToggle()" title="Switch each alert voice on or off, and hear it"><span class="dd-ic">&#127911;</span><span>Alert voices &amp; alarms</span></button><label class="nar-volbox" title="Narrator volume"><span class="dd-ic">&#128266;</span><input type="range" class="nar-vol" min="0" max="100" step="5" value="100" oninput="narVolSet(this.value)"><span class="nar-volpct">100%</span></label>'
                     + f'</div><div class="mtf-live" data-asset="{asset_name}"><div class="mtf-holder"></div></div>' + _tick_box_html(asset_name))
         old_open, old_close = '<div class="pat-old-box" style="display:none">', '</div>'
     voice_bar = ""
     if not _MTF_ON and _VOICE_ON and asset_name in ("BTC", "XRP"):          # the website has no chart builder, but it does get the narrator, the Alert voices panel and the volume slider
         voice_bar = (f'<div class="mtf-switch voice-bar"><button class="mtf-vs mtf-vs-tick" data-v="tick" onclick="mtfSetView(\'{asset_name}\',\'tick\')"><span class="dd-ic">&#9654;</span>5-second chart</button>'
                      '<button class="mtf-spk" onclick="narToggle(this)" title="AI narrator for this coin: speaks the alerts and the pressure"><span class="dd-ic">&#128266;</span><span class="nar-lab">Narrator OFF</span></button>'
-                     '<button class="mtf-alv" onclick="alvToggle()" title="Switch each alert voice on or off, and hear it"><span class="dd-ic">&#127911;</span><span>Alert voices</span></button>'
+                     '<button class="mtf-alv" onclick="alvToggle()" title="Switch each alert voice on or off, and hear it"><span class="dd-ic">&#127911;</span><span>Alert voices &amp; alarms</span></button>'
                      '<label class="nar-volbox" title="Narrator volume"><span class="dd-ic">&#128266;</span><input type="range" class="nar-vol" min="0" max="100" step="5" value="100" oninput="narVolSet(this.value)"><span class="nar-volpct">100%</span></label></div>' + _tick_box_html(asset_name))
     return (f'<div class="row pat-win" data-asset="{asset_name}"><div class="alert-dock pw-dock" data-dock="{asset_name}"></div>{flags}{voice_bar}{mtf_part}{old_open}'
             f'<div class="pat-old-grid">{head}{cpi_strip}'
