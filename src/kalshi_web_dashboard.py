@@ -807,7 +807,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-11-04-solo152"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-11-04-solo154"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -4943,7 +4943,7 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
   body[data-view="BTC"] .card[data-asset="BTC"] > .leftcol > .row-tight, body[data-view="XRP"] .card[data-asset="XRP"] > .leftcol > .row-tight { grid-row:7; }
   body[data-view="BTC"] .card[data-asset="BTC"] > .leftcol > .tugrow, body[data-view="XRP"] .card[data-asset="XRP"] > .leftcol > .tugrow { grid-row:8; }
   body[data-view="BTC"] .card[data-asset="BTC"] > .pat-win, body[data-view="XRP"] .card[data-asset="XRP"] > .pat-win { grid-row:2 / 10; }
-  body[data-view="BTC"] .pat-win[data-asset="BTC"] > .pw-dock, body[data-view="XRP"] .pat-win[data-asset="XRP"] > .pw-dock { display:block; flex:none; width:100%; height:100px; min-height:100px; max-height:100px; margin:0 0 8px; overflow:hidden; }
+  body[data-view="BTC"] .pat-win[data-asset="BTC"] > .pw-dock, body[data-view="XRP"] .pat-win[data-asset="XRP"] > .pw-dock { display:block; flex:none; position:relative; box-sizing:border-box; padding:0; width:100%; height:100px; min-height:100px; max-height:100px; margin:0 0 8px; overflow:hidden; }
   body[data-view="BTC"] .leftcol .topbar .tb-main .alert-dock, body[data-view="XRP"] .leftcol .topbar .tb-main .alert-dock { display:none; }
 }
 @media (min-width:1050px) {
@@ -8159,8 +8159,8 @@ let pypHold = 0;
 let pressHold = 0;
 ['pointerdown', 'touchstart'].forEach(ev => document.addEventListener(ev, () => { pressHold = Date.now() + 3000; }, {passive: true, capture: true}));
 ['pointerup', 'pointercancel', 'touchend', 'touchcancel'].forEach(ev => document.addEventListener(ev, () => { pressHold = Date.now() + 500; }, {passive: true, capture: true}));
-['touchstart', 'touchmove', 'wheel'].forEach(ev => document.addEventListener(ev, e => { if (e.target && e.target.closest && e.target.closest('.pyp-body, .ct-body')) pypHold = Date.now() + 2500; }, {passive: true, capture: true}));
-document.addEventListener('touchend', e => { if (e.target && e.target.closest && e.target.closest('.pyp-body, .ct-body')) pypHold = Date.now() + 1800; }, {passive: true, capture: true});
+['touchstart', 'touchmove', 'wheel'].forEach(ev => document.addEventListener(ev, e => { if (e.target && e.target.closest && e.target.closest('.pyp-body, .ct-body, .pat-win-legend')) pypHold = Date.now() + 2500; }, {passive: true, capture: true}));
+document.addEventListener('touchend', e => { if (e.target && e.target.closest && e.target.closest('.pyp-body, .ct-body, .pat-win-legend')) pypHold = Date.now() + 1800; }, {passive: true, capture: true});
 function pypKey(el) { const d = el.closest('details[data-pat]'); return d ? d.getAttribute('data-pat') : null; }
 
 function scrollKey(el) {
