@@ -807,7 +807,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-11-04-audio166"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-11-04-onevol167"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -4892,7 +4892,7 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .alv-note { flex-basis:100%; font-size:12px; margin-left:26px; } .alv-row { flex-wrap:wrap; }
 .nar-volbox { flex:0 0 auto; display:flex; align-items:center; gap:8px; font-size:15px; font-weight:800; padding:10px 14px; border-radius:12px; color:#fff; border:2px solid #6e7681; background:#21262d; }
 .nar-volbox .dd-ic { display:inline-flex; width:28px; height:28px; align-items:center; justify-content:center; border-radius:50%; background:rgba(255,255,255,.2); }
-.nar-vol { width:130px; cursor:pointer; accent-color:#3fb950; } .fl-vol { accent-color:#ffb84d; } .mtf-fla { border-color:#6e7681; } .mtf-fla.on { border-color:#ffb84d; background:#3a2a0a; color:#ffe0b3; } .fl-volbox { border-color:#ffb84d; } .fl-volpct { min-width:42px; text-align:right; } .nar-volpct { min-width:42px; text-align:right; }
+.nar-vol { width:130px; cursor:pointer; accent-color:#3fb950; } .mtf-fla { border-color:#6e7681; } .mtf-fla.on { border-color:#ffb84d; background:#3a2a0a; color:#ffe0b3; } .nar-volpct { min-width:42px; text-align:right; }
 .alv-old { display:block; margin:6px 0; padding:6px 8px; border:1px solid #30363d; border-radius:8px; cursor:pointer; }
 .alv-h { margin-bottom:8px; }
 .alv-voice { display:flex; align-items:center; gap:8px; margin:8px 0 10px; padding:8px 10px; border:2px solid #39d0d8; border-radius:10px; background:#0e1a24; }
@@ -5506,18 +5506,10 @@ function vol(peak) {
   return peak * masterVolume;
 }
 // ---- FLIP VOLUME: its own level for the flip alerts (voice + beeps), separate from the narrator and master volumes
-let flipVol = 1.0;
-try { const fv0 = localStorage.getItem('flipVol'); if (fv0 !== null && isFinite(parseFloat(fv0))) flipVol = Math.max(0, Math.min(1, parseFloat(fv0))); } catch (e) {}
-function fvol(peak) { return peak * flipVol; }
+function fvol(peak) { return peak * narVol; }                         // the ONE volume bar (narrator volume) sets the loudness of the flip alarm too
 const FLIP_CLIP_RX = /^(flip_warn|flip_incoming|reversal|reversal_up|reversal_down|crowd_turn)$/;
 const FLIP_TEXT_RX = /(Flip incoming|Scalp opportunity|Possible flip|Reversal|Scent of blood)/i;
 function isFlipLine(clip, text) { return FLIP_CLIP_RX.test(clip || '') || FLIP_TEXT_RX.test(text || ''); }
-function flipVolSet(v) {
-  flipVol = Math.max(0, Math.min(1, Number(v) / 100));
-  try { localStorage.setItem('flipVol', String(flipVol)); } catch (e) {}
-  sliderHold = Math.max(sliderHold === Infinity ? 0 : sliderHold, Date.now() + 1500);
-  document.querySelectorAll('.fl-volpct').forEach(el => { el.textContent = Math.round(flipVol * 100) + '%'; });
-}
 let flipAlertsOn = true, flipSayUntil = 0, flipNarUntil = 0, flipBusyUntil = 0, flipBusyLvl = 0, flipSeq = 0;
 try { const fa0 = localStorage.getItem('flipAlerts'); if (fa0 !== null) flipAlertsOn = fa0 === '1'; } catch (e) {}
 function flipAlertsPaint() {
@@ -5527,6 +5519,10 @@ function flipAlertsToggle() {
   flipAlertsOn = !flipAlertsOn;
   try { localStorage.setItem('flipAlerts', flipAlertsOn ? '1' : '0'); } catch (e) {}
   flipAlertsPaint();
+  if (flipAlertsOn) {                                                // turning it ON plays the alarm and says so, so you can hear that it works (this click also unlocks the browser's audio)
+    flipBeep(1);
+    setTimeout(() => { try { const u = new SpeechSynthesisUtterance('Flip alerts on.'); u.volume = narVol; window.speechSynthesis.cancel(); window.speechSynthesis.speak(u); } catch (e) {} }, 650);
+  }
 }
 function flipBeep(pulses) {                                          // the flip alarm: a few two-tone pulses at the flip volume
   try {
@@ -5534,13 +5530,13 @@ function flipBeep(pulses) {                                          // the flip
     for (let k = 0; k < pulses; k++) [880, 1175].forEach((f, i) => {
       const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'square'; o.connect(g); g.connect(ctx.destination);
       const t0 = now + (k * 2 + i) * 0.2; o.frequency.setValueAtTime(f, t0);
-      g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(Math.max(0.0001, fvol(0.4)), t0 + 0.02); g.gain.linearRampToValueAtTime(0.0001, t0 + 0.17);
+      g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(Math.max(0.0001, fvol(0.8)), t0 + 0.02); g.gain.linearRampToValueAtTime(0.0001, t0 + 0.17);
       o.start(t0); o.stop(t0 + 0.19);
     });
   } catch (e) {}
 }
 function flipPlay(name, text, clip, pulses) {                        // a flip alert on THIS computer, on its own: alarm, then the recorded voice (computer voice when there is no recording)
-  if (!flipAlertsOn || !soundEnabled || !soundOn(name)) return;          // the SOUND button is the master switch: OFF = nothing plays, flip alerts included
+  if (!flipAlertsOn || !soundOn(name)) return;                       // the Flip alerts button is its own switch (no SOUND button / narrator needed)
   if (clip && sigOff.indexOf(clip) >= 0) return;                     // that alert is switched off in the Alert voices panel
   const lv = pulses || 1;                                            // 1 = scalp opportunity / pressure, 2 = flip incoming, 3 = we are flipping
   if (Date.now() < flipBusyUntil) {
@@ -5551,34 +5547,19 @@ function flipPlay(name, text, clip, pulses) {                        // a flip a
   const my = ++flipSeq;                                              // a replaced alert drops out completely (no stray tag / voice from it)
   flipBeep(1);                                                       // one short two-tone alarm, then the voice
   setTimeout(() => {
-    if (!soundEnabled || my !== flipSeq) return;                     // switched off while the beep was playing, or replaced by a more serious alert
+    if (!flipAlertsOn || my !== flipSeq) return;                     // switched off while the beep was playing, or replaced by a more serious alert
     const vc = voiceBy[name] || voiceSet;
     const go = () => {
-      if (!soundEnabled || my !== flipSeq) return;
-      flipSayUntil = Date.now() + 600;                              // the flip volume applies only to the line that is starting right now
+      if (!flipAlertsOn || my !== flipSeq) return;
       if (clip && clipPlay(clip, null, vc)) return;
-      try { const u = new SpeechSynthesisUtterance(text.replace(/^BTC\b/, 'Bitcoin').replace(/^XRP\b/, 'X R P')); u.volume = flipVol; window.speechSynthesis.cancel(); window.speechSynthesis.speak(u); } catch (e) {}
+      try { const u = new SpeechSynthesisUtterance(text.replace(/^BTC\b/, 'Bitcoin').replace(/^XRP\b/, 'X R P')); u.volume = narVol; window.speechSynthesis.cancel(); window.speechSynthesis.speak(u); } catch (e) {}
     };
-    flipSayUntil = Date.now() + 600;
     if (!coinTag(name, go)) go();
   }, 650);
 }
 function flipSay(name, text, clip, key, ttl, pulses) {               // narrator ON for this coin: the narrator says it (and the shared feed carries it); otherwise this computer plays it itself
   if (narCoin[name]) narSay(text, key, ttl, clip, null, true); else flipPlay(name, text, clip, pulses);
 }
-function flipVolPreview() {                                          // let go of the slider = a short two-tone beep at the flip level
-  if (!soundEnabled) return;                                         // SOUND is the master switch
-  try {
-    const ctx = ensureAudioCtx(), now = ctx.currentTime;
-    [660, 880].forEach((f, i) => {
-      const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'square'; o.connect(g); g.connect(ctx.destination);
-      const t0 = now + i * 0.2; o.frequency.setValueAtTime(f, t0);
-      g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(Math.max(0.0001, fvol(0.4)), t0 + 0.02); g.gain.linearRampToValueAtTime(0.0001, t0 + 0.17);
-      o.start(t0); o.stop(t0 + 0.19);
-    });
-  } catch (e) {}
-}
-
 function setMasterVolume(v) {
   masterVolume = Math.max(0, Math.min(1, parseFloat(v)));
   try { localStorage.setItem('masterVolume', String(masterVolume)); } catch (e) {}
@@ -5854,7 +5835,7 @@ function speakBrowser(text) {
     // boosted 2026-09-28 per user request ("make it a little bit louder") -
     // raises the floor and applies a 1.3x multiplier, capped at the Web
     // Speech API's hard ceiling of 1.0
-    u.volume = isFlipText0(text) ? flipVol : narGain();
+    u.volume = narGain();
     window.speechSynthesis.speak(u);
   } catch (e) { /* speech synthesis unavailable/blocked - the sound alert already played, fine */ }
 }
@@ -6035,7 +6016,7 @@ function playBuildingBeep(assetName, tier) {
     const tierIndex = BUILD_TIERS.indexOf(tier); // 0, 1
     const freq = p.low + (p.high - p.low) * (0.3 + tierIndex * 0.3);
     osc.frequency.setValueAtTime(freq, now);
-    gain.gain.setValueAtTime(fvol(0.4), now);
+    gain.gain.setValueAtTime(vol(0.4), now);
     gain.gain.linearRampToValueAtTime(0.0001, now + 0.18);
     osc.start(now);
     osc.stop(now + 0.2);
@@ -6071,8 +6052,8 @@ function playSirenAlert(assetName) {
       osc.frequency.linearRampToValueAtTime(lowF, t2);
     }
     const dur = cycles * cycleDur;
-    gain.gain.setValueAtTime(fvol(0.45), now);
-    gain.gain.setValueAtTime(fvol(0.45), now + dur - 0.1);
+    gain.gain.setValueAtTime(vol(0.45), now);
+    gain.gain.setValueAtTime(vol(0.45), now + dur - 0.1);
     gain.gain.linearRampToValueAtTime(0.0001, now + dur);
     osc.start(now);
     osc.stop(now + dur + 0.05);
@@ -6168,7 +6149,7 @@ function playReversalAlarm(assetName) {
       gain.connect(ctx.destination);
       const t0 = now + offset;
       osc.frequency.setValueAtTime(freq, t0);
-      gain.gain.setValueAtTime(fvol(0.4), t0);
+      gain.gain.setValueAtTime(vol(0.4), t0);
       gain.gain.linearRampToValueAtTime(0.0001, t0 + 0.18);
       osc.start(t0);
       osc.stop(t0 + 0.2);
@@ -6849,7 +6830,7 @@ let narVol = 0.2;                                                    // the narr
 let sliderHold = 0;
 document.addEventListener('pointerdown', e => { if (e.target && e.target.classList && e.target.classList.contains('nar-vol')) sliderHold = Infinity; }, true);
 ['pointerup', 'pointercancel'].forEach(ev => document.addEventListener(ev, () => { if (sliderHold === Infinity) sliderHold = Date.now() + 400; }, true));
-function narGain() { if (timerSayText && narNow && narNow.text === timerSayText) return timerOpts.vol; if (Date.now() < flipSayUntil || Date.now() < flipNarUntil) return flipVol; if (timerSayText && ((narNow && narNow.text === timerSayText) || Date.now() < timerSayUntil)) return timerOpts.vol; return narVol; }          // the round-alarm line has its own volume
+function narGain() { if (timerSayText && narNow && narNow.text === timerSayText) return timerOpts.vol; if (timerSayText && ((narNow && narNow.text === timerSayText) || Date.now() < timerSayUntil)) return timerOpts.vol; return narVol; }          // the round-alarm line has its own volume
 function narVolSet(v) {
   narVol = Math.max(0, Math.min(1, Number(v) / 100));
   try { localStorage.setItem('narVol', String(narVol)); } catch (e) {}
@@ -6971,9 +6952,7 @@ function narToggle(btn) {
   narBanner();
 }
 function narPaint() {
-  document.querySelectorAll('.nar-vol:not(.fl-vol)').forEach(el => { if (Date.now() >= sliderHold) el.value = String(Math.round(narVol * 100)); });
-  document.querySelectorAll('.fl-vol').forEach(el => { if (Date.now() >= sliderHold) el.value = String(Math.round(flipVol * 100)); });
-  document.querySelectorAll('.fl-volpct').forEach(el => { el.textContent = Math.round(flipVol * 100) + '%'; });
+  document.querySelectorAll('.nar-vol').forEach(el => { if (Date.now() >= sliderHold) el.value = String(Math.round(narVol * 100)); });
   flipAlertsPaint();
   document.querySelectorAll('.nar-volpct').forEach(el => { el.textContent = Math.round(narVol * 100) + '%'; });
   document.querySelectorAll('.mtf-spk').forEach(b => {
@@ -6981,7 +6960,7 @@ function narPaint() {
     const on = (k === 'BTC' || k === 'XRP') ? narCoin[k] : narratorOn;
     b.classList.toggle('on', on);
     const l = b.querySelector('.nar-lab');
-    if (l) l.textContent = (k ? k + ' narrator ' : 'Narrator ') + (on ? 'ON' : 'OFF');
+    if (l) l.textContent = (k ? k + ' alert voices ' : 'Alert voices ') + (on ? 'ON' : 'OFF');
   });
 }
 // ---- the alert-voices panel: every alert type, on / off, and a play button to hear it
@@ -7195,7 +7174,6 @@ function narFlush() {
   const it = narQueue.shift();
   if (!it) return;
   narNow = it;
-  flipNarUntil = isFlipLine(it.clip, it.text) ? Date.now() + 15000 : 0;          // this line is a flip alert: it plays at the flip volume (and only it - the next line resets this)
   const cm = /^(BTC|XRP)\b/.exec(it.text || '');
   const spoken = (it.text || '').replace(/^BTC\b/, 'Bitcoin').replace(/^XRP\b/, 'X R P');
   const vc = cm ? voiceBy[cm[1]] : voiceSet;                         // this coin's own narrator voice
@@ -7330,7 +7308,7 @@ function flipLadder(name, key, r, call, sd) {
     if (!name || !key || isNaN(r)) return;
     if (sd !== undefined && sd !== null && sd < 0) r = Math.max(r, flipSteps.flip);                    // price is already PAST the line: that is a flip, whatever the percentage says
     const said = flipRiskSaid[key] || (flipRiskSaid[key] = {});
-    if (!narCoin[name] && !(flipAlertsOn && soundEnabled && soundOn(name))) return;
+    if (!narCoin[name] && !(flipAlertsOn && soundOn(name))) return;
     // three steps, each at its own flip-risk percentage (set in Alert voices; back-test of 1,451 locked calls at 20 / 30 / 55%: about 5:45 / 4:30 / 3:30 before the end - the earlier it fires the more false alarms)
     if (r >= flipSteps.flip && !said.flip) {
       said.flip = true; said.rise = true; said.early = true;
@@ -7432,7 +7410,7 @@ function checkFlipRiskAlerts() {
 // the fast lane: the flip meter re-worked from the LIVE price about twice a second, independent of the page refresh
 const flipPreState = {};
 function flipPre(name, v) {                                            // before the call (or in a no-call round): scalp opportunity when price is right at the line, and "flipping" each time it crosses
-  if (!narCoin[name] && !(flipAlertsOn && soundEnabled && soundOn(name))) return;
+  if (!narCoin[name] && !(flipAlertsOn && soundOn(name))) return;
   const st = flipPreState[v.key] || (flipPreState[v.key] = {side: null, scalp: false, cross: 0});
   const now = Date.now();
   if (st.side !== null && st.side !== v.side && now - st.cross > 30000) {
@@ -7475,7 +7453,7 @@ document.addEventListener('click', e => {                              // the li
 const crowdSaid = {};
 function crowdPressure(name, v) {                                      // the crowd's quote is turning against the call while the bar is still low: say it once per round
   if (crowdSaid[v.key]) return;
-  if (!narCoin[name] && !(flipAlertsOn && soundEnabled && soundOn(name))) return;
+  if (!narCoin[name] && !(flipAlertsOn && soundOn(name))) return;
   crowdSaid[v.key] = true;
   const line = name + '. Scent of blood. Possible scalp. Scent of blood. Possible scalp.';          // owner's wording; its own alert slot (crowd_turn) - a recording for it can be added later, until then the text is spoken
   flipSay(name, line, 'crowd_turn', 'crowd:' + v.key, 600000, 1);
@@ -13794,13 +13772,13 @@ def build_pattern_window(asset_name):
     mtf_part, old_open, old_close = "", "", ""
     if _MTF_ON and asset_name in ("BTC", "XRP"):
         _vb = lambda v, cls, label: (f'<button class="mtf-vs {cls}" data-v="{v}" onclick="mtfSetView(\'{asset_name}\',\'{v}\')"><span class="dd-ic">&#9654;</span>{label}</button>')
-        mtf_part = (f'<div class="mtf-switch">' + _vb("pat", "mtf-vs-pat", "Tunnel chart") + _vb("old", "mtf-vs-old", "Live pattern window") + _vb("tick", "mtf-vs-tick", "5-second chart") + '<button class="mtf-spk" onclick="narToggle(this)" title="AI narrator for this coin: talks about what is happening on its chart and pressure"><span class="dd-ic">&#128266;</span><span class="nar-lab">Narrator OFF</span></button><button class="mtf-alv" onclick="alvToggle()" title="Switch each alert voice on or off, and hear it"><span class="dd-ic">&#127911;</span><span>Alert voices &amp; alarms</span></button><label class="nar-volbox" title="Narrator volume"><span class="dd-ic">&#128266;</span><input type="range" class="nar-vol" min="0" max="100" step="5" value="100" oninput="narVolSet(this.value)"><span class="nar-volpct">100%</span></label><button class="mtf-alv mtf-fla on" onclick="flipAlertsToggle()" title="Flip alerts on its own: ON = the flip alerts (Scalp opportunity, Flip incoming, We are flipping, Scent of blood) play on this computer with an alarm and the voice, even with the narrator OFF (needs the SOUND button ON - SOUND is the master switch). OFF = no flip alerts on this screen."><span class="dd-ic">&#9889;</span><span class="fla-lab">Flip alerts ON</span></button><label class="nar-volbox fl-volbox" title="Flip volume: the flip alerts (Scalp opportunity, Flip incoming, reversals, Scent of blood) and their beeps. It is separate from the narrator volume, so you can turn the narrator all the way down and still hear the flip alerts."><span class="dd-ic">&#9889;</span><span>Flip</span><input type="range" class="nar-vol fl-vol" min="0" max="100" step="5" value="100" oninput="flipVolSet(this.value)" onchange="flipVolPreview()"><span class="fl-volpct">100%</span></label>'
+        mtf_part = (f'<div class="mtf-switch">' + _vb("pat", "mtf-vs-pat", "Tunnel chart") + _vb("old", "mtf-vs-old", "Live pattern window") + _vb("tick", "mtf-vs-tick", "5-second chart") + '<button class="mtf-spk" onclick="narToggle(this)" title="AI narrator for this coin: talks about what is happening on its chart and pressure"><span class="dd-ic">&#128266;</span><span class="nar-lab">Alert voices OFF</span></button><button class="mtf-alv" onclick="alvToggle()" title="Switch each alert voice on or off, and hear it"><span class="dd-ic">&#127911;</span><span>Alert voices &amp; alarms</span></button><label class="nar-volbox" title="Narrator volume"><span class="dd-ic">&#128266;</span><input type="range" class="nar-vol" min="0" max="100" step="5" value="100" oninput="narVolSet(this.value)"><span class="nar-volpct">100%</span></label><button class="mtf-alv mtf-fla on" onclick="flipAlertsToggle()" title="Flip alerts: ON = the flip alerts (Scalp opportunity, Flip incoming, We are flipping, Scent of blood) play on this computer with an alarm and the voice, whether the alert voices are on or off. OFF = no flip alerts on this screen. The one volume bar sets how loud."><span class="dd-ic">&#9889;</span><span class="fla-lab">Flip alerts ON</span></button>'
                     + f'</div><div class="mtf-live" data-asset="{asset_name}"><div class="mtf-holder"></div></div>' + _tick_box_html(asset_name))
         old_open, old_close = '<div class="pat-old-box" style="display:none">', '</div>'
     voice_bar = ""
     if not _MTF_ON and _VOICE_ON and asset_name in ("BTC", "XRP"):          # the website has no chart builder, but it does get the narrator, the Alert voices panel and the volume slider
         voice_bar = (f'<div class="mtf-switch voice-bar"><button class="mtf-vs mtf-vs-tick" data-v="tick" onclick="mtfSetView(\'{asset_name}\',\'tick\')"><span class="dd-ic">&#9654;</span>5-second chart</button>'
-                     '<button class="mtf-spk" onclick="narToggle(this)" title="AI narrator for this coin: speaks the alerts and the pressure"><span class="dd-ic">&#128266;</span><span class="nar-lab">Narrator OFF</span></button>'
+                     '<button class="mtf-spk" onclick="narToggle(this)" title="AI narrator for this coin: speaks the alerts and the pressure"><span class="dd-ic">&#128266;</span><span class="nar-lab">Alert voices OFF</span></button>'
                      '<button class="mtf-alv" onclick="alvToggle()" title="Switch each alert voice on or off, and hear it"><span class="dd-ic">&#127911;</span><span>Alert voices &amp; alarms</span></button>'
                      '<label class="nar-volbox" title="Narrator volume"><span class="dd-ic">&#128266;</span><input type="range" class="nar-vol" min="0" max="100" step="5" value="100" oninput="narVolSet(this.value)"><span class="nar-volpct">100%</span></label></div>' + _tick_box_html(asset_name))
     return (f'<div class="row pat-win" data-asset="{asset_name}"><div class="alert-dock pw-dock" data-dock="{asset_name}"></div>{flags}{voice_bar}{mtf_part}{old_open}'
