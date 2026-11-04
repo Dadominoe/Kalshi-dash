@@ -807,7 +807,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-11-04-alarm158"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-11-04-pyp159"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -5003,8 +5003,9 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .alt-chip.lag { border-color:#ffd24a; box-shadow:0 0 0 1px #ffd24a inset; } .alt-chip.lag .alt-sub { color:#ffd24a; font-weight:900; font-size:11px; }
 .alt-chip.stale { opacity:.45; }
 .pyp-rowbest td { background:rgba(255,210,74,.16); } .pyp-tag.pyp-now { background:#ffd24a; color:#0d1117; border-color:#ffd24a; font-weight:800; }
-.pyp-why-d { display:inline-block; vertical-align:middle; margin-left:6px; } .pyp-why-d summary { list-style:none; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:50%; border:1.5px solid #ffd24a; color:#ffd24a; font-size:12px; font-weight:800; font-style:italic; font-family:Georgia,serif; user-select:none; }
-.pyp-why-d summary::-webkit-details-marker { display:none; } .pyp-why-d[open] summary { background:#ffd24a; color:#0d1117; }
+.pyp-why-d { display:inline-block; vertical-align:middle; margin-left:6px; } .pyp-i { cursor:pointer; display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; padding:0; border-radius:50%; border:1.5px solid #ffd24a; background:transparent; color:#ffd24a; font-size:12px; font-weight:800; font-style:italic; font-family:Georgia,serif; user-select:none; }
+.pyp-i:hover { background:rgba(255,210,74,.2); }
+#crowd-overlay.pyp-panel { border-color:#ffd24a; } #crowd-overlay.pyp-panel .crowd-body b { color:#ffd24a; } #crowd-overlay.pyp-panel .crowd-body { font-size:14px; line-height:1.5; }
 .pyp-why { width:330px; max-width:100%; white-space:normal; margin-top:6px; padding:8px 10px; border:1px solid #ffd24a; border-radius:8px; background:#161b22; color:#e6edf3; font-size:13px; line-height:1.4; font-style:normal; font-weight:400; } .pyp-why b { color:#ffd24a; }
 .pyp-min { font-size:14px; } .pyp-tag { font-size:11px; letter-spacing:.8px; color:#ffd24a; border:1px solid #ffd24a; border-radius:999px; padding:0 7px; margin-left:6px; } .pyp-foot td { border-top:2px solid #30363d; } .pyp-note { margin-top:8px; }
 .pyp-body { overflow-x:auto; }
@@ -7361,19 +7362,23 @@ function flipPre(name, v) {                                            // before
 function closeCrowdHelp() { const o = document.getElementById('crowd-overlay'); if (o) o.remove(); }
 document.addEventListener('click', e => {                              // the little i beside PRESSURE WATCH opens a centered window (it is cut out of the page so the 1 s re-draw cannot close it or clip it)
   const t = e.target;
-  const btn = t && t.closest ? t.closest('.crowd-i, #pw-i') : null;          // the page's own script rewrites the class of buttons in the top row, so the id is matched too
+  const btn = t && t.closest ? t.closest('.crowd-i, #pw-i, .pyp-i') : null;          // the page's own script rewrites the class of buttons in the top row, so the id is matched too
   if (btn) {
     e.preventDefault();
     if (document.getElementById('crowd-overlay')) { closeCrowdHelp(); return; }          // the i again closes it
-    const src = (btn.parentElement && btn.parentElement.querySelector('.crowd-help-src')) || document.querySelector('.crowd-help-src');
+    const isPyp = btn.classList.contains('pyp-i');
+    const src = isPyp ? (btn.parentElement && btn.parentElement.querySelector('.pyp-why-src')) : ((btn.parentElement && btn.parentElement.querySelector('.crowd-help-src')) || document.querySelector('.crowd-help-src'));
     if (!src) return;
     const o = document.createElement('div');
     o.id = 'crowd-overlay';
-    o.className = 'crowd-panel';
-    o.innerHTML = '<div class="crowd-bar"><b>Pressure watch</b><button class="size-mode-btn" type="button" data-close="1">Close</button></div><div class="info-help-body crowd-body">' + src.innerHTML + '</div>';
+    o.className = 'crowd-panel' + (isPyp ? ' pyp-panel' : '');
+    o.innerHTML = '<div class="crowd-bar"><b>' + (isPyp ? 'Best minute right now' : 'Pressure watch') + '</b><button class="size-mode-btn" type="button" data-close="1">Close</button></div><div class="info-help-body crowd-body">' + src.innerHTML + '</div>';
     document.documentElement.appendChild(o);                                            // outside the (zoomed) page body: nothing dims, nothing moves
     const r = btn.getBoundingClientRect(), w = o.getBoundingClientRect().width;
-    o.style.top = Math.max(6, r.bottom + 6) + 'px';
+    const hh = o.getBoundingClientRect().height;
+    let tp = r.bottom + 6;
+    if (tp + hh > window.innerHeight - 6) tp = Math.max(6, r.top - hh - 6);          // no room below the i: open above it
+    o.style.top = Math.max(6, Math.min(tp, window.innerHeight - hh - 6)) + 'px';
     o.style.left = Math.max(6, Math.min(r.left, window.innerWidth - w - 6)) + 'px';
     return;
   }
@@ -10510,8 +10515,8 @@ def build_pick_poison(name, d, tn):
         if _n24:
             _ln.append(f"Its record over 24 hours: {_w24} right of {_n24} ({_w24 / _n24 * 100:.0f}%).")
         _ln.append("This is an estimate from recorded prices, not a real fill. Later minutes are more accurate but cost more, so profit is what is compared, not the percent right. It can change as rounds finish. Information only - it does not change any call.")
-        why = (f'<details class="pyp-why-d" data-pat="PYPWHY|{name}"><summary title="Why is this the best right now?">i</summary>'
-               f'<div class="pyp-why"><b>Why {_m_in} min in is the best right now</b><br>' + "<br>".join(_ln) + '</div></details>')
+        why = (f'<span class="pyp-why-d"><button type="button" class="pyp-i" title="Why is this the best right now?" aria-label="Why is this the best right now?">i</button>'
+               f'<div class="pyp-why-src" hidden><b>Why {_m_in} min in is the best right now</b><br>' + "<br>".join(_ln) + '</div></span>')
     body = []
     for M in order:
         m_in = 15 - M
