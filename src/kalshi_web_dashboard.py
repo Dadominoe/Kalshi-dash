@@ -807,7 +807,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-11-04-crowd143"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-11-04-crowd144"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -4909,6 +4909,12 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .flip-risk-bar .frb-t { font-size:17px; font-weight:800; color:#e8eaf0; }
 .flip-risk-bar .frb-crowd-row { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:4px 0 2px; } .frb-crowd-row .info-help { margin:0; } .frb-crowd-row .info-help summary { display:inline-block; padding:2px 9px; border:1px solid #58a6ff; border-radius:11px; font-weight:700; white-space:nowrap; }
 .frb-crowd-row .ih-pop .info-help-body { width:min(440px, 86vw); max-height:70vh; overflow:auto; }
+.crowd-i { flex:0 0 auto; width:20px; height:20px; padding:0; border:1px solid #58a6ff; border-radius:50%; background:transparent; color:#58a6ff; font:italic 700 13px/17px Georgia, serif; cursor:pointer; }
+.crowd-i:hover { background:rgba(88,166,255,0.18); }
+#crowd-overlay { position:fixed; top:0; left:0; right:0; bottom:0; z-index:100002; background:rgba(5,8,12,0.78); display:flex; align-items:center; justify-content:center; padding:14px; }
+#crowd-overlay .crowd-panel { width:min(580px, 96vw); max-height:90vh; overflow:auto; background:#161b22; border:1px solid #30363d; border-radius:10px; padding:12px 16px; box-shadow:0 10px 40px rgba(0,0,0,0.7); }
+#crowd-overlay .crowd-bar { display:flex; align-items:center; gap:12px; margin-bottom:8px; font-size:17px; color:#e6edf3; } #crowd-overlay .crowd-bar button { margin-left:auto; padding:4px 14px; }
+#crowd-overlay .crowd-body { margin:0; padding:0; border:0; background:none; font-size:14px; line-height:1.5; }
 .frb-crowd-calm { font-size:12px; font-weight:600; color:#8b949e; }
 .crowd-stats { width:100%; border-collapse:collapse; font-size:12px; margin:4px 0 8px; } .crowd-stats th, .crowd-stats td { padding:3px 6px; border-bottom:1px solid #30363d; text-align:right; } .crowd-stats th:first-child, .crowd-stats td:first-child { text-align:left; } .crowd-stats th { color:#8b949e; font-weight:600; }
 .flip-risk-bar .frb-crowd { display:block; margin:0; padding:3px 8px; border-radius:6px; background:rgba(255,166,0,0.16); border:1px solid rgba(255,166,0,0.65); color:#ffb84d; font-size:14px; font-weight:800; letter-spacing:0.2px; }
@@ -7243,6 +7249,24 @@ function flipPre(name, v) {                                            // before
   }
   st.side = v.side;
 }
+function closeCrowdHelp() { const o = document.getElementById('crowd-overlay'); if (o) o.remove(); }
+document.addEventListener('click', e => {                              // the little i beside PRESSURE WATCH opens a centered window (it is cut out of the page so the 1 s re-draw cannot close it or clip it)
+  const t = e.target;
+  const btn = t && t.closest ? t.closest('.crowd-i') : null;
+  if (btn) {
+    e.preventDefault();
+    closeCrowdHelp();
+    const src = btn.parentElement && btn.parentElement.querySelector('.crowd-help-src');
+    if (!src) return;
+    const o = document.createElement('div');
+    o.id = 'crowd-overlay';
+    o.innerHTML = '<div class="crowd-panel"><div class="crowd-bar"><b>Pressure watch</b><button class="size-mode-btn" type="button" data-close="1">Close (Esc)</button></div><div class="info-help-body crowd-body">' + src.innerHTML + '</div></div>';
+    document.body.appendChild(o);
+    return;
+  }
+  const ov = document.getElementById('crowd-overlay');
+  if (ov && (!t.closest || !t.closest('.crowd-panel') || (t.getAttribute && t.getAttribute('data-close')))) closeCrowdHelp();
+});
 const crowdSaid = {};
 function crowdPressure(name, v) {                                      // the crowd's quote is turning against the call while the bar is still low: say it once per round
   if (crowdSaid[v.key]) return;
@@ -7532,7 +7556,7 @@ function renderExpanded() {
   o.innerHTML = '<div class="pat-ov-bar"><span class="live-clock live-clock-big"><span class="lc-t"></span><span class="lc-d"></span></span><b>' + expandedAsset + ' - what is being formed (live)</b> ' + (tfs ? tfs.outerHTML : '') +
     ' <button onclick="closeExpanded()">Close (Esc)</button></div><div class="pat-ov-chart">' + (chart ? chart.innerHTML : '') + '</div>';
 }
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeExpanded(); closePopHelps(null); closeLcZoom(); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeExpanded(); closePopHelps(null); closeLcZoom(); closeCrowdHelp(); } });
 // ---- blow up a line-crossing / last-window picture: click it, it fills the screen (a copy, so the once-a-second page rebuild cannot touch it); click anywhere, Close or Esc puts it away
 function closeLcZoom() { const o = document.getElementById('lc-overlay'); if (o) o.remove(); }
 document.addEventListener('click', e => {
@@ -9897,6 +9921,7 @@ def _ctb_indicator_cards(name):
 
 # What has been updated, newest first - the UPDATES card in the scrolling banner shows the top ones. Add a line here every time something ships (date, NEW or FIX, a short name, one plain line).
 SITE_UPDATES = [
+    (1793762000, "FIX", "Pressure watch info button", "the info tab beside PRESSURE WATCH is now a plain i button that opens a centered pop-up window (click outside or press Esc to close)"),
     (1793761000, "NEW", "Pressure watch line always visible", "a small PRESSURE WATCH line with an i what is this tab now always sits under the FLIP RISK bar (grey when calm, orange PRESSURE BUILDING when the crowd turns against a low bar)"),
     (1793760000, "NEW", "Stats in the pressure warning info tab", "the i what is this tab on the PRESSURE BUILDING warning now shows the back-test numbers: how often it flipped, by minute of the round, and how each piece did on its own"),
     (1793755000, "FIX", "Pressure warning has its own voice line", "the PRESSURE BUILDING warning now says: Scent of blood. Possible scalp. (twice) - its own line, separate from the Scalp opportunity alert"),
@@ -11279,7 +11304,7 @@ def _crowd_help(name, w, risk, last=None):
                  + (f' Its confidence in the current side {"fell" if last["drop"] >= 0 else "rose"} {abs(last["drop"]) * 100:.0f} points in the last minute.' if last.get("drop") is not None else "") + ' The line turns orange and says PRESSURE BUILDING when the conditions below are all true.</p>')
     else:
         right = '<p><b>Right now.</b> No warning. The line turns orange and says PRESSURE BUILDING when the conditions below are all true.</p>'
-    return _info_help(f"CROWD|{name}", "i what is this", (
+    body = (
         '<p><b>What it means.</b> The FLIP RISK bar only looks at two things: how far price is from the line, and how much time is left. It cannot see people getting nervous. '
         'The <b>crowd</b> is everyone trading this Kalshi market. When they start selling the side price is on, the market price moves <i>before</i> the bar does. This line appears when that happens while the bar is still low.</p>'
         f'{right}'
@@ -11303,7 +11328,9 @@ def _crowd_help(name, w, risk, last=None):
         '<p><b>Does the bar climb afterwards?</b> After this warning, the bar later reached 15% or more in the same round 26% of the time (12% for a normal low reading).</p>'
         '<p><b>What it is NOT.</b> About 85% of the time this warning fires, the round still does not flip. It is a heads-up that the odds got worse, not a prediction. We also tested candle patterns (doji, hammer, shooting star, head and shoulders), '
         'RSI, momentum, drawn ceilings and floors, buy / sell pressure, order flow and the order book as early warnings: none of them warned ahead of time. Only the crowd\'s own price did.</p>'
-        '<p class="hint">Information only. It never changes the locked call and it is not advice to buy or sell anything. Every time it fires it is written to a log (one row per round), so its live record can be checked against these numbers.</p>'), pop=True)
+        '<p class="hint">Information only. It never changes the locked call and it is not advice to buy or sell anything. Every time it fires it is written to a log (one row per round), so its live record can be checked against these numbers.</p>')
+    return ('<button type="button" class="crowd-i" title="What is this?" aria-label="Pressure watch: what is this?">i</button>'
+            f'<div class="crowd-help-src" hidden>{body}</div>')
 
 
 def _flip_now():
