@@ -807,7 +807,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-11-04-pyp162"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-11-04-flip163"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -4892,7 +4892,7 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 .alv-note { flex-basis:100%; font-size:12px; margin-left:26px; } .alv-row { flex-wrap:wrap; }
 .nar-volbox { flex:0 0 auto; display:flex; align-items:center; gap:8px; font-size:15px; font-weight:800; padding:10px 14px; border-radius:12px; color:#fff; border:2px solid #6e7681; background:#21262d; }
 .nar-volbox .dd-ic { display:inline-flex; width:28px; height:28px; align-items:center; justify-content:center; border-radius:50%; background:rgba(255,255,255,.2); }
-.nar-vol { width:130px; cursor:pointer; accent-color:#3fb950; } .nar-volpct { min-width:42px; text-align:right; }
+.nar-vol { width:130px; cursor:pointer; accent-color:#3fb950; } .fl-vol { accent-color:#ffb84d; } .fl-volbox { border-color:#ffb84d; } .fl-volpct { min-width:42px; text-align:right; } .nar-volpct { min-width:42px; text-align:right; }
 .alv-old { display:block; margin:6px 0; padding:6px 8px; border:1px solid #30363d; border-radius:8px; cursor:pointer; }
 .alv-h { margin-bottom:8px; }
 .alv-voice { display:flex; align-items:center; gap:8px; margin:8px 0 10px; padding:8px 10px; border:2px solid #39d0d8; border-radius:10px; background:#0e1a24; }
@@ -5505,6 +5505,30 @@ try {
 function vol(peak) {
   return peak * masterVolume;
 }
+// ---- FLIP VOLUME: its own level for the flip alerts (voice + beeps), separate from the narrator and master volumes
+let flipVol = 1.0;
+try { const fv0 = localStorage.getItem('flipVol'); if (fv0 !== null && isFinite(parseFloat(fv0))) flipVol = Math.max(0, Math.min(1, parseFloat(fv0))); } catch (e) {}
+function fvol(peak) { return peak * flipVol; }
+const FLIP_CLIP_RX = /^(flip_warn|flip_incoming|reversal|reversal_up|reversal_down|crowd_turn)$/;
+const FLIP_TEXT_RX = /(Flip incoming|Scalp opportunity|Possible flip|Reversal|Scent of blood)/i;
+function isFlipLine(clip, text) { return FLIP_CLIP_RX.test(clip || '') || FLIP_TEXT_RX.test(text || ''); }
+function flipVolSet(v) {
+  flipVol = Math.max(0, Math.min(1, Number(v) / 100));
+  try { localStorage.setItem('flipVol', String(flipVol)); } catch (e) {}
+  sliderHold = Math.max(sliderHold === Infinity ? 0 : sliderHold, Date.now() + 1500);
+  document.querySelectorAll('.fl-volpct').forEach(el => { el.textContent = Math.round(flipVol * 100) + '%'; });
+}
+function flipVolPreview() {                                          // let go of the slider = a short two-tone beep at the flip level
+  try {
+    const ctx = ensureAudioCtx(), now = ctx.currentTime;
+    [660, 880].forEach((f, i) => {
+      const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'square'; o.connect(g); g.connect(ctx.destination);
+      const t0 = now + i * 0.2; o.frequency.setValueAtTime(f, t0);
+      g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(Math.max(0.0001, fvol(0.4)), t0 + 0.02); g.gain.linearRampToValueAtTime(0.0001, t0 + 0.17);
+      o.start(t0); o.stop(t0 + 0.19);
+    });
+  } catch (e) {}
+}
 
 function setMasterVolume(v) {
   masterVolume = Math.max(0, Math.min(1, parseFloat(v)));
@@ -5760,6 +5784,7 @@ function browserVoice(vs) {
   return null;
 }
 try { window.speechSynthesis.getVoices(); window.speechSynthesis.onvoiceschanged = () => {}; } catch (e) {}
+function isFlipText0(t) { return FLIP_TEXT_RX.test(t || ''); }
 function speakBrowser(text) {
   // unconditional - no toggle checks. Used by speak() below AND directly by
   // the "Test voice alert" button, so the test proves the actual mechanism
@@ -5780,7 +5805,7 @@ function speakBrowser(text) {
     // boosted 2026-09-28 per user request ("make it a little bit louder") -
     // raises the floor and applies a 1.3x multiplier, capped at the Web
     // Speech API's hard ceiling of 1.0
-    u.volume = narGain();
+    u.volume = isFlipText0(text) ? flipVol : narGain();
     window.speechSynthesis.speak(u);
   } catch (e) { /* speech synthesis unavailable/blocked - the sound alert already played, fine */ }
 }
@@ -5961,7 +5986,7 @@ function playBuildingBeep(assetName, tier) {
     const tierIndex = BUILD_TIERS.indexOf(tier); // 0, 1
     const freq = p.low + (p.high - p.low) * (0.3 + tierIndex * 0.3);
     osc.frequency.setValueAtTime(freq, now);
-    gain.gain.setValueAtTime(vol(0.4), now);
+    gain.gain.setValueAtTime(fvol(0.4), now);
     gain.gain.linearRampToValueAtTime(0.0001, now + 0.18);
     osc.start(now);
     osc.stop(now + 0.2);
@@ -5997,8 +6022,8 @@ function playSirenAlert(assetName) {
       osc.frequency.linearRampToValueAtTime(lowF, t2);
     }
     const dur = cycles * cycleDur;
-    gain.gain.setValueAtTime(vol(0.45), now);
-    gain.gain.setValueAtTime(vol(0.45), now + dur - 0.1);
+    gain.gain.setValueAtTime(fvol(0.45), now);
+    gain.gain.setValueAtTime(fvol(0.45), now + dur - 0.1);
     gain.gain.linearRampToValueAtTime(0.0001, now + dur);
     osc.start(now);
     osc.stop(now + dur + 0.05);
@@ -6094,7 +6119,7 @@ function playReversalAlarm(assetName) {
       gain.connect(ctx.destination);
       const t0 = now + offset;
       osc.frequency.setValueAtTime(freq, t0);
-      gain.gain.setValueAtTime(vol(0.4), t0);
+      gain.gain.setValueAtTime(fvol(0.4), t0);
       gain.gain.linearRampToValueAtTime(0.0001, t0 + 0.18);
       osc.start(t0);
       osc.stop(t0 + 0.2);
@@ -6775,7 +6800,7 @@ let narVol = 0.2;                                                    // the narr
 let sliderHold = 0;
 document.addEventListener('pointerdown', e => { if (e.target && e.target.classList && e.target.classList.contains('nar-vol')) sliderHold = Infinity; }, true);
 ['pointerup', 'pointercancel'].forEach(ev => document.addEventListener(ev, () => { if (sliderHold === Infinity) sliderHold = Date.now() + 400; }, true));
-function narGain() { if (timerSayText && ((narNow && narNow.text === timerSayText) || Date.now() < timerSayUntil)) return timerOpts.vol; return narVol; }          // the round-alarm line has its own volume
+function narGain() { if (narNow && isFlipLine(narNow.clip, narNow.text)) return flipVol; if (timerSayText && ((narNow && narNow.text === timerSayText) || Date.now() < timerSayUntil)) return timerOpts.vol; return narVol; }          // the round-alarm line has its own volume
 function narVolSet(v) {
   narVol = Math.max(0, Math.min(1, Number(v) / 100));
   try { localStorage.setItem('narVol', String(narVol)); } catch (e) {}
@@ -6897,7 +6922,9 @@ function narToggle(btn) {
   narBanner();
 }
 function narPaint() {
-  document.querySelectorAll('.nar-vol').forEach(el => { if (Date.now() >= sliderHold) el.value = String(Math.round(narVol * 100)); });
+  document.querySelectorAll('.nar-vol:not(.fl-vol)').forEach(el => { if (Date.now() >= sliderHold) el.value = String(Math.round(narVol * 100)); });
+  document.querySelectorAll('.fl-vol').forEach(el => { if (Date.now() >= sliderHold) el.value = String(Math.round(flipVol * 100)); });
+  document.querySelectorAll('.fl-volpct').forEach(el => { el.textContent = Math.round(flipVol * 100) + '%'; });
   document.querySelectorAll('.nar-volpct').forEach(el => { el.textContent = Math.round(narVol * 100) + '%'; });
   document.querySelectorAll('.mtf-spk').forEach(b => {
     const w = b.closest('.pat-win'), k = w ? w.getAttribute('data-asset') : null;
@@ -13715,7 +13742,7 @@ def build_pattern_window(asset_name):
     mtf_part, old_open, old_close = "", "", ""
     if _MTF_ON and asset_name in ("BTC", "XRP"):
         _vb = lambda v, cls, label: (f'<button class="mtf-vs {cls}" data-v="{v}" onclick="mtfSetView(\'{asset_name}\',\'{v}\')"><span class="dd-ic">&#9654;</span>{label}</button>')
-        mtf_part = (f'<div class="mtf-switch">' + _vb("pat", "mtf-vs-pat", "Tunnel chart") + _vb("old", "mtf-vs-old", "Live pattern window") + _vb("tick", "mtf-vs-tick", "5-second chart") + '<button class="mtf-spk" onclick="narToggle(this)" title="AI narrator for this coin: talks about what is happening on its chart and pressure"><span class="dd-ic">&#128266;</span><span class="nar-lab">Narrator OFF</span></button><button class="mtf-alv" onclick="alvToggle()" title="Switch each alert voice on or off, and hear it"><span class="dd-ic">&#127911;</span><span>Alert voices &amp; alarms</span></button><label class="nar-volbox" title="Narrator volume"><span class="dd-ic">&#128266;</span><input type="range" class="nar-vol" min="0" max="100" step="5" value="100" oninput="narVolSet(this.value)"><span class="nar-volpct">100%</span></label>'
+        mtf_part = (f'<div class="mtf-switch">' + _vb("pat", "mtf-vs-pat", "Tunnel chart") + _vb("old", "mtf-vs-old", "Live pattern window") + _vb("tick", "mtf-vs-tick", "5-second chart") + '<button class="mtf-spk" onclick="narToggle(this)" title="AI narrator for this coin: talks about what is happening on its chart and pressure"><span class="dd-ic">&#128266;</span><span class="nar-lab">Narrator OFF</span></button><button class="mtf-alv" onclick="alvToggle()" title="Switch each alert voice on or off, and hear it"><span class="dd-ic">&#127911;</span><span>Alert voices &amp; alarms</span></button><label class="nar-volbox" title="Narrator volume"><span class="dd-ic">&#128266;</span><input type="range" class="nar-vol" min="0" max="100" step="5" value="100" oninput="narVolSet(this.value)"><span class="nar-volpct">100%</span></label><label class="nar-volbox fl-volbox" title="Flip volume: the flip alerts (Scalp opportunity, Flip incoming, reversals, Scent of blood) and their beeps. It is separate from the narrator volume, so you can turn the narrator all the way down and still hear the flip alerts."><span class="dd-ic">&#9889;</span><span>Flip</span><input type="range" class="nar-vol fl-vol" min="0" max="100" step="5" value="100" oninput="flipVolSet(this.value)" onchange="flipVolPreview()"><span class="fl-volpct">100%</span></label>'
                     + f'</div><div class="mtf-live" data-asset="{asset_name}"><div class="mtf-holder"></div></div>' + _tick_box_html(asset_name))
         old_open, old_close = '<div class="pat-old-box" style="display:none">', '</div>'
     voice_bar = ""
