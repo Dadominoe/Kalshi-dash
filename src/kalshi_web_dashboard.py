@@ -807,7 +807,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-11-04-crowd146"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-11-04-patwin151"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -4601,14 +4601,14 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 /* ONE coin on screen + a wide window: use the empty space - chart on the left, the pattern list beside it on the right (no scrolling down to read it) */
 @media (min-width:1200px) {
   body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1800px; flex:1 1 100%; }
-  body[data-view="BTC"] .pat-old-grid, body[data-view="XRP"] .pat-old-grid { display:grid; grid-template-columns:minmax(0,1.7fr) minmax(360px,1fr); column-gap:16px; align-items:start; }
+  body[data-view="BTC"] .pat-old-grid, body[data-view="XRP"] .pat-old-grid { display:block; }
   body[data-view="BTC"] .pat-old-grid > .pat-win-head, body[data-view="XRP"] .pat-old-grid > .pat-win-head,
   body[data-view="BTC"] .pat-old-grid > .cpi-drop, body[data-view="XRP"] .pat-old-grid > .cpi-drop { grid-column:1 / -1; }
   body[data-view="BTC"] .pat-old-grid > .pat-chart-row, body[data-view="XRP"] .pat-old-grid > .pat-chart-row { grid-column:1; grid-row:3; }
   body[data-view="BTC"] .pat-old-grid > .hint, body[data-view="XRP"] .pat-old-grid > .hint { grid-column:1; grid-row:4; }
   body[data-view="BTC"] .pat-old-grid > .pat-win-legend, body[data-view="XRP"] .pat-old-grid > .pat-win-legend {
-    grid-column:2; grid-row:3 / span 2; margin-top:0; max-height:84vh; overflow-y:auto; padding:0 6px 0 2px; border-left:1px solid #30363d; padding-left:12px; }
-  body[data-view="BTC"] .pat-win .pat-chart svg, body[data-view="XRP"] .pat-win .pat-chart svg { max-height:84vh; }
+    grid-column:auto; grid-row:auto; margin-top:8px; max-height:27vh; overflow-y:auto; padding:0 6px 0 0; border-left:0; }
+  body[data-view="BTC"] .pat-win .pat-chart svg, body[data-view="XRP"] .pat-win .pat-chart svg { max-height:var(--pfit, 70vh); }
 }
 #content { display:flex; flex-wrap:wrap; gap:20px; align-items:flex-start; margin-top:10px; }
 .sound-details { display:inline-block; vertical-align:middle; margin-left:8px; }
@@ -5092,7 +5092,9 @@ body.no-pfvg .pfvg { display:none; } .pfvg-sw { cursor:pointer; color:#e6edf3; }
 .pat-win-head { margin-bottom:6px; }
 .pat-win-tfs { margin-top:6px; }
 .pat-win-tfs button { margin-right:6px; }
-.pat-win-legend { margin-top:8px; max-height:62vh; overflow-y:auto; padding-right:6px; overscroll-behavior:contain; }
+.pat-win-legend { display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); column-gap:18px; align-items:start; margin-top:8px; max-height:46vh; overflow-y:auto; padding-right:6px; overscroll-behavior:contain; }
+.pat-win-legend > .pw-form, .pat-win-legend > .pw-kept { min-width:0; } .pat-win-legend .pw-h { margin:0 0 4px 0; font-weight:700; color:#8b949e; text-transform:uppercase; letter-spacing:.4px; font-size:12px; }
+.pat-win-legend > .pw-kept { border-left:1px solid #30363d; padding-left:14px; }
 .pat-panel { display:block; }
 details.pat-main > summary { cursor:pointer; list-style:none; }
 .pat-chips { margin-top:6px; display:flex; flex-wrap:wrap; gap:6px; }
@@ -7381,6 +7383,18 @@ function mtfSetView(a, v) {
   applyMtf();
   if (v === 'tick' && mtfView[a] === 'tick') setTimeout(() => { const t = document.querySelector('.pat-win[data-asset="' + a + '"] .pat-tick-box'); if (t && t.offsetParent !== null) t.scrollIntoView({block: 'nearest'}); }, 120);      // the button was just clicked: bring the chart into the window
 }
+function pwFitOld(win) {                                                // the pattern window is showing (no chart frame): give its graph the height the tunnel chart would get
+  const single = document.body.getAttribute('data-view') === 'BTC' || document.body.getAttribute('data-view') === 'XRP';
+  const row = win.querySelector('.pat-chart');
+  if (!(single && window.innerWidth >= 1050) || !row) { win.style.removeProperty('--pfit'); return; }
+  const fr0 = win.querySelector('.mtf-holder iframe'), last = fr0 ? parseFloat(fr0.dataset.fit) : 0;      // the tunnel chart's own settled height, when it has been showing: use exactly that
+  if (last > 0) { win.style.setProperty('--pfit', Math.round(last) + 'px'); return; }
+  const zm = parseFloat(document.body.style.zoom) || 1, vh = window.innerHeight / zm;
+  const tp = (row.getBoundingClientRect().top + window.scrollY) / zm;
+  let f = vh - tp - 90;
+  if (f < vh * 0.55) f = vh - 110;
+  win.style.setProperty('--pfit', Math.max(380, Math.round(f)) + 'px');
+}
 function applyMtf() {
   if (document.body.getAttribute('data-view') === 'both' && (mtfView.XRP || 'pat') !== (mtfView.BTC || 'pat')) {   // side by side: XRP follows BTC so the two charts are always the same kind and size
     mtfView.XRP = mtfView.BTC || 'pat';
@@ -7400,7 +7414,7 @@ function applyMtf() {
     live.style.display = showLive ? 'block' : 'none';
     if (old) old.style.display = (v === 'old') ? 'block' : 'none';
     win.querySelectorAll('.mtf-vs').forEach(b => { b.classList.toggle('on', b.getAttribute('data-v') === v); });
-    if (!showLive) return;
+    if (!showLive) { pwFitOld(win); return; }
     const holder = live.querySelector('.mtf-holder');
     let fr = holder.querySelector('iframe');
     if (!fr) {
@@ -7429,6 +7443,7 @@ function applyMtf() {
         _fit = (_over > 6 || _over < -40) ? Math.max(380, Math.round(_cur - _over)) : _cur;
       } else if (_cur > 0) _fit = _cur;
     }
+    if (_fit) win.style.setProperty('--pfit', _fit + 'px'); else win.style.removeProperty('--pfit');
     if (win.style.top) win.style.top = ''; if (win.style.maxHeight) win.style.maxHeight = '';         // (an older build pinned the chart with these - never any more)
     if (fr.dataset.fit !== String(_fit)) {
       try { fr.contentWindow.postMessage({mtfFit: _fit}, '*'); fr.dataset.fit = String(_fit); fr._fitAt = Date.now(); } catch (e) {}
@@ -7599,7 +7614,7 @@ function saveOpenPats() {
 const openPatterns = new Set(loadOpenPats());
 // "Recent completed calls that worked": ONE switch for every coin / timeframe. It is OPEN every time the page loads; if you close it, it STAYS closed (until the next page load).
 // (It is not saved with the other pull-downs: the other coin's hidden copy used to re-open it on every refresh.)
-let keptListOpen = true;
+let keptListOpen = false;                                             // owner 2026-11-04: the kept-for-a-while lists start closed
 function fillPatternInfo(d) {
   const box = d.querySelector('.pat-info');
   if (!box || box.dataset.filled === '1') return;
@@ -9926,6 +9941,7 @@ def _ctb_indicator_cards(name):
 
 # What has been updated, newest first - the UPDATES card in the scrolling banner shows the top ones. Add a line here every time something ships (date, NEW or FIX, a short name, one plain line).
 SITE_UPDATES = [
+    (1793767000, "NEW", "Live pattern window: wider graph, two columns below", "the graph is wider and still fits the screen; under it, what is forming sits on the left and the kept-for-a-while calls (with the failed ones under them) on the right; the kept lists start closed"),
     (1793764000, "FIX", "Pressure watch info is a small drop-down", "the i at the top now opens a small box right under it (nothing is dimmed or covered); press the i again, press Esc, or click anywhere else to close it"),
     (1793763000, "FIX", "Pressure watch i moved to the top", "the i for the PRESSURE WATCH info now sits in the button row at the top of the page (it was inside the moving flip bar and glitched); press it to open the explanation and stats"),
     (1793762000, "FIX", "Pressure watch info button", "the info tab beside PRESSURE WATCH is now a plain i button that opens a centered pop-up window (click outside or press Esc to close)"),
@@ -12337,7 +12353,7 @@ def chart_live_payload(asset_name):
     else:
         labels = _st(cs, tf) + _cp(cs, tf, max_age=3)
         _live_labels[key] = (time.time(), labels, len(cs))
-    svg, shown = render_window_svg(cs, _stable_labels(asset_name, tf, labels), title=f"{asset_name} - {_MTF_NAMES[tf]} candles (dashed outline = still forming)", events=_cpi_chart_events(cs), levels=_chart_levels(asset_name), sweeps=_sweep_stars(asset_name, tf, labels, cs), fvg=_fvg_open(cs[-90:]))
+    svg, shown = render_window_svg(cs, _stable_labels(asset_name, tf, labels), title=f"{asset_name} - {_MTF_NAMES[tf]} candles (dashed outline = still forming)", events=_cpi_chart_events(cs), levels=_chart_levels(asset_name), sweeps=_sweep_stars(asset_name, tf, labels, cs), fvg=_fvg_open(cs[-90:]), height=960)
     return {"svg": svg, "vol": build_volume_bar(asset_name), "tf": tf, "rsi": rsi_tradingview(asset_name)}
 
 
@@ -13508,7 +13524,7 @@ def build_pattern_window(asset_name):
             _l["done_ts"] = cs[len(cs) - 2 - _l.get("age", 0)][0] + _TFS.get(tf, 0)
     from src.pattern_detector import FailTracker
     ghosts = _win_trackers.setdefault((asset_name, tf), FailTracker()).update(labels)
-    svg, shown = render_window_svg(cs, _stable_labels(asset_name, tf, labels), title=f"{asset_name} - {_MTF_NAMES[tf]} candles (dashed outline = still forming)", events=_cpi_chart_events(cs), levels=_chart_levels(asset_name), sweeps=_sweep_stars(asset_name, tf, labels, cs), fvg=_fvg_open(cs[-90:]))
+    svg, shown = render_window_svg(cs, _stable_labels(asset_name, tf, labels), title=f"{asset_name} - {_MTF_NAMES[tf]} candles (dashed outline = still forming)", events=_cpi_chart_events(cs), levels=_chart_levels(asset_name), sweeps=_sweep_stars(asset_name, tf, labels, cs), fvg=_fvg_open(cs[-90:]), height=960)
     items = []
     for l in list(shown) + list(ghosts):
         e = _pat_explain(l["name"])
@@ -13559,7 +13575,8 @@ def build_pattern_window(asset_name):
                           f'<div class="hint kept-head">&#10007; failed &middot; &#8211; no real move</div>' + "".join(rows_bad) + '</details>')
     except Exception as _ke:
         print(f"[history] kept calls failed: {_ke!r}")
-    legend = "".join(items) + kept_html or '<span class="flat">no clear pattern forming on this timeframe right now</span>'
+    _forming = "".join(items) or '<span class="flat">no clear pattern forming on this timeframe right now</span>'
+    legend = f'<div class="pw-form"><div class="hint pw-h">What is forming now</div>{_forming}</div><div class="pw-kept"><div class="hint pw-h">Kept for a while</div>{kept_html}</div>'
     try:
         cpi_strip = build_cpi_strip(asset_name)
     except Exception as _cpe:
