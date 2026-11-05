@@ -807,7 +807,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-11-04-onevol167"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-11-05-pyp168"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -2024,6 +2024,20 @@ def best_hours_html(asset_history):
 
 
 STREAK_GAP_SECONDS = 3600
+KALSHI_MAINT_WEEKDAY, KALSHI_MAINT_START_HOUR, KALSHI_MAINT_END_HOUR = 3, 3, 5   # Thursdays 3-5 AM Eastern: Kalshi lists no 15-minute rounds (seen 22 Oct, 29 Oct, 5 Nov; the tickers 404)
+
+
+def _maint_seconds_between(older, newer):
+    """Seconds of Kalshi's weekly maintenance inside older..newer (both aware datetimes)."""
+    total = 0.0
+    day, last = older.astimezone(ET_ZONE).date(), newer.astimezone(ET_ZONE).date()
+    while day <= last:
+        if day.weekday() == KALSHI_MAINT_WEEKDAY:
+            start = dt.datetime(day.year, day.month, day.day, KALSHI_MAINT_START_HOUR, tzinfo=ET_ZONE)
+            end = dt.datetime(day.year, day.month, day.day, KALSHI_MAINT_END_HOUR, tzinfo=ET_ZONE)
+            total += max(0.0, (min(newer, end) - max(older, start)).total_seconds())
+        day += dt.timedelta(days=1)
+    return total
 
 
 def get_streak(asset_history):
@@ -2040,8 +2054,8 @@ def get_streak(asset_history):
             t_ = _window_close_utc(h.get("ticker"))
         except Exception:
             t_ = None
-        if t_ is not None and newer_t is not None and (newer_t - t_).total_seconds() > STREAK_GAP_SECONDS:
-            break                                          # no calls on record for over an hour here (the dashboard was not running): those rounds are unknown, so the streak stops
+        if t_ is not None and newer_t is not None and (newer_t - t_).total_seconds() - _maint_seconds_between(t_, newer_t) > STREAK_GAP_SECONDS:
+            break                                          # no calls on record for over an hour here (the dashboard was not running): those rounds are unknown, so the streak stops. Kalshi's weekly maintenance does not count: no rounds existed then
         if t_ is not None:
             newer_t = t_
         if h["correct"] is None:
@@ -5014,6 +5028,7 @@ body[data-view="BTC"] .card, body[data-view="XRP"] .card { max-width:1100px; }
 @media (min-width:1050px) {
   .pyp-drop[open] > .pyp-body { position:fixed; top:4vh; left:12px; width:min(1240px, calc(100vw - 24px)); max-height:88vh; overflow:auto; box-sizing:border-box; z-index:100001; background:#0d1117; border:2px solid #ffd24a; border-radius:12px; padding:10px 14px 14px; box-shadow:0 10px 40px rgba(0,0,0,.75); }
   .pyp-drop[open] > .pyp-body .pyp-t { font-size:13px; } .pyp-drop[open] > .pyp-body .pyp-t th { white-space:normal; padding:4px 5px; } .pyp-drop[open] > .pyp-body .pyp-t td { padding:4px 5px; }
+  body[data-view="both"] .card[data-asset="XRP"] .pyp-drop[open] > .pyp-body { left:auto; right:12px; }
   .pyp-drop[open] > .pyp-body .pyp-x { display:block; position:sticky; top:0; margin:0 0 6px auto; float:right; z-index:2; }
 }
 .ct-body { position:absolute; left:0; top:calc(100% + 4px); width:100%; min-width:680px; max-width:min(1300px, 98vw); z-index:60; max-height:78vh; overflow:auto; background:#0d1117; border:2px solid #39d0d8; border-radius:12px; padding:12px; box-shadow:0 14px 44px rgba(0,0,0,.75); }
@@ -7423,6 +7438,7 @@ function flipPre(name, v) {                                            // before
   }
   st.side = v.side;
 }
+document.addEventListener('toggle', e => { const d = e.target; if (d && d.classList && d.classList.contains('pyp-drop') && d.open) document.querySelectorAll('.pyp-drop[open]').forEach(o => { if (o !== d) o.open = false; }); }, true);          // the wide Pick your poison panels never stack: opening one closes the other
 document.addEventListener('click', e => { const x = e.target && e.target.closest ? e.target.closest('.pyp-x') : null; if (x) { const d = x.closest('details'); if (d) d.open = false; } });
 function closeCrowdHelp() { const o = document.getElementById('crowd-overlay'); if (o) o.remove(); }
 document.addEventListener('click', e => {                              // the little i beside PRESSURE WATCH opens a centered window (it is cut out of the page so the 1 s re-draw cannot close it or clip it)
