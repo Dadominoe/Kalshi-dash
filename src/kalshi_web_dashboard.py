@@ -807,7 +807,7 @@ LIVE_BUY_DELAY_MAX_CANDLES = 10
 _live_buy_deadline = {}      # ticker -> wall-clock time.time() after which it stops trying
 _live_buy_gave_up = set()    # tickers that are done - either fully filled, or the deadline passed
 BUILD_ID = str(int(time.time()))  # changes on every dashboard start; open tabs reload when it changes
-SITE_VERSION = "2026-11-05-pyp168"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
+SITE_VERSION = "2026-11-06-cost169"                                   # shown on /healthz so the owner (and I) can tell which version the website is running
 HOSTED_PASSWORD = os.environ.get("DASH_PASSWORD", "")          # set on a hosted copy: every page asks for this password (any user name)
 HOSTED_READ_ONLY = os.environ.get("READ_ONLY", "") in ("1", "true", "yes")
 ACCEPT_SYNC = os.environ.get("ACCEPT_SYNC", "") in ("1", "true", "yes")       # set on the website copy: it takes its streak / records / END CALLS from the owner's bot
@@ -8509,11 +8509,13 @@ setInterval(() => {
 const LOCAL_PAGE = ['localhost', '127.', '192.168.', '10.'].some(x => location.hostname.indexOf(x) === 0) || /^172[.](1[6-9]|2[0-9]|3[01])[.]/.test(location.hostname);
 function nextRefreshMs() {
   if (LOCAL_PAGE) return 1000;
+  if (document.hidden) return (typeof soundEnabled !== 'undefined' && (soundEnabled || narratorOn)) ? 6000 : 15000;          // a background tab of the website (nobody is looking at the page): the full page is ~120 KB per fetch and costs money, so it is fetched far less often. The call, the flip meter and the voice alerts run on their own fast lanes and are NOT slowed; coming back to the tab refreshes at once
   let fast = false;
   document.querySelectorAll('.clock[data-left]').forEach(c => { if (+c.getAttribute('data-left') <= 60 && c.getAttribute('data-near') === '1') fast = true; });
   return fast ? 1000 : 3000;
 }
 (function refreshLoop() { refresh(); setTimeout(refreshLoop, nextRefreshMs()); })();
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { try { refresh(); } catch (e) {} } });
 // ---- INSTANT lane (owner, 2026-10-28: 'the call has to be instant, no delay on the call or the flip meter'): the END CALL box and the flip meter come from /end_now, worked out from the live price,
 // asked 4 times a second here and 2.5 times a second on the website; only pieces that changed are sent. They are put back after every full page refresh, so the slower refresh never shows older numbers.
 const ENDF = {};
